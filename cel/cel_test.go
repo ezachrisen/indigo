@@ -2,8 +2,8 @@ package cel_test
 
 import (
 	"fmt"
-	"rules"
-	"rules/cel"
+	"github.com/ezachrisen/rules"
+	"github.com/ezachrisen/rules/cel"
 	"testing"
 )
 

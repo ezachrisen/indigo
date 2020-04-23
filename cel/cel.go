@@ -3,7 +3,7 @@ package cel
 
 import (
 	"fmt"
-	"rules"
+	"github.com/ezachrisen/rules"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
