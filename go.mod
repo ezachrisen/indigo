@@ -1,4 +1,4 @@
-module rules
+module github.com/ezachrisen/rules
 
 go 1.14
 
