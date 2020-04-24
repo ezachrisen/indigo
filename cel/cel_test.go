@@ -8,6 +8,16 @@ import (
 	"github.com/ezachrisen/rules/cel"
 )
 
+type CustomRule struct {
+	id         string
+	value      int
+	expression string
+}
+
+func (c CustomRule) Expression() string {
+	return c.expression
+}
+
 func TestSimpleCEL(t *testing.T) {
 
 	engine := cel.NewEngine()
@@ -26,10 +36,10 @@ func TestSimpleCEL(t *testing.T) {
 		ID:     "myset",
 		Schema: schema,
 		Rules: []rules.Rule{
-			{ID: "1", Expression: `// some text here
+			CustomRule{expression: `// some text here
 
-objectType == "car" && "admin" in claims.roles && "A" in grades`},
-			{ID: "2", Expression: `objectType == "xya" || ( "admin" in claims.roles && "A" in grades)`},
+objectType == "car" && "admin" in claims.roles && "A" in grades`, value: 100},
+			CustomRule{expression: `objectType == "xya" || ( "admin" in claims.roles && "A" in grades)`, value: 3},
 		},
 	}
 
@@ -49,8 +59,9 @@ objectType == "car" && "admin" in claims.roles && "A" in grades`},
 		fmt.Printf("Error evaluating: %v", err)
 	}
 	for _, v := range results {
+		//fmt.Println((*v.Rule).Expression(), v.Pass, (*v.Rule).(CustomRule).value)
 		if !v.Pass {
-			t.Errorf("Expected true, got false: %s: %s", v.Rule.ID, v.Rule.Expression)
+			t.Errorf("Expected true, got false: %s", (*v.Rule).Expression())
 		}
 	}
 }
@@ -71,7 +82,7 @@ func TestMissingData(t *testing.T) {
 		ID:     "myset",
 		Schema: schema,
 		Rules: []rules.Rule{
-			{ID: "1", Expression: `objectType == "car" && state == "good"`},
+			CustomRule{expression: `objectType == "car" && state == "good"`},
 		},
 	}
 
@@ -89,8 +100,8 @@ func TestMissingData(t *testing.T) {
 		fmt.Printf("Error evaluating: %v", err)
 	}
 	for _, v := range results {
-		if !v.Pass {
-			t.Errorf("Expected true, got false: %s: %s", v.Rule.ID, v.Rule.Expression)
+		if v.Pass {
+			t.Errorf("Expected false, got true: %s", (*v.Rule).Expression())
 		}
 	}
 }
@@ -112,7 +123,7 @@ func TestNestedMap(t *testing.T) {
 		ID:     "myset",
 		Schema: schema,
 		Rules: []rules.Rule{
-			{ID: "1", Expression: `objectType == "car" && items["one"]["color"] == "green"`},
+			CustomRule{expression: `objectType == "car" && items["one"]["color"] == "green"`},
 		},
 	}
 	err := engine.AddRuleSet(&ruleSet)
@@ -138,7 +149,7 @@ func TestNestedMap(t *testing.T) {
 	}
 	for _, v := range results {
 		if !v.Pass {
-			t.Errorf("Expected true, got false: %s: %s", v.Rule.ID, v.Rule.Expression)
+			t.Errorf("Expected true, got false: %s", (*v.Rule).Expression())
 		}
 	}
 
@@ -162,7 +173,7 @@ func BenchmarkCELSimple(b *testing.B) {
 		ID:     "myset",
 		Schema: schema,
 		Rules: []rules.Rule{
-			{ID: "1", Expression: `objectType == "car" && (state == "X" || state == "Y")`},
+			CustomRule{expression: `objectType == "car" && (state == "X" || state == "Y")`},
 		},
 	}
 
@@ -198,7 +209,7 @@ func BenchmarkCELWithLists(b *testing.B) {
 		ID:     "myset",
 		Schema: schema,
 		Rules: []rules.Rule{
-			{ID: "1", Expression: `objectType == "car" && "admin" in claims.roles && "A" in grades`},
+			CustomRule{expression: `objectType == "car" && "admin" in claims.roles && "A" in grades`},
 		},
 	}
 	err := engine.AddRuleSet(&ruleSet)

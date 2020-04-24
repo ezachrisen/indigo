@@ -80,11 +80,12 @@ func EvaluateUntilTrue(e Engine, data map[string]interface{}, ruleSetID string) 
 // --------------------------------------------------
 // Rules
 
-// Rule is an evaluable unit of logic represented as a text expression
-// (see https://pkg.go.dev/github.com/google/cel-go/cel for documentation)
-type Rule struct {
-	ID         string
-	Expression string
+// The Rule interface provides an expression that follows the
+// Common Expression Language specification (see
+// https://pkg.go.dev/github.com/google/cel-go/cel for documentation)
+
+type Rule interface {
+	Expression() string
 }
 
 // RuleSet contains a group of rules that will be evaluated together to produce results.

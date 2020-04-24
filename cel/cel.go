@@ -11,7 +11,7 @@ import (
 	exprbp "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
-// celType converts from a rules/Type to a CEL type
+// celType converts from a rules.Type to a CEL type
 func celType(t rules.Type) *exprbp.Type {
 
 	switch v := t.(type) {
@@ -80,7 +80,7 @@ func (e *CELEngine) EvaluateRule(data map[string]interface{}, r *rules.Rule) (*r
 	program, found := e.programs[r]
 
 	if e.programs[r] == nil || !found {
-		return nil, fmt.Errorf("Missing program for rule with ID '%s'", r.ID)
+		return nil, fmt.Errorf("Missing program for rule")
 	}
 
 	rawValue, _, error := program.Eval(data)
@@ -111,7 +111,7 @@ func (e *CELEngine) AddRuleSet(ruleSet *rules.RuleSet) error {
 	for i, rule := range ruleSet.Rules {
 
 		// Parse the rule expression to an AST
-		p, iss := env.Parse(rule.Expression)
+		p, iss := env.Parse(rule.Expression())
 		if iss != nil && iss.Err() != nil {
 			return iss.Err()
 		}
