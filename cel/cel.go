@@ -3,6 +3,7 @@ package cel
 
 import (
 	"fmt"
+
 	"github.com/ezachrisen/rules"
 
 	"github.com/google/cel-go/cel"
@@ -84,7 +85,13 @@ func (e *CELEngine) EvaluateRule(data map[string]interface{}, r *rules.Rule) (*r
 
 	rawValue, _, error := program.Eval(data)
 	if error == nil {
-		result.Pass = rawValue.Value().(bool)
+		val, ok := rawValue.Value().(bool)
+		if !ok {
+			result.Pass = false
+		} else {
+			result.Pass = val
+		}
+
 	}
 
 	return &result, nil
