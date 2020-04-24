@@ -2,9 +2,10 @@ package cel_test
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/ezachrisen/rules"
 	"github.com/ezachrisen/rules/cel"
-	"testing"
 )
 
 func TestSimpleCEL(t *testing.T) {
@@ -25,7 +26,9 @@ func TestSimpleCEL(t *testing.T) {
 		ID:     "myset",
 		Schema: schema,
 		Rules: []rules.Rule{
-			{ID: "1", Expression: `objectType == "car" && "admin" in claims.roles && "A" in grades`},
+			{ID: "1", Expression: `// some text here
+
+objectType == "car" && "admin" in claims.roles && "A" in grades`},
 			{ID: "2", Expression: `objectType == "xya" || ( "admin" in claims.roles && "A" in grades)`},
 		},
 	}
@@ -39,6 +42,46 @@ func TestSimpleCEL(t *testing.T) {
 		"objectType": "car",
 		"grades":     []interface{}{"A", "C", "D"},
 		"claims":     map[string]interface{}{"roles": []string{"admin", ",something", "somethingelse"}},
+	}
+
+	results, err := engine.EvaluateAll(data, "myset")
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+	}
+	for _, v := range results {
+		if !v.Pass {
+			t.Errorf("Expected true, got false: %s: %s", v.Rule.ID, v.Rule.Expression)
+		}
+	}
+}
+
+func TestMissingData(t *testing.T) {
+
+	engine := cel.NewEngine()
+
+	schema := rules.Schema{
+		ID: "my schema",
+		Elements: []rules.DataElement{
+			{Name: "objectType", Type: rules.String{}},
+			{Name: "state", Type: rules.String{}},
+		},
+	}
+
+	ruleSet := rules.RuleSet{
+		ID:     "myset",
+		Schema: schema,
+		Rules: []rules.Rule{
+			{ID: "1", Expression: `objectType == "car" && state == "good"`},
+		},
+	}
+
+	err := engine.AddRuleSet(&ruleSet)
+	if err != nil {
+		fmt.Printf("Error adding ruleset: %v", err)
+	}
+
+	data := map[string]interface{}{
+		"objectType": "car",
 	}
 
 	results, err := engine.EvaluateAll(data, "myset")
