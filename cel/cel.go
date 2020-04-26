@@ -19,6 +19,8 @@ func celType(t rules.Type) *exprbp.Type {
 		return decls.String
 	case rules.Int:
 		return decls.Int
+	case rules.Float:
+		return decls.Double
 	case rules.Bool:
 		return decls.Bool
 	case rules.Duration:
@@ -45,18 +47,20 @@ func schemaToDeclarations(s rules.Schema) (cel.EnvOption, error) {
 }
 
 type CELEngine struct {
-	ruleSets map[string]*rules.RuleSet
-	programs map[*rules.Rule]cel.Program
+	// Map of ruleSet.ID to rule set
+	ruleSets map[string]rules.RuleSet
+	// Map of ruleset.ID and rule.ID to program
+	programs map[string]map[string]cel.Program
 }
 
 func NewEngine() *CELEngine {
 	engine := CELEngine{}
-	engine.ruleSets = make(map[string]*rules.RuleSet)
-	engine.programs = make(map[*rules.Rule]cel.Program)
+	engine.ruleSets = make(map[string]rules.RuleSet)
+	engine.programs = make(map[string]map[string]cel.Program)
 	return &engine
 }
 
-func (e *CELEngine) RuleSet(id string) (*rules.RuleSet, bool) {
+func (e *CELEngine) RuleSet(id string) (rules.RuleSet, bool) {
 	ruleSet, found := e.ruleSets[id]
 	return ruleSet, found
 }
@@ -65,53 +69,62 @@ func (e *CELEngine) EvaluateAll(data map[string]interface{}, ruleSetID string) (
 	return rules.EvaluateAll(e, data, ruleSetID)
 }
 
-func (e *CELEngine) EvaluateUntilTrue(data map[string]interface{}, ruleSetID string) (*rules.Result, error) {
+func (e *CELEngine) EvaluateUntilTrue(data map[string]interface{}, ruleSetID string) (rules.Result, error) {
 	return rules.EvaluateUntilTrue(e, data, ruleSetID)
 }
 
-func (e *CELEngine) EvaluateRule(data map[string]interface{}, r *rules.Rule) (*rules.Result, error) {
+func (e *CELEngine) EvaluateRule(data map[string]interface{}, ruleSetID string, ruleID string) (*rules.Result, error) {
 
-	result := rules.Result{Rule: r}
+	program, found := e.programs[ruleSetID][ruleID]
 
-	if r == nil {
-		return nil, fmt.Errorf("Rule is nil")
-	}
-
-	program, found := e.programs[r]
-
-	if e.programs[r] == nil || !found {
+	if program == nil || !found {
 		return nil, fmt.Errorf("Missing program for rule")
 	}
 
+	result := rules.Result{RuleSetID: ruleSetID, RuleID: ruleID}
+
 	rawValue, _, error := program.Eval(data)
 	if error == nil {
-		val, ok := rawValue.Value().(bool)
-		if !ok {
-			result.Pass = false
-		} else {
-			result.Pass = val
+		switch v := rawValue.Value().(type) {
+		case bool:
+			result.Pass = v
+		case float64:
+			result.Float64Value = v
+		case int64:
+			result.Int64Value = v
+		case string:
+			result.StringValue = v
 		}
-
 	}
-
 	return &result, nil
 }
 
-func (e *CELEngine) AddRuleSet(ruleSet *rules.RuleSet) error {
-	declarations, err := schemaToDeclarations(ruleSet.Schema)
+func (e *CELEngine) AddRuleSet(rs rules.RuleSet) error {
+
+	// Prevent accidental updating of rule sets
+	if _, found := e.ruleSets[rs.ID]; found {
+		return fmt.Errorf("Rule set already exists: %s", rs.ID)
+	}
+	return e.AddOrReplaceRuleSet(rs)
+}
+
+func (e *CELEngine) AddOrReplaceRuleSet(rs rules.RuleSet) error {
+
+	decls, err := schemaToDeclarations(rs.Schema)
 	if err != nil {
 		return err
 	}
 
-	env, err := cel.NewEnv(declarations)
+	env, err := cel.NewEnv(decls)
 	if err != nil {
 		return err
 	}
+	e.programs[rs.ID] = make(map[string]cel.Program)
 
-	for i, rule := range ruleSet.Rules {
+	for k, r := range rs.Rules {
 
 		// Parse the rule expression to an AST
-		p, iss := env.Parse(rule.Expression())
+		p, iss := env.Parse(r.Expression())
 		if iss != nil && iss.Err() != nil {
 			return iss.Err()
 		}
@@ -129,9 +142,9 @@ func (e *CELEngine) AddRuleSet(ruleSet *rules.RuleSet) error {
 		}
 
 		// Save the program ready to be evaluated
-		e.programs[&ruleSet.Rules[i]] = prg
+		e.programs[rs.ID][k] = prg
 	}
 
-	e.ruleSets[ruleSet.ID] = ruleSet
+	e.ruleSets[rs.ID] = rs
 	return nil
 }
