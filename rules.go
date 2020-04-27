@@ -110,10 +110,9 @@ func (s SimpleRule) Expression() string {
 
 // RuleSet contains a group of rules that will be evaluated together to produce results.
 type RuleSet struct {
-	ID         string
-	Rules      map[string]Rule // The rules to evaluate. The map key is known as the "rule id"
-	Schema     Schema          // The data schema that all rules and data must adhere to
-	OutputType Type            // The type of the result value: bool, float, string, etc.
+	ID     string
+	Rules  map[string]Rule // The rules to evaluate. The map key is known as the "rule id"
+	Schema Schema          // The data schema that all rules and data must adhere to
 }
 
 // --------------------------------------------------
