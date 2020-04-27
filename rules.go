@@ -2,6 +2,7 @@ package rules
 
 import (
 	"fmt"
+	"time"
 )
 
 // --------------------------------------------------
@@ -40,6 +41,7 @@ type Result struct {
 	Int64Value   int64
 	StringValue  string
 	ResultType   Type
+	Duration     time.Duration
 }
 
 // These functions are intended to be called by implementors of the Engine interface.
