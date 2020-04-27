@@ -53,7 +53,7 @@ func EvaluateAll(e Engine, data map[string]interface{}, ruleSetID string) ([]Res
 
 	ruleSet, found := e.RuleSet(ruleSetID)
 	if !found {
-		return nil, fmt.Errorf("Ruleset %v not found", ruleSet)
+		return nil, fmt.Errorf("Ruleset %s not found", ruleSetID)
 	}
 
 	results := make([]Result, 0, len(ruleSet.Rules))
