@@ -3,8 +3,10 @@ package cel
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/ezachrisen/rules"
+	"github.com/golang/protobuf/ptypes/duration"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
@@ -84,17 +86,23 @@ func (e *CELEngine) EvaluateRule(data map[string]interface{}, ruleSetID string, 
 	result := rules.Result{RuleSetID: ruleSetID, RuleID: ruleID}
 
 	rawValue, _, error := program.Eval(data)
-	if error == nil {
-		switch v := rawValue.Value().(type) {
-		case bool:
-			result.Pass = v
-		case float64:
-			result.Float64Value = v
-		case int64:
-			result.Int64Value = v
-		case string:
-			result.StringValue = v
-		}
+	if error != nil {
+		return nil, fmt.Errorf("Error evaluating rule %s:%s:%w", ruleSetID, ruleID, error)
+	}
+
+	switch v := rawValue.Value().(type) {
+	case bool:
+		result.Pass = v
+	case float64:
+		result.Float64Value = v
+	case int64:
+		result.Int64Value = v
+	case string:
+		result.StringValue = v
+	case *duration.Duration:
+		// Durations are returned as seconds; convert to nanosecond for
+		// TODO: check how CEL supports sub-second durations
+		result.Duration = time.Duration(v.Seconds * 1000000000)
 	}
 	return &result, nil
 }
