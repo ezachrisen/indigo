@@ -42,6 +42,7 @@ type Result struct {
 	StringValue  string
 	ResultType   Type
 	Duration     time.Duration
+	RawValue     interface{}
 }
 
 // These functions are intended to be called by implementors of the Engine interface.

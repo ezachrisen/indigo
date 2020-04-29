@@ -90,6 +90,8 @@ func (e *CELEngine) EvaluateRule(data map[string]interface{}, ruleSetID string, 
 		return nil, fmt.Errorf("Error evaluating rule %s:%s:%w", ruleSetID, ruleID, error)
 	}
 
+	result.RawValue = rawValue
+
 	switch v := rawValue.Value().(type) {
 	case bool:
 		result.Pass = v
@@ -130,23 +132,22 @@ func (e *CELEngine) AddOrReplaceRuleSet(rs rules.RuleSet) error {
 	e.programs[rs.ID] = make(map[string]cel.Program)
 
 	for k, r := range rs.Rules {
-
 		// Parse the rule expression to an AST
 		p, iss := env.Parse(r.Expression())
 		if iss != nil && iss.Err() != nil {
-			return iss.Err()
+			return fmt.Errorf("parsing rule %s:%s, %w", rs.ID, k, iss.Err())
 		}
 
 		// Type-check the parsed AST against the declarations
 		c, iss := env.Check(p)
 		if iss != nil && iss.Err() != nil {
-			return iss.Err()
+			return fmt.Errorf("checking rule %s:%s, %w", rs.ID, k, iss.Err())
 		}
 
 		// Generate an evaluable program
 		prg, err := env.Program(c)
 		if err != nil {
-			return err
+			return fmt.Errorf("generating program %s:%s, %w", rs.ID, k, err)
 		}
 
 		// Save the program ready to be evaluated
