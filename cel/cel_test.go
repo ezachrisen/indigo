@@ -159,6 +159,38 @@ func TestExpressionValues(t *testing.T) {
 
 }
 
+// func TestAdHoc(t *testing.T) {
+// 	engine := cel.NewEngine()
+
+// 	schema := rules.Schema{
+// 		ID: "my schema",
+// 		Elements: []rules.DataElement{
+// 			{Name: "cost", Type: rules.Float{}},
+// 			{Name: "score", Type: rules.Int{}},
+// 			{Name: "name", Type: rules.String{}},
+// 			{Name: "incidentTime", Type: rules.Timestamp{}},
+// 			{Name: "now", Type: rules.Timestamp{}},
+// 		},
+// 	}
+
+// 	data := map[string]interface{}{
+// 		"cost":         100.00,
+// 		"score":        6,
+// 		"name":         "Joe",
+// 		"incidentTime": &tpb.Timestamp{Seconds: time.Date(2020, 4, 19, 12, 10, 30, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+// 		"now":          &tpb.Timestamp{Seconds: time.Date(2020, 4, 19, 13, 15, 45, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+// 	}
+
+// 	result, err := engine.EvaluateAdHocRule(data, schema, `cost + 1.22`)
+// 	if err != nil {
+// 		t.Fatalf("Error evaluating rule: %v", err)
+// 	}
+// 	if result.Float64Value != 101.22 {
+// 		t.Errorf("Expected %f, got %f", 101.22, result.Float64Value)
+// 	}
+
+// }
+
 func TestNestedMap(t *testing.T) {
 
 	engine := cel.NewEngine()
@@ -226,7 +258,7 @@ func BenchmarkCELSimple(b *testing.B) {
 		Schema: schema,
 		Rules: map[string]rules.Rule{
 			"honor_student": rules.SimpleRule{Expr: `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`},
-			"at_risk":       rules.SimpleRule{Expr: `student.GPA < 2.5 || student.Status == "Probation"`},
+			//"at_risk": rules.SimpleRule{Expr: `student.GPA < 2.5 || student.Status == "Probation"`},
 		},
 	}
 
