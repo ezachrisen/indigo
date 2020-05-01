@@ -10,31 +10,56 @@ import (
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/types/pb"
 	exprbp "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+	"google.golang.org/protobuf/runtime/protoiface"
 )
 
 // celType converts from a rules.Type to a CEL type
-func celType(t rules.Type) *exprbp.Type {
+func celType(t rules.Type) (*exprbp.Type, error) {
 
 	switch v := t.(type) {
 	case rules.String:
-		return decls.String
+		return decls.String, nil
 	case rules.Int:
-		return decls.Int
+		return decls.Int, nil
 	case rules.Float:
-		return decls.Double
+		return decls.Double, nil
 	case rules.Bool:
-		return decls.Bool
+		return decls.Bool, nil
 	case rules.Duration:
-		return decls.Duration
+		return decls.Duration, nil
 	case rules.Timestamp:
-		return decls.Timestamp
+		return decls.Timestamp, nil
 	case rules.Map:
-		return decls.NewMapType(celType(v.KeyType), celType(v.ValueType))
+		key, err := celType(v.KeyType)
+		if err != nil {
+			return nil, fmt.Errorf("Setting key of %v map: %w", v.KeyType, err)
+		}
+		val, err := celType(v.ValueType)
+		if err != nil {
+			return nil, fmt.Errorf("Setting value of %v map: %w", v.ValueType, err)
+		}
+		return decls.NewMapType(key, val), nil
 	case rules.List:
-		return decls.NewListType(celType(v.ValueType))
+		val, err := celType(v.ValueType)
+		if err != nil {
+			return nil, fmt.Errorf("Setting value of %v list: %w", v.ValueType, err)
+		}
+		return decls.NewListType(val), nil
+	case rules.Proto:
+		protoMessage, ok := v.Message.(protoiface.MessageV1)
+		if !ok {
+			return nil, fmt.Errorf("Casting to proto message %v", v.Protoname)
+		}
+		_, err := pb.DefaultDb.RegisterMessage(protoMessage)
+		if err != nil {
+			return nil, fmt.Errorf("registering proto message %v: %w", v.Protoname, err)
+		}
+		return decls.NewObjectType(v.Protoname), nil
 	}
-	return decls.Any
+	return decls.Any, nil
+
 }
 
 // schemaToDeclarations converts from a rules/Schema to a set of CEL declarations that
@@ -43,7 +68,11 @@ func schemaToDeclarations(s rules.Schema) (cel.EnvOption, error) {
 	items := []*exprbp.Decl{}
 
 	for _, d := range s.Elements {
-		items = append(items, decls.NewIdent(d.Name, celType(d.Type), nil))
+		typ, err := celType(d.Type)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, decls.NewIdent(d.Name, typ, nil))
 	}
 	return cel.Declarations(items...), nil
 }
@@ -65,6 +94,7 @@ func NewEngine() *CELEngine {
 func (e *CELEngine) RuleSet(id string) (rules.RuleSet, bool) {
 	ruleSet, found := e.ruleSets[id]
 	return ruleSet, found
+
 }
 
 func (e *CELEngine) EvaluateAll(data map[string]interface{}, ruleSetID string) ([]rules.Result, error) {

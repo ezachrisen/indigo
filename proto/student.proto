@@ -1,0 +1,24 @@
+syntax = "proto3";
+package school;
+
+option go_package = ".;school";
+
+import "google/protobuf/timestamp.proto";
+
+message Student {
+  double ID = 1;
+  int32 Age = 2;
+  double GPA = 3;
+  status_type Status = 4;
+
+  google.protobuf.Timestamp EnrollmentDate = 7; 
+  
+  enum status_type {
+	ENROLLED = 0;
+	PROBATION = 1;
+  }
+  
+  map<string, string> Attrs = 6;
+  
+  repeated double Grades = 5;
+}

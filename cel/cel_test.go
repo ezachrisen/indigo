@@ -7,7 +7,7 @@ import (
 
 	"github.com/ezachrisen/rules"
 	"github.com/ezachrisen/rules/cel"
-	tpb "github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/golang/protobuf/ptypes/timestamp"
 )
 
 func TestSimpleCEL(t *testing.T) {
@@ -58,7 +58,7 @@ func TestSimpleCEL(t *testing.T) {
 		"student.Grades":         []interface{}{"A", "B", "A"},
 		"student.EnrollmentDate": "2018-08-03T16:00:00-07:00",
 		"now":                    "2019-08-03T16:00:00-07:00",
-		"alsoNow":                &tpb.Timestamp{Seconds: time.Now().Unix()},
+		"alsoNow":                &timestamp.Timestamp{Seconds: time.Now().Unix()},
 	}
 
 	results, err := engine.EvaluateAll(data, "student_actions")
@@ -117,8 +117,8 @@ func TestExpressionValues(t *testing.T) {
 		"cost":         100.00,
 		"score":        6,
 		"name":         "Joe",
-		"incidentTime": &tpb.Timestamp{Seconds: time.Date(2020, 4, 19, 12, 10, 30, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
-		"now":          &tpb.Timestamp{Seconds: time.Date(2020, 4, 19, 13, 15, 45, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+		"incidentTime": &timestamp.Timestamp{Seconds: time.Date(2020, 4, 19, 12, 10, 30, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+		"now":          &timestamp.Timestamp{Seconds: time.Date(2020, 4, 19, 13, 15, 45, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
 	f, err := engine.EvaluateRule(data, "myset", "float")
