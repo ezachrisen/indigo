@@ -5,16 +5,20 @@ import (
 	"time"
 )
 
+// ./runtests.sh
 // --------------------------------------------------
 // Rules Engine
 
 // The Engine interface represents a rules engine capable of evaluating rules.
 // against a specific rule set.
 type Engine interface {
-	// Add the rule set to the engine
-	// Will produce an error if the rule set already exists
-	// Use AddOrReplaceRuleSet in that case.
+
+	// Add the rule set to the engine. Will produce an error if the rules already
+	// exists. Use AddOrReplaceRuleset instead.
 	AddRuleSet(RuleSet) error
+
+	// Add a rule set to the engine. An existing rule set with the same ID will be
+	// replaced silently.
 	AddOrReplaceRuleSet(RuleSet) error
 
 	// Return the rule set if found
@@ -151,6 +155,10 @@ type Any struct{}
 type Bool struct{}
 type Duration struct{}
 type Timestamp struct{}
+type Proto struct {
+	Protoname string
+	Message   interface{}
+}
 
 // List is an array of items
 type List struct {
@@ -172,3 +180,4 @@ func (t Any) TypeName()       {}
 func (t Duration) TypeName()  {}
 func (t Timestamp) TypeName() {}
 func (t Float) TypeName()     {}
+func (t Proto) TypeName()     {}
