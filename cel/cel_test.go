@@ -32,15 +32,15 @@ func TestSimpleCEL(t *testing.T) {
 		Schema: schema,
 		Rules: map[string]rules.Rule{
 			"honor_student":                rules.SimpleRule{Expr: `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`},
-			"at_risk":                      rules.SimpleRule{Expr: `student.GPA < 2.5 || student.Status == "Probation"`},
+			"at_risk":                      rules.SimpleRule{Expr: `student.GPA < 2.5 || student.Status == "Probation"`, Acts: []rules.Action{rules.SimpleRule{Expr: `2.0+6.0`}}},
 			"been_here_more_than_6_months": rules.SimpleRule{Expr: `timestamp(now) - timestamp(student.EnrollmentDate) > duration("4320h")`},
 			"been_here_more_than_1_hour":   rules.SimpleRule{Expr: `alsoNow - timestamp(student.EnrollmentDate) > duration("1h")`},
 		},
 	}
 
 	expectedResults := map[string]bool{
-		"honor_student":                true,
-		"at_risk":                      false,
+		"honor_student":                false,
+		"at_risk":                      true,
 		"been_here_more_than_6_months": true,
 		"been_here_more_than_1_hour":   true,
 	}
@@ -53,7 +53,7 @@ func TestSimpleCEL(t *testing.T) {
 	data := map[string]interface{}{
 		"student.ID":             "12312",
 		"student.Age":            16,
-		"student.GPA":            3.76,
+		"student.GPA":            2.2,
 		"student.Status":         "Enrolled",
 		"student.Grades":         []interface{}{"A", "B", "A"},
 		"student.EnrollmentDate": "2018-08-03T16:00:00-07:00",
@@ -74,6 +74,13 @@ func TestSimpleCEL(t *testing.T) {
 		if exp != v.Pass {
 			t.Errorf("Wanted true, got false for rule %s", v.RuleID)
 		}
+
+		if v.Pass {
+			for a := v.
+
+
+		}
+		
 	}
 }
 

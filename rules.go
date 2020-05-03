@@ -102,15 +102,30 @@ func EvaluateUntilTrue(e Engine, data map[string]interface{}, ruleSetID string) 
 
 type Rule interface {
 	Expression() string
+	Actions() []Action
+}
+
+// The Action interface
+type Action interface {
+	Do() error
 }
 
 // Simple implementation of the Rule interface
 type SimpleRule struct {
 	Expr string
+	Acts []Action
 }
 
 func (s SimpleRule) Expression() string {
 	return s.Expr
+}
+
+func (s SimpleRule) Actions() []Action {
+	return s.Acts
+}
+
+func (a SimpleRule) Do() error {
+	return nil
 }
 
 // RuleSet contains a group of rules that will be evaluated together to produce results.

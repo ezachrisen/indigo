@@ -133,7 +133,6 @@ func (e *CELEngine) EvaluateRule(data map[string]interface{}, ruleSetID string, 
 		result.StringValue = v
 	case *duration.Duration:
 		// Durations are returned as seconds; convert to nanosecond for
-		// TODO: check how CEL supports sub-second durations
 		result.Duration = time.Duration(v.Seconds * 1000000000)
 	}
 	return &result, nil
@@ -146,6 +145,28 @@ func (e *CELEngine) AddRuleSet(rs rules.RuleSet) error {
 		return fmt.Errorf("Rule set already exists: %s", rs.ID)
 	}
 	return e.AddOrReplaceRuleSet(rs)
+}
+
+func (e *CELEngine) CompileRule(env *cel.Env, r rules.Rule, ruleID string) (cel.Program, error) {
+
+	// Parse the rule expression to an AST
+	p, iss := env.Parse(r.Expression())
+	if iss != nil && iss.Err() != nil {
+		return nil, fmt.Errorf("parsing rule %s, %w", ruleID, iss.Err())
+	}
+
+	// Type-check the parsed AST against the declarations
+	c, iss := env.Check(p)
+	if iss != nil && iss.Err() != nil {
+		return nil, fmt.Errorf("checking rule %s, %w", ruleID, iss.Err())
+	}
+
+	// Generate an evaluable program
+	prg, err := env.Program(c)
+	if err != nil {
+		return nil, fmt.Errorf("generating program %s, %w", ruleID, err)
+	}
+	return prg, nil
 }
 
 func (e *CELEngine) AddOrReplaceRuleSet(rs rules.RuleSet) error {
@@ -162,26 +183,23 @@ func (e *CELEngine) AddOrReplaceRuleSet(rs rules.RuleSet) error {
 	e.programs[rs.ID] = make(map[string]cel.Program)
 
 	for k, r := range rs.Rules {
-		// Parse the rule expression to an AST
-		p, iss := env.Parse(r.Expression())
-		if iss != nil && iss.Err() != nil {
-			return fmt.Errorf("parsing rule %s:%s, %w", rs.ID, k, iss.Err())
-		}
-
-		// Type-check the parsed AST against the declarations
-		c, iss := env.Check(p)
-		if iss != nil && iss.Err() != nil {
-			return fmt.Errorf("checking rule %s:%s, %w", rs.ID, k, iss.Err())
-		}
-
-		// Generate an evaluable program
-		prg, err := env.Program(c)
+		prg, err := e.CompileRule(env, r, k)
 		if err != nil {
-			return fmt.Errorf("generating program %s:%s, %w", rs.ID, k, err)
+			return fmt.Errorf("Adding rule set %s: %w", rs.ID, err)
 		}
-
 		// Save the program ready to be evaluated
 		e.programs[rs.ID][k] = prg
+
+		// If the rule has actions, and the action is a rule, compile and save it as well
+		for i, a := range r.Actions() {
+			if actionRule, ok := a.(rules.Rule); ok {
+				prg, err := e.CompileRule(env, actionRule, k)
+				if err != nil {
+					return fmt.Errorf("Adding action #%d for rule %s to rule set %s: %w", i, k, rs.ID, err)
+				}
+				e.programs[rs.ID][fmt.Sprintf("%s-%d", k, i)] = prg
+			}
+		}
 	}
 
 	e.ruleSets[rs.ID] = rs
