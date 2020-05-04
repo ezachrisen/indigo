@@ -74,13 +74,6 @@ func TestSimpleCEL(t *testing.T) {
 		if exp != v.Pass {
 			t.Errorf("Wanted true, got false for rule %s", v.RuleID)
 		}
-
-		if v.Pass {
-			for a := v.
-
-
-		}
-		
 	}
 }
 
