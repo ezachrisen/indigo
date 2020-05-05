@@ -24,6 +24,7 @@ type Engine interface {
 
 	EvaluateN(data map[string]interface{}, id string, n int) (*Result, error)
 
+	Calculate(data map[string]interface{}, expr string, schema Schema) (float64, error)
 	// // Evaluate all rules in a rule set against the data
 	// EvaluateAll(data map[string]interface{}, setID string) ([]Result, error)
 
@@ -39,18 +40,12 @@ const (
 // See the documentation for the Evaluate* methods for information on the
 // result set.
 type Result struct {
-	RuleID string
-
-	Value interface{}
-	// Pass         bool // Whether the expression was satisfied by the input data
-	// Float64Value float64
-	// Int64Value   int64
-	// StringValue  string
-	// ResultType   Type
-	// Duration     time.Duration
+	RuleID   string
+	XRef     interface{}
+	Pass     bool
+	Value    interface{}
 	RawValue interface{}
-	Results  []Result
-	Rule     *Rule
+	Results  map[string]Result
 }
 
 // --------------------------------------------------
@@ -61,10 +56,32 @@ type Result struct {
 // https://pkg.go.dev/github.com/google/cel-go/cel for documentation)
 
 type Rule interface {
+	XRef() interface{}
 	ID() string
 	Schema() Schema
 	Expression() string
-	Rules() []Rule
+	Rules() map[string]Rule
+}
+
+type BasicRule struct {
+	RuleID     string
+	Expr       string
+	RuleSchema Schema
+	ChildRules map[string]BasicRule
+	Expected   Result
+	Ref        string
+}
+
+func (r BasicRule) XRef() interface{}  { return r.Ref }
+func (r BasicRule) ID() string         { return r.RuleID }
+func (r BasicRule) Schema() Schema     { return r.RuleSchema }
+func (r BasicRule) Expression() string { return r.Expr }
+func (r BasicRule) Rules() map[string]Rule {
+	rls := make(map[string]Rule, len(r.ChildRules))
+	for k, v := range r.ChildRules {
+		rls[k] = BasicRule(v)
+	}
+	return rls
 }
 
 // --------------------------------------------------
@@ -173,9 +190,9 @@ func (t Proto) TypeName()     {}
 // 	return Result{}, nil
 // }
 
-func MakeChildRuleID(parentRuleID string, childRuleID string) string {
-	return parentRuleID + ":" + childRuleID
-}
+// func MakeChildRuleID(parentRuleID string, childRuleID string) string {
+// 	return parentRuleID + ":" + childRuleID
+// }
 
 // // Simple implementation of the Rule interface
 // type SimpleRule struct {
