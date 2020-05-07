@@ -55,33 +55,12 @@ type Result struct {
 // Common Expression Language specification (see
 // https://pkg.go.dev/github.com/google/cel-go/cel for documentation)
 
-type Rule interface {
-	XRef() interface{}
-	ID() string
-	Schema() Schema
-	Expression() string
-	Rules() map[string]Rule
-}
-
-type BasicRule struct {
-	RuleID     string
-	Expr       string
-	RuleSchema Schema
-	ChildRules map[string]BasicRule
-	Expected   Result
-	Ref        string
-}
-
-func (r BasicRule) XRef() interface{}  { return r.Ref }
-func (r BasicRule) ID() string         { return r.RuleID }
-func (r BasicRule) Schema() Schema     { return r.RuleSchema }
-func (r BasicRule) Expression() string { return r.Expr }
-func (r BasicRule) Rules() map[string]Rule {
-	rls := make(map[string]Rule, len(r.ChildRules))
-	for k, v := range r.ChildRules {
-		rls[k] = BasicRule(v)
-	}
-	return rls
+type Rule struct {
+	ID     string
+	Expr   string
+	Schema Schema
+	Rules  map[string]Rule
+	Meta   interface{}
 }
 
 // --------------------------------------------------

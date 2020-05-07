@@ -31,22 +31,22 @@ func TestBasicRules(t *testing.T) {
 		},
 	}
 	myref := "d04ab6d9-f59d-9474-5c38-34d65380c612"
-	rule := rules.BasicRule{
-		RuleID:     "student_actions",
-		Ref:        myref,
-		RuleSchema: education,
-		ChildRules: map[string]rules.BasicRule{
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Meta:   myref,
+		Schema: education,
+		Rules: map[string]rules.Rule{
 			"honors_student": {
-				RuleID: "honors_student",
-				Expr:   `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+				ID:   "honors_student",
+				Expr: `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
 			},
 			"at_risk": {
-				RuleID: "at_risk",
-				Expr:   `student.GPA < 2.5 || student.Status == "Probation"`,
-				ChildRules: map[string]rules.BasicRule{
+				ID:   "at_risk",
+				Expr: `student.GPA < 2.5 || student.Status == "Probation"`,
+				Rules: map[string]rules.Rule{
 					"risk_factor": {
-						RuleID: "risk_factor",
-						Expr:   `2.0+6.0`,
+						ID:   "risk_factor",
+						Expr: `2.0+6.0`,
 					},
 				},
 			},
@@ -199,24 +199,24 @@ func TestProtoMessage(t *testing.T) {
 
 	engine := cel.NewEngine()
 
-	rule := rules.BasicRule{
-		RuleID:     "student_actions",
-		RuleSchema: schema,
-		ChildRules: map[string]rules.BasicRule{
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Schema: schema,
+		Rules: map[string]rules.Rule{
 			"honor_student": {
-				RuleID:   "honor_student",
-				Expr:     `student.GPA >= 3.6 && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
-				Expected: rules.Result{Pass: true},
+				ID:   "honor_student",
+				Expr: `student.GPA >= 3.7 && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
+				Meta: true,
 			},
 			"at_risk": {
-				RuleID:   "at_risk",
-				Expr:     `student.GPA < 2.5 || student.Status == school.Student.status_type.PROBATION`,
-				Expected: rules.Result{Pass: false},
+				ID:   "at_risk",
+				Expr: `student.GPA < 2.5 || student.Status == school.Student.status_type.PROBATION`,
+				Meta: false,
 			},
 			"tenure_gt_6months": {
-				RuleID:   "tenure_gt_6months",
-				Expr:     `now - student.EnrollmentDate > duration("4320h")`, // 6 months = 4320 hours
-				Expected: rules.Result{Pass: true},
+				ID:   "tenure_gt_6months",
+				Expr: `now - student.EnrollmentDate > duration("4320h")`, // 6 months = 4320 hours
+				Meta: true,
 			},
 		},
 	}
@@ -241,17 +241,14 @@ func TestProtoMessage(t *testing.T) {
 	}
 
 	results, err := engine.Evaluate(data, "student_actions")
-	if err != nil {
-		t.Errorf("Evaluation error: %v", err)
-	}
 
 	for _, v := range results.Results {
-		br, found := rule.ChildRules[v.RuleID]
+		br, found := rule.Rules[v.RuleID]
 		if !found {
 			t.Errorf("Unexpected rule ID in results; no corresponding rule: %s", v.RuleID)
 		}
-		if br.Expected.Pass != v.Pass {
-			t.Errorf("Expected %t, got %t, rule %s", br.Expected.Pass, v.Pass, v.RuleID)
+		if br.Meta != v.Pass {
+			t.Errorf("Expected %t, got %t, rule %s", br.Meta, v.Pass, v.RuleID)
 		}
 	}
 }
@@ -272,15 +269,14 @@ func BenchmarkSimpleRule(b *testing.B) {
 		},
 	}
 
-	rule := rules.BasicRule{
-		RuleID:     "student_actions",
-		RuleSchema: education,
-		ChildRules: map[string]rules.BasicRule{
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Schema: education,
+		Rules: map[string]rules.Rule{
 			"at_risk": {
-
-				RuleID:     "at_risk",
-				RuleSchema: education,
-				Expr:       `student.GPA < 2.5 || student.Status == "Probation"`,
+				ID:     "at_risk",
+				Schema: education,
+				Expr:   `student.GPA < 2.5 || student.Status == "Probation"`,
 			},
 		},
 	}
@@ -322,14 +318,14 @@ func BenchmarkRuleWithArray(b *testing.B) {
 		},
 	}
 
-	rule := rules.BasicRule{
-		RuleID:     "student_actions",
-		RuleSchema: education,
-		ChildRules: map[string]rules.BasicRule{
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Schema: education,
+		Rules: map[string]rules.Rule{
 			"honors_student": {
-				RuleID:     "honors_student",
-				RuleSchema: education,
-				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+				ID:     "honors_student",
+				Schema: education,
+				Expr:   `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
 			},
 		},
 	}
