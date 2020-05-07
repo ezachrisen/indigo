@@ -2,23 +2,127 @@ package cel_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ezachrisen/rules"
 	"github.com/ezachrisen/rules/cel"
+	"github.com/ezachrisen/rules/examples/school"
 	"github.com/golang/protobuf/ptypes/timestamp"
+	"github.com/google/cel-go/common/types/pb"
 )
 
-func TestSimpleCEL(t *testing.T) {
+func TestBasicRules(t *testing.T) {
 
 	engine := cel.NewEngine()
 
-	schema := rules.Schema{
+	education := rules.Schema{
 		Elements: []rules.DataElement{
 			{Name: "student.ID", Type: rules.String{}},
 			{Name: "student.Age", Type: rules.Int{}},
 			{Name: "student.GPA", Type: rules.Float{}},
+			{Name: "student.Adjustment", Type: rules.Float{}},
+			{Name: "student.Status", Type: rules.String{}},
+			{Name: "student.Grades", Type: rules.List{ValueType: rules.String{}}},
+			{Name: "student.EnrollmentDate", Type: rules.String{}},
+			{Name: "now", Type: rules.String{}},
+			{Name: "alsoNow", Type: rules.Timestamp{}},
+		},
+	}
+	myref := "d04ab6d9-f59d-9474-5c38-34d65380c612"
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Meta:   myref,
+		Schema: education,
+		Rules: map[string]rules.Rule{
+			"honors_student": {
+				ID:   "honors_student",
+				Expr: `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+			},
+			"at_risk": {
+				ID:   "at_risk",
+				Expr: `student.GPA < 2.5 || student.Status == "Probation"`,
+				Rules: map[string]rules.Rule{
+					"risk_factor": {
+						ID:   "risk_factor",
+						Expr: `2.0+6.0`,
+					},
+				},
+			},
+		},
+	}
+
+	err := engine.AddRule(rule)
+	if err != nil {
+		t.Error(err)
+	}
+
+	data := map[string]interface{}{
+		"student.ID":             "12312",
+		"student.Age":            16,
+		"student.GPA":            2.2,
+		"student.Status":         "Enrolled",
+		"student.Grades":         []interface{}{"A", "B", "A"},
+		"student.EnrollmentDate": "2018-08-03T16:00:00-07:00",
+		"student.Adjustment":     2.1,
+		"now":                    "2019-08-03T16:00:00-07:00",
+		"specificTime":           &timestamp.Timestamp{Seconds: time.Now().Unix()},
+	}
+
+	results, err := engine.EvaluateN(data, "student_actions", 2)
+	// PrintResults(results, 0)
+	// if results.XRef == nil {
+	// 	t.Errorf("No xref. Expected %s", myref)
+	// }
+	if results.XRef != myref {
+		t.Errorf("Expected Xref %v, got %v (type %T)", myref, results.XRef, results.XRef)
+	}
+
+	if results.Pass != true {
+		t.Errorf("Expected true, got false: %v", results.RuleID)
+	}
+
+	if results.Results["honors_student"].Pass != false {
+		t.Errorf("Expected false, got true: %v", "honors_student")
+	}
+
+	if results.Results["at_risk"].Pass != true {
+		t.Errorf("Expected true, got false: %v", "at_risk")
+	}
+
+	if results.Results["at_risk"].Results["risk_factor"].Value.(float64) != 8.0 {
+		t.Errorf("Expected %f, got false: %v", 8.0, results.Results["at_risk"].Results["risk_factor"].RawValue)
+
+	}
+}
+
+func PrintResults(res *rules.Result, tabs int) {
+
+	fmt.Printf("%-30s %v ", fmt.Sprintf("%s%s", strings.Repeat(" ", tabs), res.RuleID), res.Pass)
+	// r := *res.Rule
+	// test_rule := r.(Rule)
+	// if res.Value != test_rule.expected.Value {
+	// 	fmt.Printf(" --- expected %v (%T), got %v (%T)\n", test_rule.expected.Value, test_rule.expected.Value, res.Value, res.Value)
+	// } else {
+	fmt.Printf("\n")
+	//	}
+
+	for _, cres := range res.Results {
+		PrintResults(&cres, tabs+1)
+	}
+}
+
+func TestCalculation(t *testing.T) {
+
+	engine := cel.NewEngine()
+
+	education := rules.Schema{
+		Elements: []rules.DataElement{
+			{Name: "student.ID", Type: rules.String{}},
+			{Name: "student.Age", Type: rules.Int{}},
+			{Name: "student.GPA", Type: rules.Float{}},
+			{Name: "student.Adjustment", Type: rules.Float{}},
 			{Name: "student.Status", Type: rules.String{}},
 			{Name: "student.Grades", Type: rules.List{ValueType: rules.String{}}},
 			{Name: "student.EnrollmentDate", Type: rules.String{}},
@@ -27,27 +131,160 @@ func TestSimpleCEL(t *testing.T) {
 		},
 	}
 
-	ruleSet := rules.RuleSet{
-		ID:     "student_actions",
-		Schema: schema,
-		Rules: map[string]rules.Rule{
-			"honor_student":                rules.SimpleRule{Expr: `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`},
-			"at_risk":                      rules.SimpleRule{Expr: `student.GPA < 2.5 || student.Status == "Probation"`, Acts: []rules.Action{rules.SimpleRule{Expr: `2.0+6.0`}}},
-			"been_here_more_than_6_months": rules.SimpleRule{Expr: `timestamp(now) - timestamp(student.EnrollmentDate) > duration("4320h")`},
-			"been_here_more_than_1_hour":   rules.SimpleRule{Expr: `alsoNow - timestamp(student.EnrollmentDate) > duration("1h")`},
+	data := map[string]interface{}{
+		"student.ID":             "12312",
+		"student.Age":            16,
+		"student.GPA":            2.2,
+		"student.Adjustment":     1.6,
+		"student.Status":         "Enrolled",
+		"student.Grades":         []interface{}{"A", "B", "A"},
+		"student.EnrollmentDate": "2018-08-03T16:00:00-07:00",
+		"now":                    "2019-08-03T16:00:00-07:00",
+	}
+
+	v, err := engine.Calculate(data, `2.0+student.GPA + (1.344 * student.Adjustment)/3.3`, education)
+	if err != nil {
+		t.Error(err)
+	}
+	if v != 4.851636363636364 {
+		t.Errorf("Expected %f, got %f", 4.851636363636364, v)
+	}
+}
+
+func BenchmarkCalculation(b *testing.B) {
+
+	engine := cel.NewEngine()
+
+	education := rules.Schema{
+		Elements: []rules.DataElement{
+			{Name: "student.ID", Type: rules.String{}},
+			{Name: "student.Age", Type: rules.Int{}},
+			{Name: "student.GPA", Type: rules.Float{}},
+			{Name: "student.Adjustment", Type: rules.Float{}},
+			{Name: "student.Status", Type: rules.String{}},
+			{Name: "student.Grades", Type: rules.List{ValueType: rules.String{}}},
+			{Name: "student.EnrollmentDate", Type: rules.String{}},
+			{Name: "now", Type: rules.String{}},
 		},
 	}
 
-	expectedResults := map[string]bool{
-		"honor_student":                false,
-		"at_risk":                      true,
-		"been_here_more_than_6_months": true,
-		"been_here_more_than_1_hour":   true,
+	data := map[string]interface{}{
+		"student.ID":             "12312",
+		"student.Age":            16,
+		"student.GPA":            2.2,
+		"student.Adjustment":     1.6,
+		"student.Status":         "Enrolled",
+		"student.Grades":         []interface{}{"A", "B", "A"},
+		"student.EnrollmentDate": "2018-08-03T16:00:00-07:00",
+		"now":                    "2019-08-03T16:00:00-07:00",
 	}
 
-	err := engine.AddRuleSet(ruleSet)
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Calculate(data, `2.0+student.GPA + (1.344 * student.Adjustment)/3.3`, education)
+		if err != nil {
+			b.Fatalf("Could not calculate risk factor: %v", err)
+		}
+	}
+}
+
+func TestProtoMessage(t *testing.T) {
+
+	pb.DefaultDb.RegisterMessage(&school.Student{})
+
+	schema := rules.Schema{
+		Elements: []rules.DataElement{
+			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: rules.Timestamp{}},
+		},
+	}
+
+	engine := cel.NewEngine()
+
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Schema: schema,
+		Rules: map[string]rules.Rule{
+			"honor_student": {
+				ID:   "honor_student",
+				Expr: `student.GPA >= 3.7 && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
+				Meta: true,
+			},
+			"at_risk": {
+				ID:   "at_risk",
+				Expr: `student.GPA < 2.5 || student.Status == school.Student.status_type.PROBATION`,
+				Meta: false,
+			},
+			"tenure_gt_6months": {
+				ID:   "tenure_gt_6months",
+				Expr: `now - student.EnrollmentDate > duration("4320h")`, // 6 months = 4320 hours
+				Meta: true,
+			},
+		},
+	}
+
+	err := engine.AddRule(rule)
 	if err != nil {
 		t.Errorf("Error adding ruleset: %v", err)
+	}
+
+	s := school.Student{
+		Age:            16,
+		GPA:            3.76,
+		Status:         school.Student_ENROLLED,
+		Grades:         []float64{4.0, 4.0, 3.7},
+		Attrs:          map[string]string{"Nickname": "Joey"},
+		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+	}
+
+	data := map[string]interface{}{
+		"student": &s,
+		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+	}
+
+	results, err := engine.Evaluate(data, "student_actions")
+
+	for _, v := range results.Results {
+		br, found := rule.Rules[v.RuleID]
+		if !found {
+			t.Errorf("Unexpected rule ID in results; no corresponding rule: %s", v.RuleID)
+		}
+		if br.Meta != v.Pass {
+			t.Errorf("Expected %t, got %t, rule %s", br.Meta, v.Pass, v.RuleID)
+		}
+	}
+}
+
+func BenchmarkSimpleRule(b *testing.B) {
+
+	engine := cel.NewEngine()
+
+	education := rules.Schema{
+		Elements: []rules.DataElement{
+			{Name: "student.ID", Type: rules.String{}},
+			{Name: "student.Age", Type: rules.Int{}},
+			{Name: "student.GPA", Type: rules.Float{}},
+			{Name: "student.Status", Type: rules.String{}},
+			{Name: "student.Grades", Type: rules.List{ValueType: rules.String{}}},
+			{Name: "student.EnrollmentDate", Type: rules.String{}},
+			{Name: "now", Type: rules.String{}},
+		},
+	}
+
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Schema: education,
+		Rules: map[string]rules.Rule{
+			"at_risk": {
+				ID:     "at_risk",
+				Schema: education,
+				Expr:   `student.GPA < 2.5 || student.Status == "Probation"`,
+			},
+		},
+	}
+
+	err := engine.AddRule(rule)
+	if err != nil {
+		b.Errorf("Error adding ruleset: %v", err)
 	}
 
 	data := map[string]interface{}{
@@ -61,293 +298,56 @@ func TestSimpleCEL(t *testing.T) {
 		"alsoNow":                &timestamp.Timestamp{Seconds: time.Now().Unix()},
 	}
 
-	results, err := engine.EvaluateAll(data, "student_actions")
-	if err != nil {
-		t.Errorf("Evaluation error: %v", err)
-	}
-
-	for _, v := range results {
-		exp, found := expectedResults[v.RuleID]
-		if !found {
-			t.Errorf("Got result for rule %s, did not expect result for it", v.RuleID)
-		}
-		if exp != v.Pass {
-			t.Errorf("Wanted true, got false for rule %s", v.RuleID)
-		}
+	for i := 0; i < b.N; i++ {
+		engine.Evaluate(data, "student_actions")
 	}
 }
 
-func TestExpressionValues(t *testing.T) {
+func BenchmarkRuleWithArray(b *testing.B) {
 
 	engine := cel.NewEngine()
 
-	schema := rules.Schema{
-		ID: "my schema",
-		Elements: []rules.DataElement{
-			{Name: "cost", Type: rules.Float{}},
-			{Name: "score", Type: rules.Int{}},
-			{Name: "name", Type: rules.String{}},
-			{Name: "incidentTime", Type: rules.Timestamp{}},
-			{Name: "now", Type: rules.Timestamp{}},
-		},
-	}
-
-	floatRule := rules.SimpleRule{Expr: "cost + 1.22"}
-	intRule := rules.SimpleRule{Expr: "score * 2"}
-	stringRule := rules.SimpleRule{Expr: `"My name is " + name`}
-	durationRule := rules.SimpleRule{Expr: `now-incidentTime`}
-
-	ruleSet := rules.RuleSet{
-		ID:     "myset",
-		Schema: schema,
-		Rules: map[string]rules.Rule{
-			"float":    floatRule,
-			"int":      intRule,
-			"string":   stringRule,
-			"duration": durationRule,
-		},
-	}
-
-	err := engine.AddRuleSet(ruleSet)
-	if err != nil {
-		t.Fatalf("Error adding ruleset: %v", err)
-	}
-
-	data := map[string]interface{}{
-		"cost":         100.00,
-		"score":        6,
-		"name":         "Joe",
-		"incidentTime": &timestamp.Timestamp{Seconds: time.Date(2020, 4, 19, 12, 10, 30, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
-		"now":          &timestamp.Timestamp{Seconds: time.Date(2020, 4, 19, 13, 15, 45, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
-	}
-
-	f, err := engine.EvaluateRule(data, "myset", "float")
-	if err != nil {
-		t.Fatalf("Error evaluating rule %s", floatRule.Expr)
-	}
-	if f.Float64Value != 101.22 {
-		t.Errorf("Expected %f, got %f", 101.22, f.Float64Value)
-	}
-
-	i, err := engine.EvaluateRule(data, "myset", "int")
-	if err != nil {
-		t.Fatalf("Error evaluating rule %s", intRule.Expr)
-	}
-	if i.Int64Value != 12 {
-		t.Errorf("Expected %d, got %d", 12, f.Int64Value)
-	}
-
-	s, err := engine.EvaluateRule(data, "myset", "string")
-	if err != nil {
-		t.Fatalf("Error evaluating rule %s", stringRule.Expr)
-	}
-	if s.StringValue != "My name is Joe" {
-		t.Errorf("Expected '%s', got '%s'", "My name is Joe", s.StringValue)
-	}
-
-	d, err := engine.EvaluateRule(data, "myset", "duration")
-	if err != nil {
-		t.Fatalf("Error evaluating rule %s", durationRule.Expr)
-	}
-	expectedDuration, err := time.ParseDuration("1h5m15s")
-	if err != nil {
-		t.Fatalf("Error parsing duration")
-	}
-	if d.Duration != expectedDuration {
-		t.Errorf("Expected '%v', got '%v'", expectedDuration, d.Duration)
-	}
-
-}
-
-// func TestAdHoc(t *testing.T) {
-// 	engine := cel.NewEngine()
-
-// 	schema := rules.Schema{
-// 		ID: "my schema",
-// 		Elements: []rules.DataElement{
-// 			{Name: "cost", Type: rules.Float{}},
-// 			{Name: "score", Type: rules.Int{}},
-// 			{Name: "name", Type: rules.String{}},
-// 			{Name: "incidentTime", Type: rules.Timestamp{}},
-// 			{Name: "now", Type: rules.Timestamp{}},
-// 		},
-// 	}
-
-// 	data := map[string]interface{}{
-// 		"cost":         100.00,
-// 		"score":        6,
-// 		"name":         "Joe",
-// 		"incidentTime": &tpb.Timestamp{Seconds: time.Date(2020, 4, 19, 12, 10, 30, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
-// 		"now":          &tpb.Timestamp{Seconds: time.Date(2020, 4, 19, 13, 15, 45, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
-// 	}
-
-// 	result, err := engine.EvaluateAdHocRule(data, schema, `cost + 1.22`)
-// 	if err != nil {
-// 		t.Fatalf("Error evaluating rule: %v", err)
-// 	}
-// 	if result.Float64Value != 101.22 {
-// 		t.Errorf("Expected %f, got %f", 101.22, result.Float64Value)
-// 	}
-
-// }
-
-func TestNestedMap(t *testing.T) {
-
-	engine := cel.NewEngine()
-
-	schema := rules.Schema{
-		ID: "my schema",
-		Elements: []rules.DataElement{
-			{Name: "objectType", Type: rules.String{}},
-			{Name: "state", Type: rules.String{}},
-			{Name: "items", Type: rules.Map{KeyType: rules.String{}, ValueType: rules.Map{KeyType: rules.String{}, ValueType: rules.String{}}}},
-		},
-	}
-
-	ruleSet := rules.RuleSet{
-		ID:     "myset",
-		Schema: schema,
-		Rules: map[string]rules.Rule{
-			"1": rules.SimpleRule{Expr: `objectType == "car" && items["one"]["color"] == "green"`},
-		},
-	}
-	err := engine.AddRuleSet(ruleSet)
-	if err != nil {
-		fmt.Printf("Error adding ruleset: %v", err)
-	}
-
-	data := map[string]interface{}{
-		"objectType": "car",
-		"items": map[string]map[string]string{
-			"one": {
-				"color": "green",
-				"size":  "small",
-			},
-			"square": {
-				"color": "blue",
-			},
-		},
-	}
-	results, err := engine.EvaluateAll(data, "myset")
-	if err != nil {
-		fmt.Printf("Error evaluating: %v", err)
-	}
-	for _, v := range results {
-		if !v.Pass {
-			t.Errorf("Expected true, got false: %s", v.RuleID)
-		}
-	}
-
-}
-
-func BenchmarkCELSimple(b *testing.B) {
-	engine := cel.NewEngine()
-
-	schema := rules.Schema{
+	education := rules.Schema{
 		Elements: []rules.DataElement{
 			{Name: "student.ID", Type: rules.String{}},
 			{Name: "student.Age", Type: rules.Int{}},
 			{Name: "student.GPA", Type: rules.Float{}},
 			{Name: "student.Status", Type: rules.String{}},
 			{Name: "student.Grades", Type: rules.List{ValueType: rules.String{}}},
+			{Name: "student.EnrollmentDate", Type: rules.String{}},
+			{Name: "now", Type: rules.String{}},
 		},
 	}
 
-	ruleSet := rules.RuleSet{
+	rule := rules.Rule{
 		ID:     "student_actions",
-		Schema: schema,
+		Schema: education,
 		Rules: map[string]rules.Rule{
-			"honor_student": rules.SimpleRule{Expr: `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`},
-			//"at_risk": rules.SimpleRule{Expr: `student.GPA < 2.5 || student.Status == "Probation"`},
+			"honors_student": {
+				ID:     "honors_student",
+				Schema: education,
+				Expr:   `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+			},
 		},
 	}
 
-	err := engine.AddRuleSet(ruleSet)
+	err := engine.AddRule(rule)
 	if err != nil {
 		b.Errorf("Error adding ruleset: %v", err)
 	}
 
 	data := map[string]interface{}{
-		"student.ID":     "12312",
-		"student.Age":    16,
-		"student.GPA":    3.76,
-		"student.Status": "Enrolled",
-		"student.Grades": []interface{}{"A", "B", "A"},
+		"student.ID":             "12312",
+		"student.Age":            16,
+		"student.GPA":            2.2,
+		"student.Status":         "Enrolled",
+		"student.Grades":         []interface{}{"A", "B", "A"},
+		"student.EnrollmentDate": "2018-08-03T16:00:00-07:00",
+		"now":                    "2019-08-03T16:00:00-07:00",
+		"alsoNow":                &timestamp.Timestamp{Seconds: time.Now().Unix()},
 	}
 
 	for i := 0; i < b.N; i++ {
-		engine.EvaluateAll(data, "student_actions")
+		engine.Evaluate(data, "student_actions")
 	}
-
 }
-
-// 	engine := cel.NewEngine()
-
-// 	schema := rules.Schema{
-// 		ID: "my schema",
-// 		Elements: []rules.DataElement{
-// 			{Name: "objectType", Type: rules.String{}},
-// 			{Name: "state", Type: rules.String{}},
-// 			{Name: "grades", Type: rules.List{ValueType: rules.Any{}}},
-// 			{Name: "claims", Type: rules.Map{KeyType: rules.String{}, ValueType: rules.Any{}}},
-// 		},
-// 	}
-
-// 	ruleSet := rules.RuleSet{
-// 		ID:     "myset",
-// 		Schema: schema,
-// 		Rules: []rules.Rule{
-// 			&CustomRule{expression: `objectType == "car" && (state == "X" || state == "Y")`},
-// 		},
-// 	}
-
-// 	err := engine.AddRuleSet(&ruleSet)
-// 	if err != nil {
-// 		fmt.Printf("Error adding ruleset: %v", err)
-// 	}
-
-// 	data := map[string]interface{}{
-// 		"objectType": "car",
-// 		"state":      "X",
-// 	}
-
-// 	for i := 0; i < b.N; i++ {
-// 		engine.EvaluateAll(data, "myset")
-// 	}
-// }
-
-// func BenchmarkCELWithLists(b *testing.B) {
-
-// 	engine := cel.NewEngine()
-// 	schema := rules.Schema{
-// 		ID: "my schema",
-// 		Elements: []rules.DataElement{
-// 			{Name: "objectType", Type: rules.String{}},
-// 			{Name: "state", Type: rules.String{}},
-// 			{Name: "grades", Type: rules.List{ValueType: rules.Any{}}},
-// 			{Name: "claims", Type: rules.Map{KeyType: rules.String{}, ValueType: rules.Any{}}},
-// 		},
-// 	}
-
-// 	ruleSet := rules.RuleSet{
-// 		ID:     "myset",
-// 		Schema: schema,
-// 		Rules: []rules.Rule{
-// 			&CustomRule{expression: `objectType == "car" && "admin" in claims.roles && "A" in grades`},
-// 		},
-// 	}
-// 	err := engine.AddRuleSet(&ruleSet)
-// 	if err != nil {
-// 		fmt.Printf("Error adding ruleset: %v", err)
-// 	}
-
-// 	data := map[string]interface{}{
-// 		"objectType": "car",
-// 		"grades":     []interface{}{"A", "C", "D"},
-// 		"claims":     map[string]interface{}{"roles": []string{"admin", ",something", "somethingelse"}},
-// 	}
-
-// 	for i := 0; i < b.N; i++ {
-// 		engine.EvaluateAll(data, "myset")
-// 	}
-// }
