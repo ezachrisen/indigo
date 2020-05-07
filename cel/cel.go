@@ -111,12 +111,12 @@ func (e *CELEngine) EvaluateN(data map[string]interface{}, id string, n int) (*r
 	}
 
 	rule, found := e.rules[id]
-	if rule == nil || !found {
+	if !found {
 		return nil, fmt.Errorf("rule not found %s", id)
 	}
 
 	pr := rules.Result{
-		XRef:    rule.XRef(),
+		XRef:    rule.Meta,
 		RuleID:  id,
 		Results: make(map[string]rules.Result),
 	}
@@ -141,13 +141,13 @@ func (e *CELEngine) EvaluateN(data map[string]interface{}, id string, n int) (*r
 		pr.Pass = true
 	}
 
-	for _, c := range e.rules[id].Rules() {
-		res, err := e.EvaluateN(data, c.ID(), n-1)
+	for _, c := range e.rules[id].Rules {
+		res, err := e.EvaluateN(data, c.ID, n-1)
 		if err != nil {
 			return nil, err
 		}
 		if res != nil {
-			pr.Results[c.ID()] = *res
+			pr.Results[c.ID] = *res
 		}
 	}
 	return &pr, nil
@@ -156,21 +156,21 @@ func (e *CELEngine) EvaluateN(data map[string]interface{}, id string, n int) (*r
 func (e *CELEngine) CompileRule(env *cel.Env, r rules.Rule) (cel.Program, error) {
 
 	// Parse the rule expression to an AST
-	p, iss := env.Parse(r.Expression())
+	p, iss := env.Parse(r.Expr)
 	if iss != nil && iss.Err() != nil {
-		return nil, fmt.Errorf("parsing rule %s, %w", r.ID(), iss.Err())
+		return nil, fmt.Errorf("parsing rule %s, %w", r.ID, iss.Err())
 	}
 
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(p)
 	if iss != nil && iss.Err() != nil {
-		return nil, fmt.Errorf("checking rule %s, %w", r.ID(), iss.Err())
+		return nil, fmt.Errorf("checking rule %s, %w", r.ID, iss.Err())
 	}
 
 	// Generate an evaluable program
 	prg, err := env.Program(c)
 	if err != nil {
-		return nil, fmt.Errorf("generating program %s, %w", r.ID(), err)
+		return nil, fmt.Errorf("generating program %s, %w", r.ID, err)
 	}
 	return prg, nil
 }
@@ -178,10 +178,10 @@ func (e *CELEngine) CompileRule(env *cel.Env, r rules.Rule) (cel.Program, error)
 func (e *CELEngine) Calculate(data map[string]interface{}, expr string, schema rules.Schema) (float64, error) {
 	prg, found := e.programs[expr]
 	if !found {
-		r := rules.BasicRule{
-			RuleID:     expr,
-			Expr:       expr,
-			RuleSchema: schema,
+		r := rules.Rule{
+			ID:     expr,
+			Expr:   expr,
+			Schema: schema,
 		}
 		err := e.AddRule(r)
 		if err != nil {
@@ -209,12 +209,12 @@ func (e *CELEngine) addRuleWithSchema(r rules.Rule, s rules.Schema) error {
 	var schemaToPassOn rules.Schema
 
 	// If the rule has a schema, use it, otherwise use the parent rule's
-	if len(r.Schema().Elements) > 0 {
-		decls, err = schemaToDeclarations(r.Schema())
+	if len(r.Schema.Elements) > 0 {
+		decls, err = schemaToDeclarations(r.Schema)
 		if err != nil {
 			return err
 		}
-		schemaToPassOn = r.Schema()
+		schemaToPassOn = r.Schema
 	} else if len(s.Elements) > 0 {
 		decls, err = schemaToDeclarations(s)
 		if err != nil {
@@ -224,7 +224,7 @@ func (e *CELEngine) addRuleWithSchema(r rules.Rule, s rules.Schema) error {
 	}
 
 	if decls == nil {
-		return fmt.Errorf("No valid schema for rule %s", r.ID())
+		return fmt.Errorf("No valid schema for rule %s", r.ID)
 	}
 
 	env, err := cel.NewEnv(decls)
@@ -232,29 +232,29 @@ func (e *CELEngine) addRuleWithSchema(r rules.Rule, s rules.Schema) error {
 		return err
 	}
 
-	if r.Expression() != "" {
+	if r.Expr != "" {
 		prg, err := e.CompileRule(env, r)
 		if err != nil {
-			return fmt.Errorf("compiling rule %s: %w", r.ID(), err)
+			return fmt.Errorf("compiling rule %s: %w", r.ID, err)
 		}
-		e.programs[r.ID()] = prg
+		e.programs[r.ID] = prg
 	}
 
-	for _, c := range r.Rules() {
+	for _, c := range r.Rules {
 		err = e.addRuleWithSchema(c, schemaToPassOn)
 		if err != nil {
-			return fmt.Errorf("adding rule %s: %w", c.ID(), err)
+			return fmt.Errorf("adding rule %s: %w", c.ID, err)
 		}
 	}
-	e.rules[r.ID()] = r
+	e.rules[r.ID] = r
 	return nil
 }
 
 func (e *CELEngine) AddRule(r rules.Rule) error {
-	if len(strings.Trim(r.ID(), " ")) == 0 {
-		return fmt.Errorf("Required rule ID for rule with expression %s", r.Expression())
+	if len(strings.Trim(r.ID, " ")) == 0 {
+		return fmt.Errorf("Required rule ID for rule with expression %s", r.Expr)
 	}
-	return e.addRuleWithSchema(r, r.Schema())
+	return e.addRuleWithSchema(r, r.Schema)
 }
 
 // func (e *CELEngine) EvaluateAll(data map[string]interface{}, ruleSetID string) ([]rules.Result, error) {
