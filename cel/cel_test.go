@@ -9,7 +9,7 @@ import (
 
 	"github.com/ezachrisen/rules"
 	"github.com/ezachrisen/rules/cel"
-	"github.com/ezachrisen/rules/examples/school"
+	"github.com/ezachrisen/rules/testdata/school"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/cel-go/common/types/pb"
 )
