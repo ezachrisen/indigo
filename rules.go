@@ -38,7 +38,10 @@ const (
 	// rules when Evaluate is called.
 	// Does not impact EvaluateN
 	MaxLevels = 100
-	SelfKey   = "self"
+
+	// If the rule includes a Self object, it will be made available in the input
+	// data with the key SelfKey.
+	SelfKey = "self"
 )
 
 // --------------------------------------------------
@@ -116,6 +119,9 @@ type Schema struct {
 type DataElement struct {
 	// Short, user-friendly name of the variable. This is the name
 	// that will be used in rules to refer to data passed in.
+	//
+	// RESERVED NAMES:
+	//   SelfKey (see const)
 	Name string
 
 	// One of the Type interface defined.
@@ -140,6 +146,7 @@ type Any struct{}
 type Bool struct{}
 type Duration struct{}
 type Timestamp struct{}
+
 type Proto struct {
 	Protoname string
 	Message   interface{}
@@ -156,6 +163,7 @@ type Map struct {
 	ValueType Type
 }
 
+// Dummy implementations to satisfay the Type interface
 func (t Int) TypeName()       {}
 func (t Bool) TypeName()      {}
 func (t String) TypeName()    {}
