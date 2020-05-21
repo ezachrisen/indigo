@@ -1,0 +1,8 @@
+syntax = "proto3";
+package school;
+
+option go_package = ".;school";
+
+message HonorsConfiguration {
+  double Minimum_GPA = 1;
+}

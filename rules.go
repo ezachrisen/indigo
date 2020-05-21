@@ -1,66 +1,104 @@
 package rules
 
-// ./runtests.sh
 // --------------------------------------------------
 // Rules Engine
 
 // The Engine interface represents a rules engine capable of evaluating rules.
 // against a specific rule set.
+//
+
 type Engine interface {
 
-	// Add the rule set to the engine. Will produce an error if the rules already
-	// exists. Use AddOrReplaceRuleset instead.
+	// Add the rule to the engine.
+	// The rule must have an ID that is unique among the root rules.
+	// An existing rule with the same ID will be replaced.
 	AddRule(Rule) error
 
-	// // Add a rule set to the engine. An existing rule set with the same ID will be
-	// // replaced silently.
-	// AddOrReplaceRule(Rule) error
-
-	// Return the rule set if found
+	// Return the rule with the ID
 	Rule(id string) (Rule, bool)
 
-	// Evaluate a single rule agains the the data
+	// Evaluate a rule agains the the data.
+	// Will recursively evaluate child rules up to maxLevels deep.
+	// No error will be returned if MaxLevels is reached.
+	// To control the depth, call EvaluateN.
 	Evaluate(data map[string]interface{}, id string) (*Result, error)
 
+	// Evaluate a rule against the data.
+	// Recursively evaluate child rules, up to n levels deep.
+	// Use n=1 to only evaluate the root rule, and no child rules.
+	// EvaluateN is not affected by MaxLevels.
 	EvaluateN(data map[string]interface{}, id string, n int) (*Result, error)
 
+	// Calculate the expression and return the result.
 	Calculate(data map[string]interface{}, expr string, schema Schema) (float64, error)
-	// // Evaluate all rules in a rule set against the data
-	// EvaluateAll(data map[string]interface{}, setID string) ([]Result, error)
-
-	// // Evaluate all rules in a rule set, but stop at the first true rule
-	// EvaluateUntilTrue(data map[string]interface{}, setID string) (Result, error)
 }
 
 const (
+	// MaxLevels is the maximum depth that Evaluate will recursively visit the child
+	// rules when Evaluate is called.
+	// Does not impact EvaluateN
 	MaxLevels = 100
+	SelfKey   = "self"
 )
-
-// Result of evaluating a rule. A slice of these will be returned after evaluating a rule set.
-// See the documentation for the Evaluate* methods for information on the
-// result set.
-type Result struct {
-	RuleID   string
-	XRef     interface{}
-	Pass     bool
-	Value    interface{}
-	RawValue interface{}
-	Results  map[string]Result
-}
 
 // --------------------------------------------------
 // Rules
-
-// The Rule interface provides an expression that follows the
-// Common Expression Language specification (see
-// https://pkg.go.dev/github.com/google/cel-go/cel for documentation)
-
 type Rule struct {
-	ID     string
-	Expr   string
+	// A rule identifer. (required)
+	// No two root rules can have the same identifier.
+	ID string
+
+	// The expression to evaluate (required)
+	// The expression can return a boolean (true or false), or any
+	// other value the underlying expression engine can produce.
+	// All values are returned in the Results.Value field.
+	// Boolean values are also returned in the results as Pass = true  / false
+	Expr string
+
+	// The schema describing the data provided in the Evaluate input. (optional)
+	// Some implementations of Rules require a schema.
 	Schema Schema
-	Rules  map[string]Rule
-	Meta   interface{}
+
+	// A reference to the object that "owns" this rule. (optional)
+	// This is useful to allow dynamic value substitution in the rule expression.
+	// For example, in a rule determining if a thermostat action,
+	// set Self = Thermostat, where Thermostat holds the user's temperature preference.
+	// When evaluating the rules, the Thermostat object will be included in the data
+	// with the key SelfKey. Rules can then reference the user's temperature preference
+	// in the rule expression. This allows rule inputs to be changed without recompiling
+	// the rule.
+	Self interface{}
+
+	// A set of child rules. See how to call Evaluate(N) to control which child rules
+	// are evaluated.
+	Rules map[string]Rule
+
+	// A reference to a custom object. The same reference will be returned in the results,
+	// so the engine user can use this reference to get back a relevant object.
+	Meta interface{}
+}
+
+// Result of evaluating a rule.
+type Result struct {
+	// The ID of the rule that was evaluated
+	RuleID string
+
+	// Whether the rule yielded a TRUE logical value.
+	// The default is FALSE
+	// This is the result of evaluating THIS rule only.
+	// The result will not be affected by the results of the child rules.
+	// If no rule expression is supplied for a rule, the result will be TRUE.
+	Pass bool
+
+	// User-supplied reference from the rule. See the Rule struct for information.
+	Meta interface{}
+
+	// The result of the evaluation. Boolean for logical expressions.
+	// Calculations or string manipulations will return the appropriate type.
+	Value interface{}
+
+	// Results of evaluating the child rules.
+	Results map[string]Result
 }
 
 // --------------------------------------------------
@@ -76,10 +114,14 @@ type Schema struct {
 
 // DataElement defines a named variable in a schema
 type DataElement struct {
-	ID          string
-	Name        string // Short, user-friendly name of the variable
-	Key         string // Name of the key used in the data and the rule expressions
-	Type        Type
+	// Short, user-friendly name of the variable. This is the name
+	// that will be used in rules to refer to data passed in.
+	Name string
+
+	// One of the Type interface defined.
+	Type Type
+
+	// Optional description of the type.
 	Description string
 }
 
@@ -124,67 +166,3 @@ func (t Duration) TypeName()  {}
 func (t Timestamp) TypeName() {}
 func (t Float) TypeName()     {}
 func (t Proto) TypeName()     {}
-
-// These functions are intended to be called by implementors of the Engine interface.
-// // Engines are free to create their own implementations.
-// // Evaluate all rules in a rule set and return the true/false results of each rule
-// //
-// // Evaluation stops if an error happens, and partial results are returned.
-// func EvaluateAll(e Engine, data map[string]interface{}, ruleSetID string) ([]Result, error) {
-
-// 	ruleSet, found := e.Set(ruleSetID)
-// 	if !found {
-// 		return nil, fmt.Errorf("Ruleset %s not found", ruleSetID)
-// 	}
-
-// 	results := make([]Result, 0, len(ruleSet.Rules))
-
-// 	for ruleID := range ruleSet.Rules {
-// 		result, err := e.EvaluateRule(data, ruleSetID, ruleID)
-// 		if err != nil {
-// 			return results, fmt.Errorf("Error evaluating rule: %v", err)
-// 		}
-// 		results = append(results, *result)
-// 	}
-// 	return results, nil
-// }
-
-// // Evaluate rules in the rule set, but stop as soon as a true rule is found. The true rule is returned.
-// // If no true rules are found, the result is nil.
-// func EvaluateUntilTrue(e Engine, data map[string]interface{}, ruleSetID string) (Result, error) {
-// 	ruleSet, found := e.Set(ruleSetID)
-// 	if !found {
-// 		return Result{}, fmt.Errorf("Ruleset %v not found", ruleSet)
-// 	}
-
-// 	for ruleID := range ruleSet.Rules {
-// 		result, err := e.EvaluateRule(data, ruleSetID, ruleID)
-// 		if err != nil {
-// 			return Result{}, fmt.Errorf("Error evaluating rule: %v", err)
-// 		}
-// 		if result.Pass {
-// 			return *result, nil
-// 		}
-// 	}
-// 	return Result{}, nil
-// }
-
-// func MakeChildRuleID(parentRuleID string, childRuleID string) string {
-// 	return parentRuleID + ":" + childRuleID
-// }
-
-// // Simple implementation of the Rule interface
-// type SimpleRule struct {
-// 	Expr string
-// }
-
-// func (s SimpleRule) Expression() string {
-// 	return s.Expr
-// }
-
-// // Set contains a group of rules that will be evaluated together to produce results.
-// type Set struct {
-// 	ID     string
-// 	Rules  map[string]Rule // The rules to evaluate. The map key is known as the "rule id"
-// 	Schema Schema          // The data schema that all rules and data must adhere to
-// }

@@ -2,6 +2,7 @@ package cel_test
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +31,7 @@ func TestBasicRules(t *testing.T) {
 			{Name: "alsoNow", Type: rules.Timestamp{}},
 		},
 	}
+
 	myref := "d04ab6d9-f59d-9474-5c38-34d65380c612"
 	rule := rules.Rule{
 		ID:     "student_actions",
@@ -75,8 +77,8 @@ func TestBasicRules(t *testing.T) {
 	// if results.XRef == nil {
 	// 	t.Errorf("No xref. Expected %s", myref)
 	// }
-	if results.XRef != myref {
-		t.Errorf("Expected Xref %v, got %v (type %T)", myref, results.XRef, results.XRef)
+	if results.Meta != myref {
+		t.Errorf("Expected Xref %v, got %v (type %T)", myref, results.Meta, results.Meta)
 	}
 
 	if results.Pass != true {
@@ -92,7 +94,8 @@ func TestBasicRules(t *testing.T) {
 	}
 
 	if results.Results["at_risk"].Results["risk_factor"].Value.(float64) != 8.0 {
-		t.Errorf("Expected %f, got false: %v", 8.0, results.Results["at_risk"].Results["risk_factor"].RawValue)
+		t.Errorf("Expected %f, got false: %v", 8.0, results.Results["at_risk"].Results["risk_factor"].Value)
+
 	}
 }
 
@@ -194,6 +197,7 @@ func TestProtoMessage(t *testing.T) {
 		Elements: []rules.DataElement{
 			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
 			{Name: "now", Type: rules.Timestamp{}},
+			{Name: "self", Type: rules.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 
@@ -205,7 +209,8 @@ func TestProtoMessage(t *testing.T) {
 		Rules: map[string]rules.Rule{
 			"honor_student": {
 				ID:   "honor_student",
-				Expr: `student.GPA >= 3.7 && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
+				Expr: `student.GPA >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
+				Self: &school.HonorsConfiguration{Minimum_GPA: 3.7},
 				Meta: true,
 			},
 			"at_risk": {
@@ -241,7 +246,9 @@ func TestProtoMessage(t *testing.T) {
 	}
 
 	results, err := engine.Evaluate(data, "student_actions")
-
+	if err != nil {
+		t.Fatalf("Error evaluating: %v", err)
+	}
 	for _, v := range results.Results {
 		br, found := rule.Rules[v.RuleID]
 		if !found {
@@ -349,4 +356,106 @@ func BenchmarkRuleWithArray(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		engine.Evaluate(data, "student_actions")
 	}
+}
+
+func BenchmarkProtoWithSelf(b *testing.B) {
+
+	pb.DefaultDb.RegisterMessage(&school.Student{})
+
+	schema := rules.Schema{
+		Elements: []rules.DataElement{
+			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: rules.Timestamp{}},
+			{Name: "self", Type: rules.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+		},
+	}
+
+	engine := cel.NewEngine()
+
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Schema: schema,
+		Rules: map[string]rules.Rule{
+			"at_risk": {
+				ID:   "at_risk",
+				Expr: `student.GPA < self.Minimum_GPA || student.Status == school.Student.status_type.PROBATION`,
+				Self: &school.HonorsConfiguration{Minimum_GPA: 3.7},
+				Meta: false,
+			},
+		},
+	}
+
+	err := engine.AddRule(rule)
+	if err != nil {
+		log.Fatalf("Error adding ruleset: %v", err)
+	}
+
+	s := school.Student{
+		Age:            16,
+		GPA:            3.76,
+		Status:         school.Student_ENROLLED,
+		Grades:         []float64{4.0, 4.0, 3.7},
+		Attrs:          map[string]string{"Nickname": "Joey"},
+		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+	}
+
+	data := map[string]interface{}{
+		"student": &s,
+		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+	}
+
+	for i := 0; i < b.N; i++ {
+		engine.Evaluate(data, "student_actions")
+	}
+
+}
+
+func BenchmarkProtoWithoutSelf(b *testing.B) {
+
+	pb.DefaultDb.RegisterMessage(&school.Student{})
+
+	schema := rules.Schema{
+		Elements: []rules.DataElement{
+			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: rules.Timestamp{}},
+		},
+	}
+
+	engine := cel.NewEngine()
+
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Schema: schema,
+		Rules: map[string]rules.Rule{
+			"at_risk": {
+				ID:   "at_risk",
+				Expr: `student.GPA < 2.5 || student.Status == school.Student.status_type.PROBATION`,
+				Meta: false,
+			},
+		},
+	}
+
+	err := engine.AddRule(rule)
+	if err != nil {
+		log.Fatalf("Error adding ruleset: %v", err)
+	}
+
+	s := school.Student{
+		Age:            16,
+		GPA:            3.76,
+		Status:         school.Student_ENROLLED,
+		Grades:         []float64{4.0, 4.0, 3.7},
+		Attrs:          map[string]string{"Nickname": "Joey"},
+		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+	}
+
+	data := map[string]interface{}{
+		"student": &s,
+		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+	}
+
+	for i := 0; i < b.N; i++ {
+		engine.Evaluate(data, "student_actions")
+	}
+
 }
