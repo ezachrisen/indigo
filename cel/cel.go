@@ -116,7 +116,7 @@ func (e *CELEngine) EvaluateN(data map[string]interface{}, id string, n int) (*r
 	}
 
 	pr := rules.Result{
-		XRef:    rule.Meta,
+		Meta:    rule.Meta,
 		RuleID:  id,
 		Results: make(map[string]rules.Result),
 	}
@@ -128,7 +128,6 @@ func (e *CELEngine) EvaluateN(data map[string]interface{}, id string, n int) (*r
 			return nil, fmt.Errorf("Error evaluating rule %s:%w", id, error)
 		}
 
-		pr.RawValue = rawValue
 		pr.Value = rawValue.Value()
 		if v, ok := rawValue.Value().(bool); ok {
 			pr.Pass = v
@@ -137,11 +136,13 @@ func (e *CELEngine) EvaluateN(data map[string]interface{}, id string, n int) (*r
 		}
 	} else {
 		pr.Value = true
-		pr.RawValue = true
 		pr.Pass = true
 	}
 
 	for _, c := range e.rules[id].Rules {
+		if c.Self != nil {
+			data["self"] = c.Self
+		}
 		res, err := e.EvaluateN(data, c.ID, n-1)
 		if err != nil {
 			return nil, err
