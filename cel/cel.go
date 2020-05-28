@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ezachrisen/rules"
-
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types/pb"
@@ -36,11 +36,20 @@ func NewEngine() *CELEngine {
 // AddRule compiles the rule and adds it to the engine, ready to
 // be evaluated.
 // Any errors from the compilation will be returned.
-func (e *CELEngine) AddRule(r rules.Rule) error {
-	if len(strings.Trim(r.ID, " ")) == 0 {
-		return fmt.Errorf("Required rule ID for rule with expression %s", r.Expr)
+func (e *CELEngine) AddRule(rules ...rules.Rule) error {
+	for _, r := range rules {
+
+		if len(strings.Trim(r.ID, " ")) == 0 {
+			return fmt.Errorf("Required rule ID for rule with expression %s", r.Expr)
+		}
+
+		err := e.addRuleWithSchema(r, r.Schema)
+		if err != nil {
+			return err
+		}
+		e.rules[r.ID] = r
 	}
-	return e.addRuleWithSchema(r, r.Schema)
+	return nil
 }
 
 // Find a rule with the given ID
@@ -49,37 +58,74 @@ func (e *CELEngine) Rule(id string) (rules.Rule, bool) {
 	return r, ok
 }
 
-// Evaluate the rule agains the input data.
-// All rules will be evaluated, descending down through child rules up to rules.MaxLevels
-func (e *CELEngine) Evaluate(data map[string]interface{}, id string) (*rules.Result, error) {
-	return e.EvaluateN(data, id, rules.MaxLevels)
+func (e *CELEngine) PrintStructure() {
+	fmt.Println("-------------------------------------------------- RULES")
+	//	fmt.Printf("%v\n", e.rules)
+	spew.Config.Indent = "\t"
+	spew.Config.DisableCapacities = true
+	spew.Config.DisablePointerAddresses = true
+	spew.Config.DisablePointerMethods = true
+
+	// spew.Dump(e.rules)
+	fmt.Println("-------------------------------------------------- PROGRAMS")
+	spew.Config.MaxDepth = 1
+	//	spew.Dump(e.programs)
 }
 
-// Recursively evaluate the rule and its child rules, up to n levels deep
-// EvaluateN is called with n-1 for each rule descent.
-func (e *CELEngine) EvaluateN(data map[string]interface{}, id string, n int) (*rules.Result, error) {
-	if n < 0 {
-		return nil, nil
+// Remove rule with the ID
+func (e *CELEngine) RemoveRule(id string) {
+	delete(e.rules, id)
+	delete(e.programs, id)
+}
+
+func (e *CELEngine) RuleCount() int {
+	return len(e.rules)
+}
+
+// Evaluate the rule agains the input data.
+// All rules will be evaluated, descending down through child rules up to the maximum depth
+func (e *CELEngine) Evaluate(data map[string]interface{}, id string, opts ...rules.Option) (*rules.Result, error) {
+	o := rules.EvalOptions{
+		MaxDepth:   rules.DefaultDepth,
+		ReturnFail: true,
+		ReturnPass: true,
 	}
 
-	rule, found := e.rules[id]
-	if !found {
-		return nil, fmt.Errorf("rule not found %s", id)
+	rules.ApplyOptions(&o, opts...) // TODO: remove?
+
+	rule, ok := e.rules[id]
+	if !ok {
+		return nil, fmt.Errorf("Rule not found")
+	}
+
+	return e.evaluate(data, rule, 0, o)
+}
+
+// Recursively evaluate the rule and its child rules.
+func (e *CELEngine) evaluate(data map[string]interface{}, rule rules.Rule, n int, opt rules.EvalOptions) (*rules.Result, error) {
+
+	if n > opt.MaxDepth {
+		return nil, nil
 	}
 
 	pr := rules.Result{
 		Meta:    rule.Meta,
-		RuleID:  id,
+		Action:  rule.Action,
+		RuleID:  rule.ID,
 		Results: make(map[string]rules.Result),
+		Depth:   n,
 	}
 
-	program, found := e.programs[id]
+	// Apply options for this rule evaluation
+	rules.ApplyOptions(&opt, rule.Opts...)
+
+	program, found := e.programs[rule.ID]
+	// If the rule has an expression, evaluate it
 	if program != nil && found {
-		// If the rule has an expression, evaluate it
 		addSelf(data, rule.Self)
 		rawValue, _, error := program.Eval(data)
 		if error != nil {
-			return nil, fmt.Errorf("Error evaluating rule %s:%w", id, error)
+			return nil, fmt.Errorf("Error evaluating rule %s:%w", rule.ID, error)
 		}
 
 		pr.Value = rawValue.Value()
@@ -91,19 +137,34 @@ func (e *CELEngine) EvaluateN(data map[string]interface{}, id string, n int) (*r
 	} else {
 		// If the rule has no expression default the result to true
 		// Likely this means that this rule is a "set" of child rules,
-		// and the user is only interested in the results of the children.
+		// and the user is only interested in the result of the children.
 		pr.Value = true
 		pr.Pass = true
 	}
 
-	// Evaluate all child rules
-	for _, c := range e.rules[id].Rules {
-		res, err := e.EvaluateN(data, c.ID, n-1)
+	if opt.StopIfParentNegative && pr.Pass == false {
+		return &pr, nil
+	}
+
+	// Evaluate child rules
+	for _, c := range rule.Rules {
+		res, err := e.evaluate(data, c, n+1, opt)
 		if err != nil {
 			return nil, err
 		}
 		if res != nil {
-			pr.Results[c.ID] = *res
+			if (!res.Pass && opt.ReturnFail) ||
+				(res.Pass && opt.ReturnPass) {
+				pr.Results[c.ID] = *res
+			}
+		}
+
+		if opt.StopFirstPositiveChild && res.Pass == true {
+			return &pr, nil
+		}
+
+		if opt.StopFirstNegativeChild && res.Pass == false {
+			return &pr, nil
 		}
 	}
 	return &pr, nil
@@ -188,7 +249,6 @@ func (e *CELEngine) addRuleWithSchema(r rules.Rule, s rules.Schema) error {
 	var decls cel.EnvOption
 	var err error
 	var schemaToPassOn rules.Schema
-
 	// If the rule has a schema, use it, otherwise use the parent rule's
 	if len(r.Schema.Elements) > 0 {
 		decls, err = schemaToDeclarations(r.Schema)
@@ -227,7 +287,6 @@ func (e *CELEngine) addRuleWithSchema(r rules.Rule, s rules.Schema) error {
 			return fmt.Errorf("adding rule %s: %w", c.ID, err)
 		}
 	}
-	e.rules[r.ID] = r
 	return nil
 }
 
