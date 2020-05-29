@@ -99,9 +99,9 @@ func makeEducationRules() []rules.Rule {
 		Expr:   `student.GPA > 3.5`, // false
 		Rules: map[string]rules.Rule{
 			"A": {
-				ID:   "D",
-				Expr: `student.Adjustment > 0.0`,                         // true
-				Opts: []rules.Option{rules.StopFirstPositiveChild(true)}, // RULE OPTION
+				ID:       "D",
+				Expr:     `student.Adjustment > 0.0`,                             // true
+				EvalOpts: []rules.EvalOption{rules.StopFirstPositiveChild(true)}, // RULE OPTION
 				Rules: map[string]rules.Rule{
 					"d1": {
 						ID:   "d1",
@@ -122,9 +122,9 @@ func makeEducationRules() []rules.Rule {
 				Expr: `student.Adjustment > 3.0`, // false
 			},
 			"E": {
-				ID:   "E",
-				Expr: `student.Adjustment > 0.0`, // true
-				Opts: []rules.Option{},           // NO RULE OPTION
+				ID:       "E",
+				Expr:     `student.Adjustment > 0.0`, // true
+				EvalOpts: []rules.EvalOption{},       // NO RULE OPTION
 				Rules: map[string]rules.Rule{
 					"e1": {
 						ID:   "e1",
@@ -226,6 +226,8 @@ func makeStudentProtoData() map[string]interface{} {
 		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
+	s.ProtoReflect()
+
 	return map[string]interface{}{
 		"student": &s,
 		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
@@ -236,14 +238,44 @@ func makeStudentProtoData() map[string]interface{} {
 func TestProtoMessage(t *testing.T) {
 
 	is := is.New(t)
-	engine := cel.NewEngine()
+	engine := cel.NewEngine(rules.CollectDiagnostics(true), rules.ForceDiagnosticsAllRules(true))
 	err := engine.AddRule(makeEducationProtoRules())
 	is.NoErr(err)
 
 	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions")
 	is.NoErr(err)
+	is.Equal(len(results.Results), 3)
 	for _, v := range results.Results {
 		is.Equal(v.Meta, v.Pass)
+	}
+}
+
+func TestDiagnosticOptions(t *testing.T) {
+
+	is := is.New(t)
+
+	// Turn off diagnostic collection
+	engine := cel.NewEngine(rules.CollectDiagnostics(false))
+	err := engine.AddRule(makeEducationProtoRules())
+	is.NoErr(err)
+
+	_, err = engine.Evaluate(makeStudentProtoData(), "student_actions", rules.ReturnDiagnostics(true))
+	if err == nil {
+		t.Errorf("Wanted error; should require rules.CollectDiagnostics to be turned on to enable rules.ReturnDiagnostics")
+	}
+
+	// Turn on diagnostic collection
+	engine = cel.NewEngine(rules.CollectDiagnostics(true))
+	err = engine.AddRule(makeEducationProtoRules())
+	is.NoErr(err)
+
+	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions", rules.ReturnDiagnostics(true))
+	is.NoErr(err)
+
+	for _, c := range results.Results {
+		if len(c.Diagnostics) < 100 {
+			t.Errorf("Wanted diagnostics for rule %s, got %s", c.RuleID, c.Diagnostics)
+		}
 	}
 }
 
@@ -252,29 +284,29 @@ func TestEvalOptions(t *testing.T) {
 	is := is.New(t)
 
 	cases := []struct {
-		opts []rules.Option      // Options to pass to evaluate
+		opts []rules.EvalOption  // Options to pass to evaluate
 		chk  func(*rules.Result) // Function to check the results
 	}{
 		{
-			opts: []rules.Option{rules.MaxDepth(0)},
+			opts: []rules.EvalOption{rules.MaxDepth(0)},
 			chk: func(r *rules.Result) {
 				is.Equal(len(r.Results), 0) // No child results
 			},
 		},
 		{
-			opts: []rules.Option{rules.StopIfParentNegative(true)},
+			opts: []rules.EvalOption{rules.StopIfParentNegative(true)},
 			chk: func(r *rules.Result) {
 				is.Equal(len(r.Results), 0)
 			},
 		},
 		{
-			opts: []rules.Option{rules.StopIfParentNegative(false)},
+			opts: []rules.EvalOption{rules.StopIfParentNegative(false)},
 			chk: func(r *rules.Result) {
 				is.Equal(len(r.Results), 4)
 			},
 		},
 		{
-			opts: []rules.Option{rules.StopFirstPositiveChild(true)},
+			opts: []rules.EvalOption{rules.StopFirstPositiveChild(true)},
 			chk: func(r *rules.Result) {
 				i := 0
 				for _, v := range r.Results {
@@ -286,7 +318,7 @@ func TestEvalOptions(t *testing.T) {
 			},
 		},
 		{
-			opts: []rules.Option{rules.StopFirstNegativeChild(true)},
+			opts: []rules.EvalOption{rules.StopFirstNegativeChild(true)},
 			chk: func(r *rules.Result) {
 				i := 0
 				for _, v := range r.Results {
@@ -298,26 +330,26 @@ func TestEvalOptions(t *testing.T) {
 			},
 		},
 		{
-			opts: []rules.Option{rules.StopFirstNegativeChild(true), rules.StopFirstPositiveChild(true)},
+			opts: []rules.EvalOption{rules.StopFirstNegativeChild(true), rules.StopFirstPositiveChild(true)},
 			chk: func(r *rules.Result) {
 				is.Equal(len(r.Results), 1)
 			},
 		},
 		{
-			opts: []rules.Option{rules.ReturnFail(false), rules.ReturnPass(false)},
+			opts: []rules.EvalOption{rules.ReturnFail(false), rules.ReturnPass(false)},
 			chk: func(r *rules.Result) {
 				is.Equal(len(r.Results), 0)
 			},
 		},
 		{
-			opts: []rules.Option{rules.ReturnPass(false)},
+			opts: []rules.EvalOption{rules.ReturnPass(false)},
 			chk: func(r *rules.Result) {
 				is.Equal(len(r.Results), 2)
 			},
 		},
 
 		{
-			opts: []rules.Option{rules.ReturnFail(false)},
+			opts: []rules.EvalOption{rules.ReturnFail(false)},
 			chk: func(r *rules.Result) {
 				is.Equal(len(r.Results), 2)
 			},
@@ -340,11 +372,11 @@ func TestRuleOptionOverride(t *testing.T) {
 	is := is.New(t)
 
 	cases := []struct {
-		opts []rules.Option      // Options to pass to evaluate
+		opts []rules.EvalOption  // Options to pass to evaluate
 		chk  func(*rules.Result) // Function to check the results
 	}{
 		{
-			opts: []rules.Option{},
+			opts: []rules.EvalOption{},
 			chk: func(r *rules.Result) {
 				is.Equal(len(r.Results), 3) // rules a, b and E
 
