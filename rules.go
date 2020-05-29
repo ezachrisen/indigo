@@ -45,7 +45,7 @@ type Engine interface {
 	// Note that the options can be overriden by individual rules.
 	// Will recursively evaluate child rules up to the default limit (see const DefaultDepth)
 	// or the option. No error is returned if the limit is reached.
-	Evaluate(data map[string]interface{}, id string, opts ...Option) (*Result, error)
+	Evaluate(data map[string]interface{}, id string, opts ...EvalOption) (*Result, error)
 
 	// Calculate the expression and return the result.
 	Calculate(data map[string]interface{}, expr string, schema Schema) (float64, error)
@@ -58,7 +58,7 @@ type Engine interface {
 
 // Determines how far to recurse through child rules.
 // The default is rules.DefaultDepth.
-func MaxDepth(d int) Option {
+func MaxDepth(d int) EvalOption {
 	return func(f *EvalOptions) {
 		f.MaxDepth = d
 	}
@@ -66,7 +66,7 @@ func MaxDepth(d int) Option {
 
 // Does not evaluate child rules if the parent's expression is false.
 // Use case: apply a "global" rule to all the child rules.
-func StopIfParentNegative(b bool) Option {
+func StopIfParentNegative(b bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.StopIfParentNegative = b
 	}
@@ -75,7 +75,7 @@ func StopIfParentNegative(b bool) Option {
 // Stops the evaluation of child rules when the first positive child is encountered.
 // Results will be partial. Only the child rules that were evaluated will be in the results.
 // Use case: role-based access; allow action if any child rule (permission rule) allows it.
-func StopFirstPositiveChild(b bool) Option {
+func StopFirstPositiveChild(b bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.StopFirstPositiveChild = b
 	}
@@ -84,7 +84,7 @@ func StopFirstPositiveChild(b bool) Option {
 // Stops the evaluation of child rules when the first negative child is encountered.
 // Results will be partial. Only the child rules that were evaluated will be in the results.
 // Use case: you require ALL child rules to be satisifed.
-func StopFirstNegativeChild(b bool) Option {
+func StopFirstNegativeChild(b bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.StopFirstNegativeChild = b
 	}
@@ -92,7 +92,7 @@ func StopFirstNegativeChild(b bool) Option {
 
 // Return rules that passed.
 // By default this is on.
-func ReturnPass(b bool) Option {
+func ReturnPass(b bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.ReturnPass = b
 	}
@@ -100,20 +100,31 @@ func ReturnPass(b bool) Option {
 
 // Return rules that did not pass.
 // By default this is on.
-func ReturnFail(b bool) Option {
+func ReturnFail(b bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.ReturnFail = b
 	}
 }
 
+// Include diagnostic information with the results.
+// To enable this option, you must first turn on diagnostic
+// collection at the engine level with the CollectDiagnostics EngineOption.
+// Default: off
+func ReturnDiagnostics(b bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.ReturnDiagnostics = b
+	}
+}
+
 // Internal use
-func ApplyOptions(o *EvalOptions, opts ...Option) {
+func ApplyEvalOptions(o *EvalOptions, opts ...EvalOption) {
 	for _, opt := range opts {
 		opt(o)
 	}
 }
 
 // Internal use
+// See the function definitions above for the meaning.
 type EvalOptions struct {
 	MaxDepth               int
 	StopIfParentNegative   bool
@@ -121,9 +132,45 @@ type EvalOptions struct {
 	StopFirstNegativeChild bool
 	ReturnPass             bool
 	ReturnFail             bool
+	ReturnDiagnostics      bool
 }
 
-type Option func(f *EvalOptions)
+type EvalOption func(f *EvalOptions)
+
+// Internal use
+// See the functional definitions below for the meaning.
+type EngineOptions struct {
+	CollectDiagnostics       bool
+	ForceDiagnosticsAllRules bool
+}
+
+type EngineOption func(f *EngineOptions)
+
+// Internal use
+func ApplyEngineOptions(o *EngineOptions, opts ...EngineOption) {
+	for _, opt := range opts {
+		opt(o)
+	}
+}
+
+// Collect diagnostic information from the engine.
+// Default: off
+func CollectDiagnostics(b bool) EngineOption {
+	return func(f *EngineOptions) {
+		f.CollectDiagnostics = b
+	}
+}
+
+// Force the return of diagnostic information for all rules, regardless of
+// the setting on each rule. If you don't set this option, you can enable
+// the return of diagnostic information for individual rules by setting an option
+// on the rule itself.
+// Default: off
+func ForceDiagnosticsAllRules(b bool) EngineOption {
+	return func(f *EngineOptions) {
+		f.ForceDiagnosticsAllRules = b
+	}
+}
 
 // --------------------------------------------------
 // A Rule defines an expression that can be evaluated by the
@@ -180,14 +227,13 @@ type Rule struct {
 	// A set of child rules.
 	Rules map[string]Rule
 
-	// A reference to a custom object. The same reference will be returned in the results.
+	// A reference to any object.
 	Meta interface{}
 
-	// Options
 	// Set options for how the engine should evaluate this rule and the child
 	// rules. Options will be inherited by all children, but the children can
 	// override with options of their own.
-	Opts []Option
+	EvalOpts []EvalOption
 }
 
 // Doer performs an action as a result of a rule qualifying.
@@ -197,8 +243,10 @@ type Doer interface {
 
 // Result of evaluating a rule.
 type Result struct {
-	// The ID of the rule that was evaluated
+	// The Rule that was evaluated
 	RuleID string
+
+	Meta interface{}
 
 	// Whether the rule yielded a TRUE logical value.
 	// The default is FALSE
@@ -207,12 +255,6 @@ type Result struct {
 	// If no rule expression is supplied for a rule, the result will be TRUE.
 	Pass bool
 
-	// User-supplied reference. This reference is returned in the results
-	// along with the outcome of the rule.
-	Meta interface{}
-
-	Action Doer
-
 	// The result of the evaluation. Boolean for logical expressions.
 	// Calculations or string manipulations will return the appropriate type.
 	Value interface{}
@@ -220,10 +262,8 @@ type Result struct {
 	// Results of evaluating the child rules.
 	Results map[string]Result
 
-	// Recursion depth
-	// How far down in the rule / child rule hierarchy this result is from.
-	// The first level is 0.
-	Depth int
+	// Diagnostic data
+	Diagnostics string
 }
 
 func PrintResults(r *Result, n ...int) {

@@ -6,13 +6,18 @@ package cel
 
 import (
 	"fmt"
+	"math"
+	"reflect"
 	"strings"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ezachrisen/rules"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/pb"
+	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	exprbp "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/protobuf/runtime/protoiface"
 )
@@ -23,13 +28,24 @@ type CELEngine struct {
 
 	// Rules are parsed, checked and stored as runnable CEL prorgrams
 	programs map[string]cel.Program
+
+	// ASTs are the result of compiling a rule into a program. It is not necessary to keep
+	// the ASTs for rule evaluation, but it is required to provide proper diagnostic information
+	// if enabled through options.
+	asts map[string]*cel.Ast
+
+	opts rules.EngineOptions
 }
 
 // Initialize a new CEL Engine
-func NewEngine() *CELEngine {
+func NewEngine(opts ...rules.EngineOption) *CELEngine {
 	engine := CELEngine{}
+
+	rules.ApplyEngineOptions(&engine.opts, opts...)
+
 	engine.rules = make(map[string]rules.Rule)
 	engine.programs = make(map[string]cel.Program)
+	engine.asts = make(map[string]*cel.Ast)
 	return &engine
 }
 
@@ -84,14 +100,18 @@ func (e *CELEngine) RuleCount() int {
 
 // Evaluate the rule agains the input data.
 // All rules will be evaluated, descending down through child rules up to the maximum depth
-func (e *CELEngine) Evaluate(data map[string]interface{}, id string, opts ...rules.Option) (*rules.Result, error) {
+func (e *CELEngine) Evaluate(data map[string]interface{}, id string, opts ...rules.EvalOption) (*rules.Result, error) {
 	o := rules.EvalOptions{
 		MaxDepth:   rules.DefaultDepth,
 		ReturnFail: true,
 		ReturnPass: true,
 	}
 
-	rules.ApplyOptions(&o, opts...) // TODO: remove?
+	rules.ApplyEvalOptions(&o, opts...)
+
+	if o.ReturnDiagnostics && !e.opts.CollectDiagnostics {
+		return nil, fmt.Errorf("Option set to return diagnostic, but engine does not have CollectDiagnostics option set.")
+	}
 
 	rule, ok := e.rules[id]
 	if !ok {
@@ -99,6 +119,153 @@ func (e *CELEngine) Evaluate(data map[string]interface{}, id string, opts ...rul
 	}
 
 	return e.evaluate(data, rule, 0, o)
+}
+
+func printAST(ex *exprbp.Expr, n int, details *cel.EvalDetails, data map[string]interface{}, r *rules.Result) string {
+	s := strings.Builder{}
+
+	indent := strings.Repeat(" ", n*2)
+
+	value := "?"
+	valueSource := ""
+	evaluatedValue, ok := details.State().Value(ex.Id)
+
+	if ok {
+		switch v := evaluatedValue.(type) {
+		case types.Duration:
+			dur := time.Duration(v.Seconds * int64(math.Pow10(9)))
+			value = fmt.Sprintf("%30s", dur)
+		case types.Timestamp:
+			value = fmt.Sprintf("%30s", time.Unix(v.Seconds, 0))
+		default:
+			value = fmt.Sprintf("%30s", fmt.Sprintf("%v", evaluatedValue))
+		}
+		valueSource = "E"
+	} else {
+		value = fmt.Sprintf("%30s", "?")
+	}
+
+	switch i := ex.GetExprKind().(type) {
+	case *exprbp.Expr_CallExpr:
+		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, strings.Trim(i.CallExpr.GetFunction(), "_")))
+		for x, _ := range i.CallExpr.Args {
+			s.WriteString(printAST(i.CallExpr.Args[x], n+1, details, data, r))
+		}
+	case *exprbp.Expr_ComprehensionExpr:
+		operandName := i.ComprehensionExpr.IterRange.GetSelectExpr().Operand.GetIdentExpr().GetName()
+		fieldName := i.ComprehensionExpr.IterRange.GetSelectExpr().Field
+		comprehensionName := i.ComprehensionExpr.LoopCondition.GetCallExpr().Function
+		callExpression := getCallExpression(i.ComprehensionExpr.GetLoopStep().GetCallExpr())
+		if comprehensionName == "@not_strictly_false" {
+			comprehensionName = "all"
+		}
+		s.WriteString(fmt.Sprintf("%s %s %s %s.%s.%s %s\n", value, valueSource, indent, operandName, fieldName, comprehensionName, callExpression))
+	case *exprbp.Expr_ConstExpr:
+		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, strings.Trim(i.ConstExpr.String(), " ")))
+	case *exprbp.Expr_SelectExpr:
+		operandName := getSelectIdent(i)
+		fieldName := i.SelectExpr.Field
+
+		inputValue, ok := data[operandName+"."+fieldName]
+		if ok {
+			value = fmt.Sprintf("%30s", fmt.Sprintf("%v", inputValue))
+			valueSource = "I"
+		} else {
+			obj, ok := data[operandName]
+			if ok {
+				x := reflect.ValueOf(obj).Elem()
+				value = fmt.Sprintf("%30s", fmt.Sprintf("%v", x.FieldByName(fieldName)))
+				valueSource = "I"
+			}
+		}
+
+		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, operandName+"."+fieldName))
+	case *exprbp.Expr_IdentExpr:
+		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, i.IdentExpr.Name))
+	default:
+		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, "** Unknown"))
+	}
+	return s.String()
+}
+
+func getCallExpression(e *exprbp.Expr_Call) string {
+
+	x := ""
+
+	if e.Function != "_&&_" {
+		x = e.Function
+	}
+
+	for _, a := range e.Args {
+		switch aa := a.GetExprKind().(type) {
+		case *expr.Expr_IdentExpr:
+			if aa.IdentExpr.Name != "__result__" {
+				x = x + " " + aa.IdentExpr.Name
+			}
+		case *expr.Expr_CallExpr:
+			x = x + "(" + getCallExpression(a.GetCallExpr()) + ")"
+		case *expr.Expr_ConstExpr:
+			x = x + " " + aa.ConstExpr.String()
+		}
+	}
+	return x
+}
+
+func getSelectIdent(i *expr.Expr_SelectExpr) string {
+
+	switch v := i.SelectExpr.Operand.GetExprKind().(type) {
+	case *exprbp.Expr_SelectExpr:
+		return getSelectIdent(v) + "." + v.SelectExpr.Field
+	case *exprbp.Expr_IdentExpr:
+		return v.IdentExpr.Name
+	}
+
+	return ""
+}
+
+func collectDiagnostics(ast *cel.Ast, details *cel.EvalDetails, data map[string]interface{}, r *rules.Result) {
+
+	if ast == nil || details == nil {
+		return
+	}
+
+	s := strings.Builder{}
+	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
+	s.WriteString(fmt.Sprintf("Rule ID: %s\n", r.RuleID))
+	s.WriteString(fmt.Sprintf("Expression:\n"))
+	s.WriteString(fmt.Sprintf("%s\n\n", word_wrap(ast.Source().Content(), 100)))
+	s.WriteString(fmt.Sprintf("Evaluation Result   :  %t\n", r.Pass))
+	s.WriteString(fmt.Sprintf("Evaluation Raw Value:  %v\n", r.Value))
+	s.WriteString(fmt.Sprintf("Rule Expression:\n"))
+	s.WriteString(fmt.Sprintf("%s\n", word_wrap(ast.Source().Content(), 100)))
+	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
+	s.WriteString(fmt.Sprintf("                                          EVALUATION TREE\n"))
+	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
+	s.WriteString(fmt.Sprintf("%30s    %-30s\n", "VALUE", "EXPRESSION"))
+	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
+	s.WriteString(printAST(ast.Expr(), 0, details, data, r))
+	r.Diagnostics = s.String()
+}
+
+func word_wrap(text string, lineWidth int) string {
+	words := strings.Fields(strings.TrimSpace(text))
+	if len(words) == 0 {
+		return text
+	}
+	wrapped := words[0]
+	spaceLeft := lineWidth - len(wrapped)
+	for _, word := range words[1:] {
+		if len(word)+1 > spaceLeft {
+			wrapped += "\n" + word
+			spaceLeft = lineWidth - len(word)
+		} else {
+			wrapped += " " + word
+			spaceLeft -= 1 + len(word)
+		}
+	}
+
+	return wrapped
+
 }
 
 // Recursively evaluate the rule and its child rules.
@@ -109,23 +276,22 @@ func (e *CELEngine) evaluate(data map[string]interface{}, rule rules.Rule, n int
 	}
 
 	pr := rules.Result{
-		Meta:    rule.Meta,
-		Action:  rule.Action,
 		RuleID:  rule.ID,
+		Meta:    rule.Meta,
 		Results: make(map[string]rules.Result),
-		Depth:   n,
 	}
 
 	// Apply options for this rule evaluation
-	rules.ApplyOptions(&opt, rule.Opts...)
+	rules.ApplyEvalOptions(&opt, rule.EvalOpts...)
 
 	program, found := e.programs[rule.ID]
+
 	// If the rule has an expression, evaluate it
 	if program != nil && found {
 		addSelf(data, rule.Self)
-		rawValue, _, error := program.Eval(data)
-		if error != nil {
-			return nil, fmt.Errorf("Error evaluating rule %s:%w", rule.ID, error)
+		rawValue, details, err := program.Eval(data)
+		if err != nil {
+			return nil, fmt.Errorf("Error evaluating rule %s:%w", rule.ID, err)
 		}
 
 		pr.Value = rawValue.Value()
@@ -133,6 +299,9 @@ func (e *CELEngine) evaluate(data map[string]interface{}, rule rules.Rule, n int
 			pr.Pass = v
 		} else {
 			pr.Pass = false
+		}
+		if e.opts.CollectDiagnostics && (opt.ReturnDiagnostics || e.opts.ForceDiagnosticsAllRules) {
+			collectDiagnostics(e.asts[rule.ID], details, data, &pr)
 		}
 	} else {
 		// If the rule has no expression default the result to true
@@ -221,6 +390,11 @@ func (e *CELEngine) compileRule(env *cel.Env, r rules.Rule) (cel.Program, error)
 		return nil, fmt.Errorf("parsing rule %s, %w", r.ID, iss.Err())
 	}
 
+	//
+	if e.opts.CollectDiagnostics {
+		e.asts[r.ID] = p
+	}
+
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(p)
 	if iss != nil && iss.Err() != nil {
@@ -228,7 +402,7 @@ func (e *CELEngine) compileRule(env *cel.Env, r rules.Rule) (cel.Program, error)
 	}
 
 	// Generate an evaluable program
-	prg, err := env.Program(c)
+	prg, err := env.Program(c, cel.EvalOptions(cel.OptTrackState)) // cel.OptExhaustiveEval)) //OptTrackState))
 	if err != nil {
 		return nil, fmt.Errorf("generating program %s, %w", r.ID, err)
 	}
@@ -241,6 +415,7 @@ func (e *CELEngine) evaluateProgram(data map[string]interface{}, prg cel.Program
 	if err != nil {
 		return nil, err
 	}
+
 	return rawValue.Value(), nil
 }
 
