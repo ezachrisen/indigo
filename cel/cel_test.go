@@ -272,7 +272,10 @@ func TestDiagnosticOptions(t *testing.T) {
 	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions", rules.ReturnDiagnostics(true))
 	is.NoErr(err)
 
+	is.Equal(results.RulesEvaluated, 3)
+
 	for _, c := range results.Results {
+		is.Equal(c.RulesEvaluated, 1)
 		if len(c.Diagnostics) < 100 {
 			t.Errorf("Wanted diagnostics for rule %s, got %s", c.RuleID, c.Diagnostics)
 		}

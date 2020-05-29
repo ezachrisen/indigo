@@ -302,6 +302,7 @@ func (e *CELEngine) evaluate(data map[string]interface{}, rule rules.Rule, n int
 		}
 		if e.opts.CollectDiagnostics && (opt.ReturnDiagnostics || e.opts.ForceDiagnosticsAllRules) {
 			collectDiagnostics(e.asts[rule.ID], details, data, &pr)
+			pr.RulesEvaluated++
 		}
 	} else {
 		// If the rule has no expression default the result to true
@@ -326,6 +327,10 @@ func (e *CELEngine) evaluate(data map[string]interface{}, rule rules.Rule, n int
 				(res.Pass && opt.ReturnPass) {
 				pr.Results[c.ID] = *res
 			}
+		}
+
+		if e.opts.CollectDiagnostics && (opt.ReturnDiagnostics || e.opts.ForceDiagnosticsAllRules) {
+			pr.RulesEvaluated += res.RulesEvaluated
 		}
 
 		if opt.StopFirstPositiveChild && res.Pass == true {
