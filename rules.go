@@ -260,7 +260,7 @@ type Result struct {
 	Value interface{}
 
 	// Results of evaluating the child rules.
-	Results map[string]Result
+	Results map[string]*Result
 
 	// Diagnostic data
 	Diagnostics    string
@@ -280,7 +280,7 @@ func PrintResults(r *Result, n ...int) {
 	}
 	fmt.Printf("%-60s %-10s\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString)
 	for _, c := range r.Results {
-		PrintResults(&c, n[0]+1)
+		PrintResults(c, n[0]+1)
 	}
 
 }
