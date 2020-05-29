@@ -263,7 +263,8 @@ type Result struct {
 	Results map[string]Result
 
 	// Diagnostic data
-	Diagnostics string
+	Diagnostics    string
+	RulesEvaluated int
 }
 
 func PrintResults(r *Result, n ...int) {
