@@ -67,3 +67,81 @@ func ExampleTimestampComparison() {
 	fmt.Println(results.Pass)
 	// Output: true
 }
+
+func ExampleExists() {
+
+	education := rules.Schema{
+		Elements: []rules.DataElement{
+			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"student": school.Student{
+			Grades: []float64{3.0, 2.9, 4.0, 2.1},
+		},
+	}
+
+	rule := rules.Rule{
+		ID:     "grade_check",
+		Schema: education,
+		Expr:   `student.Grades.exists(g, g < 2.0)`,
+	}
+
+	engine := cel.NewEngine()
+	err := engine.AddRule(rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Evaluate(data, "grade_check")
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+	fmt.Println(results.Pass)
+	// Output: false
+}
+
+func ExampleExistsNested() {
+
+	education := rules.Schema{
+		Elements: []rules.DataElement{
+			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: rules.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"student": school.Student{
+			Grades: []float64{3.0, 2.9, 4.0, 2.1},
+			XYZ:    &school.Student_Suspension{Cause: "Being funny"},
+			Suspensions: []*school.Student_Suspension{
+				&school.Student_Suspension{Cause: "Cheating"},
+				&school.Student_Suspension{Cause: "Fighting"},
+			},
+		},
+	}
+
+	rule := rules.Rule{
+		ID:     "fighting_check",
+		Schema: education,
+		Expr:   `student.XYZ.Cause == "Blah"`,
+	}
+
+	engine := cel.NewEngine()
+	err := engine.AddRule(rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Evaluate(data, "fighting_check")
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+	fmt.Println("RESULT: ", results.Value)
+	// Output: false
+}

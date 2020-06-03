@@ -262,6 +262,9 @@ type Result struct {
 	// Results of evaluating the child rules.
 	Results map[string]*Result
 
+	Action      Doer
+	AsyncAction Doer
+
 	// Diagnostic data
 	Diagnostics    string
 	RulesEvaluated int

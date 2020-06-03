@@ -11,6 +11,8 @@ github.com/alecthomas/repr v0.0.0-20200325044227-4184120f674c h1:MVVbswUlqicyj8P
 github.com/alecthomas/repr v0.0.0-20200325044227-4184120f674c/go.mod h1:xTS7Pm1pD1mvyM075QCDSRqH6qRLXylzS24ZTpRiSzQ=
 github.com/antlr/antlr4 v0.0.0-20190819145818-b43a4c3a8015 h1:StuiJFxQUsxSCzcby6NFZRdEhPkXD5vxN7TZ4MD6T84=
 github.com/antlr/antlr4 v0.0.0-20190819145818-b43a4c3a8015/go.mod h1:T7PbCXFs94rrTttyxjbyT5+/1V8T2TYDejxUfHJjw1Y=
+github.com/antlr/antlr4 v0.0.0-20200503195918-621b933c7a7f h1:0cEys61Sr2hUBEXfNV8eyQP01oZuBgoMeHunebPirK8=
+github.com/antlr/antlr4 v0.0.0-20200503195918-621b933c7a7f/go.mod h1:T7PbCXFs94rrTttyxjbyT5+/1V8T2TYDejxUfHJjw1Y=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -39,6 +41,8 @@ github.com/google/cel-go v0.4.2 h1:Fx1DQPo05qFcDst4TwiGgFfmTjjHsLLbLYQGX67QYUk=
 github.com/google/cel-go v0.4.2/go.mod h1:0pIisECLUDurNyQcYRcNjhGp0j/yM6v617EmXsBJE3A=
 github.com/google/cel-go v0.4.3-0.20200423192609-c4c3df541e54 h1:4wGttGzd1ZCuAr7ZGxzIBiPY6CtDDj9PCaBPWbJZU4o=
 github.com/google/cel-go v0.4.3-0.20200423192609-c4c3df541e54/go.mod h1:0pIisECLUDurNyQcYRcNjhGp0j/yM6v617EmXsBJE3A=
+github.com/google/cel-go v0.5.1 h1:oDsbtAwlwFPEcC8dMoRWNuVzWJUDeDZeHjoet9rXjTs=
+github.com/google/cel-go v0.5.1/go.mod h1:9SvtVVTtZV4DTB1/RuAD1D2HhuqEIdmZEE/r/lrFyKE=
 github.com/google/cel-spec v0.3.0/go.mod h1:MjQm800JAGhOZXI7vatnVpmIaFTR6L8FHcKk+piiKpI=
 github.com/google/cel-spec v0.4.0/go.mod h1:2pBM5cU4UKjbPDXBgwWkiwBsVgnxknuEJ7C5TDWwORQ=
 github.com/google/go-cmp v0.2.0/go.mod h1:oXzfMopK8JAjlY9xF4vHSVASa0yLyX7SntLO5aqRK0M=

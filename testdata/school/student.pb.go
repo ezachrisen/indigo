@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.22.0-devel
 // 	protoc        v3.11.4
-// source: examples/proto/student.proto
+// source: testdata/proto/student.proto
 
 package school
 
@@ -56,11 +56,11 @@ func (x StudentStatusType) String() string {
 }
 
 func (StudentStatusType) Descriptor() protoreflect.EnumDescriptor {
-	return file_examples_proto_student_proto_enumTypes[0].Descriptor()
+	return file_testdata_proto_student_proto_enumTypes[0].Descriptor()
 }
 
 func (StudentStatusType) Type() protoreflect.EnumType {
-	return &file_examples_proto_student_proto_enumTypes[0]
+	return &file_testdata_proto_student_proto_enumTypes[0]
 }
 
 func (x StudentStatusType) Number() protoreflect.EnumNumber {
@@ -69,7 +69,7 @@ func (x StudentStatusType) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use StudentStatusType.Descriptor instead.
 func (StudentStatusType) EnumDescriptor() ([]byte, []int) {
-	return file_examples_proto_student_proto_rawDescGZIP(), []int{0, 0}
+	return file_testdata_proto_student_proto_rawDescGZIP(), []int{0, 0}
 }
 
 type Student struct {
@@ -77,19 +77,21 @@ type Student struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	ID             float64              `protobuf:"fixed64,1,opt,name=ID,proto3" json:"ID,omitempty"`
-	Age            int32                `protobuf:"varint,2,opt,name=Age,proto3" json:"Age,omitempty"`
-	GPA            float64              `protobuf:"fixed64,3,opt,name=GPA,proto3" json:"GPA,omitempty"`
-	Status         StudentStatusType    `protobuf:"varint,4,opt,name=Status,proto3,enum=school.StudentStatusType" json:"Status,omitempty"`
-	EnrollmentDate *timestamp.Timestamp `protobuf:"bytes,7,opt,name=EnrollmentDate,proto3" json:"EnrollmentDate,omitempty"`
-	Attrs          map[string]string    `protobuf:"bytes,6,rep,name=Attrs,proto3" json:"Attrs,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Grades         []float64            `protobuf:"fixed64,5,rep,packed,name=Grades,proto3" json:"Grades,omitempty"`
+	ID             float64               `protobuf:"fixed64,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	Age            int32                 `protobuf:"varint,2,opt,name=Age,proto3" json:"Age,omitempty"`
+	GPA            float64               `protobuf:"fixed64,3,opt,name=GPA,proto3" json:"GPA,omitempty"`
+	Status         StudentStatusType     `protobuf:"varint,4,opt,name=Status,proto3,enum=school.StudentStatusType" json:"Status,omitempty"`
+	EnrollmentDate *timestamp.Timestamp  `protobuf:"bytes,7,opt,name=EnrollmentDate,proto3" json:"EnrollmentDate,omitempty"`
+	Attrs          map[string]string     `protobuf:"bytes,6,rep,name=Attrs,proto3" json:"Attrs,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Grades         []float64             `protobuf:"fixed64,5,rep,packed,name=Grades,proto3" json:"Grades,omitempty"`
+	XYZ            *Student_Suspension   `protobuf:"bytes,9,opt,name=XYZ,proto3" json:"XYZ,omitempty"`
+	Suspensions    []*Student_Suspension `protobuf:"bytes,8,rep,name=Suspensions,proto3" json:"Suspensions,omitempty"`
 }
 
 func (x *Student) Reset() {
 	*x = Student{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_examples_proto_student_proto_msgTypes[0]
+		mi := &file_testdata_proto_student_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -102,7 +104,7 @@ func (x *Student) String() string {
 func (*Student) ProtoMessage() {}
 
 func (x *Student) ProtoReflect() protoreflect.Message {
-	mi := &file_examples_proto_student_proto_msgTypes[0]
+	mi := &file_testdata_proto_student_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -115,7 +117,7 @@ func (x *Student) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Student.ProtoReflect.Descriptor instead.
 func (*Student) Descriptor() ([]byte, []int) {
-	return file_examples_proto_student_proto_rawDescGZIP(), []int{0}
+	return file_testdata_proto_student_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Student) GetID() float64 {
@@ -167,14 +169,83 @@ func (x *Student) GetGrades() []float64 {
 	return nil
 }
 
-var File_examples_proto_student_proto protoreflect.FileDescriptor
+func (x *Student) GetXYZ() *Student_Suspension {
+	if x != nil {
+		return x.XYZ
+	}
+	return nil
+}
 
-var file_examples_proto_student_proto_rawDesc = []byte{
-	0x0a, 0x1c, 0x65, 0x78, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x73, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+func (x *Student) GetSuspensions() []*Student_Suspension {
+	if x != nil {
+		return x.Suspensions
+	}
+	return nil
+}
+
+type Student_Suspension struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Cause string               `protobuf:"bytes,1,opt,name=Cause,proto3" json:"Cause,omitempty"`
+	Date  *timestamp.Timestamp `protobuf:"bytes,2,opt,name=Date,proto3" json:"Date,omitempty"`
+}
+
+func (x *Student_Suspension) Reset() {
+	*x = Student_Suspension{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_testdata_proto_student_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Student_Suspension) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Student_Suspension) ProtoMessage() {}
+
+func (x *Student_Suspension) ProtoReflect() protoreflect.Message {
+	mi := &file_testdata_proto_student_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Student_Suspension.ProtoReflect.Descriptor instead.
+func (*Student_Suspension) Descriptor() ([]byte, []int) {
+	return file_testdata_proto_student_proto_rawDescGZIP(), []int{0, 1}
+}
+
+func (x *Student_Suspension) GetCause() string {
+	if x != nil {
+		return x.Cause
+	}
+	return ""
+}
+
+func (x *Student_Suspension) GetDate() *timestamp.Timestamp {
+	if x != nil {
+		return x.Date
+	}
+	return nil
+}
+
+var File_testdata_proto_student_proto protoreflect.FileDescriptor
+
+var file_testdata_proto_student_proto_rawDesc = []byte{
+	0x0a, 0x1c, 0x74, 0x65, 0x73, 0x74, 0x64, 0x61, 0x74, 0x61, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
 	0x2f, 0x73, 0x74, 0x75, 0x64, 0x65, 0x6e, 0x74, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x06,
 	0x73, 0x63, 0x68, 0x6f, 0x6f, 0x6c, 0x1a, 0x1f, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2f, 0x70,
 	0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x74, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d,
-	0x70, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0xe6, 0x02, 0x0a, 0x07, 0x53, 0x74, 0x75, 0x64,
+	0x70, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x22, 0xa6, 0x04, 0x0a, 0x07, 0x53, 0x74, 0x75, 0x64,
 	0x65, 0x6e, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x49, 0x44, 0x18, 0x01, 0x20, 0x01, 0x28, 0x01, 0x52,
 	0x02, 0x49, 0x44, 0x12, 0x10, 0x0a, 0x03, 0x41, 0x67, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x05,
 	0x52, 0x03, 0x41, 0x67, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x47, 0x50, 0x41, 0x18, 0x03, 0x20, 0x01,
@@ -190,11 +261,23 @@ var file_examples_proto_student_proto_rawDesc = []byte{
 	0x1a, 0x2e, 0x73, 0x63, 0x68, 0x6f, 0x6f, 0x6c, 0x2e, 0x53, 0x74, 0x75, 0x64, 0x65, 0x6e, 0x74,
 	0x2e, 0x41, 0x74, 0x74, 0x72, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x05, 0x41, 0x74, 0x74,
 	0x72, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x47, 0x72, 0x61, 0x64, 0x65, 0x73, 0x18, 0x05, 0x20, 0x03,
-	0x28, 0x01, 0x52, 0x06, 0x47, 0x72, 0x61, 0x64, 0x65, 0x73, 0x1a, 0x38, 0x0a, 0x0a, 0x41, 0x74,
-	0x74, 0x72, 0x73, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61,
-	0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
-	0x3a, 0x02, 0x38, 0x01, 0x22, 0x2a, 0x0a, 0x0b, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x5f, 0x74,
+	0x28, 0x01, 0x52, 0x06, 0x47, 0x72, 0x61, 0x64, 0x65, 0x73, 0x12, 0x2c, 0x0a, 0x03, 0x58, 0x59,
+	0x5a, 0x18, 0x09, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x73, 0x63, 0x68, 0x6f, 0x6f, 0x6c,
+	0x2e, 0x53, 0x74, 0x75, 0x64, 0x65, 0x6e, 0x74, 0x2e, 0x53, 0x75, 0x73, 0x70, 0x65, 0x6e, 0x73,
+	0x69, 0x6f, 0x6e, 0x52, 0x03, 0x58, 0x59, 0x5a, 0x12, 0x3c, 0x0a, 0x0b, 0x53, 0x75, 0x73, 0x70,
+	0x65, 0x6e, 0x73, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x08, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x1a, 0x2e,
+	0x73, 0x63, 0x68, 0x6f, 0x6f, 0x6c, 0x2e, 0x53, 0x74, 0x75, 0x64, 0x65, 0x6e, 0x74, 0x2e, 0x53,
+	0x75, 0x73, 0x70, 0x65, 0x6e, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x0b, 0x53, 0x75, 0x73, 0x70, 0x65,
+	0x6e, 0x73, 0x69, 0x6f, 0x6e, 0x73, 0x1a, 0x38, 0x0a, 0x0a, 0x41, 0x74, 0x74, 0x72, 0x73, 0x45,
+	0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01,
+	0x1a, 0x52, 0x0a, 0x0a, 0x53, 0x75, 0x73, 0x70, 0x65, 0x6e, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x14,
+	0x0a, 0x05, 0x43, 0x61, 0x75, 0x73, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x43,
+	0x61, 0x75, 0x73, 0x65, 0x12, 0x2e, 0x0a, 0x04, 0x44, 0x61, 0x74, 0x65, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70, 0x52, 0x04,
+	0x44, 0x61, 0x74, 0x65, 0x22, 0x2a, 0x0a, 0x0b, 0x73, 0x74, 0x61, 0x74, 0x75, 0x73, 0x5f, 0x74,
 	0x79, 0x70, 0x65, 0x12, 0x0c, 0x0a, 0x08, 0x45, 0x4e, 0x52, 0x4f, 0x4c, 0x4c, 0x45, 0x44, 0x10,
 	0x00, 0x12, 0x0d, 0x0a, 0x09, 0x50, 0x52, 0x4f, 0x42, 0x41, 0x54, 0x49, 0x4f, 0x4e, 0x10, 0x01,
 	0x42, 0x0a, 0x5a, 0x08, 0x2e, 0x3b, 0x73, 0x63, 0x68, 0x6f, 0x6f, 0x6c, 0x62, 0x06, 0x70, 0x72,
@@ -202,44 +285,60 @@ var file_examples_proto_student_proto_rawDesc = []byte{
 }
 
 var (
-	file_examples_proto_student_proto_rawDescOnce sync.Once
-	file_examples_proto_student_proto_rawDescData = file_examples_proto_student_proto_rawDesc
+	file_testdata_proto_student_proto_rawDescOnce sync.Once
+	file_testdata_proto_student_proto_rawDescData = file_testdata_proto_student_proto_rawDesc
 )
 
-func file_examples_proto_student_proto_rawDescGZIP() []byte {
-	file_examples_proto_student_proto_rawDescOnce.Do(func() {
-		file_examples_proto_student_proto_rawDescData = protoimpl.X.CompressGZIP(file_examples_proto_student_proto_rawDescData)
+func file_testdata_proto_student_proto_rawDescGZIP() []byte {
+	file_testdata_proto_student_proto_rawDescOnce.Do(func() {
+		file_testdata_proto_student_proto_rawDescData = protoimpl.X.CompressGZIP(file_testdata_proto_student_proto_rawDescData)
 	})
-	return file_examples_proto_student_proto_rawDescData
+	return file_testdata_proto_student_proto_rawDescData
 }
 
-var file_examples_proto_student_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_examples_proto_student_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_examples_proto_student_proto_goTypes = []interface{}{
+var file_testdata_proto_student_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_testdata_proto_student_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_testdata_proto_student_proto_goTypes = []interface{}{
 	(StudentStatusType)(0),      // 0: school.Student.status_type
 	(*Student)(nil),             // 1: school.Student
 	nil,                         // 2: school.Student.AttrsEntry
-	(*timestamp.Timestamp)(nil), // 3: google.protobuf.Timestamp
+	(*Student_Suspension)(nil),  // 3: school.Student.Suspension
+	(*timestamp.Timestamp)(nil), // 4: google.protobuf.Timestamp
 }
-var file_examples_proto_student_proto_depIdxs = []int32{
+var file_testdata_proto_student_proto_depIdxs = []int32{
 	0, // 0: school.Student.Status:type_name -> school.Student.status_type
-	3, // 1: school.Student.EnrollmentDate:type_name -> google.protobuf.Timestamp
+	4, // 1: school.Student.EnrollmentDate:type_name -> google.protobuf.Timestamp
 	2, // 2: school.Student.Attrs:type_name -> school.Student.AttrsEntry
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 3: school.Student.XYZ:type_name -> school.Student.Suspension
+	3, // 4: school.Student.Suspensions:type_name -> school.Student.Suspension
+	4, // 5: school.Student.Suspension.Date:type_name -> google.protobuf.Timestamp
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
-func init() { file_examples_proto_student_proto_init() }
-func file_examples_proto_student_proto_init() {
-	if File_examples_proto_student_proto != nil {
+func init() { file_testdata_proto_student_proto_init() }
+func file_testdata_proto_student_proto_init() {
+	if File_testdata_proto_student_proto != nil {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_examples_proto_student_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_testdata_proto_student_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Student); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_testdata_proto_student_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Student_Suspension); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -255,19 +354,19 @@ func file_examples_proto_student_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: file_examples_proto_student_proto_rawDesc,
+			RawDescriptor: file_testdata_proto_student_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_examples_proto_student_proto_goTypes,
-		DependencyIndexes: file_examples_proto_student_proto_depIdxs,
-		EnumInfos:         file_examples_proto_student_proto_enumTypes,
-		MessageInfos:      file_examples_proto_student_proto_msgTypes,
+		GoTypes:           file_testdata_proto_student_proto_goTypes,
+		DependencyIndexes: file_testdata_proto_student_proto_depIdxs,
+		EnumInfos:         file_testdata_proto_student_proto_enumTypes,
+		MessageInfos:      file_testdata_proto_student_proto_msgTypes,
 	}.Build()
-	File_examples_proto_student_proto = out.File
-	file_examples_proto_student_proto_rawDesc = nil
-	file_examples_proto_student_proto_goTypes = nil
-	file_examples_proto_student_proto_depIdxs = nil
+	File_testdata_proto_student_proto = out.File
+	file_testdata_proto_student_proto_rawDesc = nil
+	file_testdata_proto_student_proto_goTypes = nil
+	file_testdata_proto_student_proto_depIdxs = nil
 }

@@ -275,11 +275,13 @@ func TestDiagnosticOptions(t *testing.T) {
 	is.Equal(results.RulesEvaluated, 3)
 
 	for _, c := range results.Results {
+		//		fmt.Println(c.Diagnostics)
 		is.Equal(c.RulesEvaluated, 1)
 		if len(c.Diagnostics) < 100 {
 			t.Errorf("Wanted diagnostics for rule %s, got %s", c.RuleID, c.Diagnostics)
 		}
 	}
+
 }
 
 func TestEvalOptions(t *testing.T) {
@@ -466,8 +468,35 @@ func BenchmarkSimpleRule(b *testing.B) {
 	}
 }
 
-func BenchmarkRuleWithArray(b *testing.B) {
+func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 
+	engine := cel.NewEngine(rules.CollectDiagnostics(true), rules.ForceDiagnosticsAllRules(true))
+	education := makeEducationSchema()
+	data := makeStudentData()
+
+	rule := rules.Rule{
+		ID:     "student_actions",
+		Schema: education,
+		Rules: map[string]rules.Rule{
+			"a": {
+				ID:     "at_risk",
+				Schema: education,
+				Expr:   `student.GPA < 2.5 || student.Status == "Probation"`,
+			},
+		},
+	}
+
+	err := engine.AddRule(rule)
+	if err != nil {
+		b.Errorf("Error adding ruleset: %v", err)
+	}
+
+	for i := 0; i < b.N; i++ {
+		engine.Evaluate(data, "student_actions")
+	}
+}
+
+func BenchmarkRuleWithArray(b *testing.B) {
 	engine := cel.NewEngine()
 	education := makeEducationSchema()
 
