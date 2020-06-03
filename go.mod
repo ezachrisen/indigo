@@ -10,7 +10,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/gobs/pretty v0.0.0-20180724170744-09732c25a95b
 	github.com/golang/protobuf v1.4.0-rc.4.0.20200313231945-b860323f09d0
-	github.com/google/cel-go v0.4.3-0.20200423192609-c4c3df541e54
+	github.com/google/cel-go v0.5.1
 	github.com/matryer/is v1.3.0
 	github.com/mattn/go-isatty v0.0.12 // indirect
 	github.com/mjibson/aw v0.0.0-20190312033433-fb7796cbe73b // indirect

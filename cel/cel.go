@@ -16,7 +16,6 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
-	"github.com/google/cel-go/common/types/pb"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	exprbp "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/protobuf/runtime/protoiface"
@@ -98,7 +97,7 @@ func (e *CELEngine) RuleCount() int {
 	return len(e.rules)
 }
 
-// Evaluate the rule agains the input data.
+// Evaluate the rule against the input data.
 // All rules will be evaluated, descending down through child rules up to the maximum depth
 func (e *CELEngine) Evaluate(data map[string]interface{}, id string, opts ...rules.EvalOption) (*rules.Result, error) {
 	o := rules.EvalOptions{
@@ -110,7 +109,7 @@ func (e *CELEngine) Evaluate(data map[string]interface{}, id string, opts ...rul
 	rules.ApplyEvalOptions(&o, opts...)
 
 	if o.ReturnDiagnostics && !e.opts.CollectDiagnostics {
-		return nil, fmt.Errorf("Option set to return diagnostic, but engine does not have CollectDiagnostics option set.")
+		return nil, fmt.Errorf("option set to return diagnostic, but engine does not have CollectDiagnostics option set")
 	}
 
 	rule, ok := e.rules[id]
@@ -118,7 +117,7 @@ func (e *CELEngine) Evaluate(data map[string]interface{}, id string, opts ...rul
 		return nil, fmt.Errorf("Rule not found")
 	}
 
-	return e.evaluate(data, rule, 0, o)
+	return e.evaluate(data, &rule, 0, o)
 }
 
 func printAST(ex *exprbp.Expr, n int, details *cel.EvalDetails, data map[string]interface{}, r *rules.Result) string {
@@ -269,16 +268,18 @@ func word_wrap(text string, lineWidth int) string {
 }
 
 // Recursively evaluate the rule and its child rules.
-func (e *CELEngine) evaluate(data map[string]interface{}, rule rules.Rule, n int, opt rules.EvalOptions) (*rules.Result, error) {
+func (e *CELEngine) evaluate(data map[string]interface{}, rule *rules.Rule, n int, opt rules.EvalOptions) (*rules.Result, error) {
 
 	if n > opt.MaxDepth {
 		return nil, nil
 	}
 
 	pr := rules.Result{
-		RuleID:  rule.ID,
-		Meta:    rule.Meta,
-		Results: make(map[string]rules.Result),
+		RuleID:      rule.ID,
+		Meta:        rule.Meta,
+		Action:      rule.Action,
+		AsyncAction: rule.AsynchAction,
+		Results:     make(map[string]*rules.Result, len(rule.Rules)),
 	}
 
 	// Apply options for this rule evaluation
@@ -318,14 +319,14 @@ func (e *CELEngine) evaluate(data map[string]interface{}, rule rules.Rule, n int
 
 	// Evaluate child rules
 	for _, c := range rule.Rules {
-		res, err := e.evaluate(data, c, n+1, opt)
+		res, err := e.evaluate(data, &c, n+1, opt)
 		if err != nil {
 			return nil, err
 		}
 		if res != nil {
 			if (!res.Pass && opt.ReturnFail) ||
 				(res.Pass && opt.ReturnPass) {
-				pr.Results[c.ID] = *res
+				pr.Results[c.ID] = res
 			}
 		}
 
@@ -395,19 +396,24 @@ func (e *CELEngine) compileRule(env *cel.Env, r rules.Rule) (cel.Program, error)
 		return nil, fmt.Errorf("parsing rule %s, %w", r.ID, iss.Err())
 	}
 
-	//
-	if e.opts.CollectDiagnostics {
-		e.asts[r.ID] = p
-	}
-
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(p)
 	if iss != nil && iss.Err() != nil {
 		return nil, fmt.Errorf("checking rule %s, %w", r.ID, iss.Err())
 	}
 
+	if e.opts.CollectDiagnostics {
+		e.asts[r.ID] = p
+	}
+
 	// Generate an evaluable program
-	prg, err := env.Program(c, cel.EvalOptions(cel.OptTrackState)) // cel.OptExhaustiveEval)) //OptTrackState))
+	// 	cel.EvalOptions(cel.OptTrackState)
+
+	options := cel.EvalOptions()
+	if e.opts.CollectDiagnostics {
+		options = cel.EvalOptions(cel.OptTrackState)
+	}
+	prg, err := env.Program(c, options) // cel.OptExhaustiveEval)) //OptTrackState))
 	if err != nil {
 		return nil, fmt.Errorf("generating program %s, %w", r.ID, err)
 	}
@@ -507,7 +513,8 @@ func celType(t rules.Type) (*exprbp.Type, error) {
 		if !ok {
 			return nil, fmt.Errorf("Casting to proto message %v", v.Protoname)
 		}
-		_, err := pb.DefaultDb.RegisterMessage(protoMessage)
+		//		_, err := pb.DefaultDb.RegisterMessage(protoMessage)
+
 		if err != nil {
 			return nil, fmt.Errorf("registering proto message %v: %w", v.Protoname, err)
 		}

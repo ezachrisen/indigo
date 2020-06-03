@@ -21,4 +21,13 @@ message Student {
   map<string, string> Attrs = 6;
   
   repeated double Grades = 5;
+
+  message Suspension {
+	string Cause = 1;
+	google.protobuf.Timestamp Date = 2;
+  }
+
+  Suspension XYZ = 9;
+  repeated Suspension Suspensions = 8;
 }
+
