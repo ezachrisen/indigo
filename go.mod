@@ -1,4 +1,4 @@
-module github.com/ezachrisen/rules
+module github.com/ezachrisen/indigo
 
 go 1.14
 
@@ -8,6 +8,7 @@ require (
 	github.com/alecthomas/colour v0.1.0 // indirect
 	github.com/alecthomas/repr v0.0.0-20200325044227-4184120f674c // indirect
 	github.com/davecgh/go-spew v1.1.1
+	github.com/ezachrisen/rules v0.0.0-20200507215502-8c56589cb22d
 	github.com/gobs/pretty v0.0.0-20180724170744-09732c25a95b
 	github.com/golang/protobuf v1.4.0-rc.4.0.20200313231945-b860323f09d0
 	github.com/google/cel-go v0.5.1

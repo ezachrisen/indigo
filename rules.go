@@ -1,4 +1,4 @@
-package rules
+package indigo
 
 import (
 	"fmt"
@@ -281,7 +281,7 @@ func PrintResults(r *Result, n ...int) {
 	if !r.Pass {
 		boolString = "FAIL"
 	}
-	fmt.Printf("%-60s %-10s\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString)
+	fmt.Printf("%-60s %-10s %v %d\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString, r.Value, len(r.Results))
 	for _, c := range r.Results {
 		PrintResults(c, n[0]+1)
 	}
