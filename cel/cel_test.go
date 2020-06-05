@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ezachrisen/rules"
-	"github.com/ezachrisen/rules/cel"
-	"github.com/ezachrisen/rules/testdata/school"
+	"github.com/ezachrisen/indigo"
+	"github.com/ezachrisen/indigo/cel"
+	"github.com/ezachrisen/indigo/testdata/school"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/cel-go/common/types/pb"
 	"github.com/matryer/is"
@@ -29,29 +29,29 @@ func makeStudentData() map[string]interface{} {
 
 }
 
-func makeEducationSchema() rules.Schema {
-	return rules.Schema{
-		Elements: []rules.DataElement{
-			{Name: "student.ID", Type: rules.String{}},
-			{Name: "student.Age", Type: rules.Int{}},
-			{Name: "student.GPA", Type: rules.Float{}},
-			{Name: "student.Adjustment", Type: rules.Float{}},
-			{Name: "student.Status", Type: rules.String{}},
-			{Name: "student.Grades", Type: rules.List{ValueType: rules.String{}}},
-			{Name: "student.EnrollmentDate", Type: rules.String{}},
-			{Name: "now", Type: rules.String{}},
-			{Name: "alsoNow", Type: rules.Timestamp{}},
+func makeEducationSchema() indigo.Schema {
+	return indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student.ID", Type: indigo.String{}},
+			{Name: "student.Age", Type: indigo.Int{}},
+			{Name: "student.GPA", Type: indigo.Float{}},
+			{Name: "student.Adjustment", Type: indigo.Float{}},
+			{Name: "student.Status", Type: indigo.String{}},
+			{Name: "student.Grades", Type: indigo.List{ValueType: indigo.String{}}},
+			{Name: "student.EnrollmentDate", Type: indigo.String{}},
+			{Name: "now", Type: indigo.String{}},
+			{Name: "alsoNow", Type: indigo.Timestamp{}},
 		},
 	}
 
 }
 
-func makeEducationRules() []rules.Rule {
-	rule1 := rules.Rule{
+func makeEducationRules() []indigo.Rule {
+	rule1 := indigo.Rule{
 		ID:     "student_actions",
 		Meta:   "d04ab6d9-f59d-9474-5c38-34d65380c612",
 		Schema: makeEducationSchema(),
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"a": {
 				ID:   "honors_student",
 				Expr: `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
@@ -59,7 +59,7 @@ func makeEducationRules() []rules.Rule {
 			"b": {
 				ID:   "at_risk",
 				Expr: `student.GPA < 2.5 || student.Status == "Probation"`,
-				Rules: map[string]rules.Rule{
+				Rules: map[string]indigo.Rule{
 					"c": {
 						ID:   "risk_factor",
 						Expr: `2.0+6.0`,
@@ -69,11 +69,11 @@ func makeEducationRules() []rules.Rule {
 		},
 	}
 
-	rule2 := rules.Rule{
+	rule2 := indigo.Rule{
 		ID:     "depthRules",
 		Schema: makeEducationSchema(),
 		Expr:   `student.GPA > 3.5`, // false
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"a": {
 				ID:   "c1",
 				Expr: `student.Adjustment > 0.0`, // true
@@ -93,16 +93,16 @@ func makeEducationRules() []rules.Rule {
 		},
 	}
 
-	rule3 := rules.Rule{
+	rule3 := indigo.Rule{
 		ID:     "ruleOptions",
 		Schema: makeEducationSchema(),
 		Expr:   `student.GPA > 3.5`, // false
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"A": {
 				ID:       "D",
-				Expr:     `student.Adjustment > 0.0`,                             // true
-				EvalOpts: []rules.EvalOption{rules.StopFirstPositiveChild(true)}, // RULE OPTION
-				Rules: map[string]rules.Rule{
+				Expr:     `student.Adjustment > 0.0`,                               // true
+				EvalOpts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true)}, // RULE OPTION
+				Rules: map[string]indigo.Rule{
 					"d1": {
 						ID:   "d1",
 						Expr: `student.Adjustment < 2.6`, // true
@@ -124,8 +124,8 @@ func makeEducationRules() []rules.Rule {
 			"E": {
 				ID:       "E",
 				Expr:     `student.Adjustment > 0.0`, // true
-				EvalOpts: []rules.EvalOption{},       // NO RULE OPTION
-				Rules: map[string]rules.Rule{
+				EvalOpts: []indigo.EvalOption{},      // NO RULE OPTION
+				Rules: map[string]indigo.Rule{
 					"e1": {
 						ID:   "e1",
 						Expr: `student.Adjustment < 2.6`, // true
@@ -143,7 +143,7 @@ func makeEducationRules() []rules.Rule {
 		},
 	}
 
-	return []rules.Rule{rule1, rule2, rule3}
+	return []indigo.Rule{rule1, rule2, rule3}
 
 }
 
@@ -159,7 +159,7 @@ func TestBasicRules(t *testing.T) {
 
 	results, err := engine.Evaluate(makeStudentData(), "student_actions")
 
-	//	rules.PrintResults(results)
+	//	indigo.PrintResults(results)
 
 	is.NoErr(err)
 	is.Equal(results.Meta, rule[0].Meta)
@@ -167,6 +167,8 @@ func TestBasicRules(t *testing.T) {
 	is.True(!results.Results["honors_student"].Pass)
 	is.True(results.Results["at_risk"].Pass)
 	is.Equal(results.Results["at_risk"].Results["risk_factor"].Value.(float64), 8.0)
+
+	indigo.PrintResults(results)
 
 }
 
@@ -180,21 +182,21 @@ func TestCalculation(t *testing.T) {
 	is.Equal(v, 5.055272727272728)
 }
 
-func makeEducationProtoSchema() rules.Schema {
-	return rules.Schema{
-		Elements: []rules.DataElement{
-			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "now", Type: rules.Timestamp{}},
-			{Name: "self", Type: rules.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+func makeEducationProtoSchema() indigo.Schema {
+	return indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "self", Type: indigo.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 }
 
-func makeEducationProtoRules() rules.Rule {
-	return rules.Rule{
+func makeEducationProtoRules() indigo.Rule {
+	return indigo.Rule{
 		ID:     "student_actions",
 		Schema: makeEducationProtoSchema(),
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"a": {
 				ID:   "honor_student",
 				Expr: `student.GPA >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
@@ -238,7 +240,7 @@ func makeStudentProtoData() map[string]interface{} {
 func TestProtoMessage(t *testing.T) {
 
 	is := is.New(t)
-	engine := cel.NewEngine(rules.CollectDiagnostics(true), rules.ForceDiagnosticsAllRules(true))
+	engine := cel.NewEngine(indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 	err := engine.AddRule(makeEducationProtoRules())
 	is.NoErr(err)
 
@@ -255,21 +257,21 @@ func TestDiagnosticOptions(t *testing.T) {
 	is := is.New(t)
 
 	// Turn off diagnostic collection
-	engine := cel.NewEngine(rules.CollectDiagnostics(false))
+	engine := cel.NewEngine(indigo.CollectDiagnostics(false))
 	err := engine.AddRule(makeEducationProtoRules())
 	is.NoErr(err)
 
-	_, err = engine.Evaluate(makeStudentProtoData(), "student_actions", rules.ReturnDiagnostics(true))
+	_, err = engine.Evaluate(makeStudentProtoData(), "student_actions", indigo.ReturnDiagnostics(true))
 	if err == nil {
-		t.Errorf("Wanted error; should require rules.CollectDiagnostics to be turned on to enable rules.ReturnDiagnostics")
+		t.Errorf("Wanted error; should require indigo.CollectDiagnostics to be turned on to enable indigo.ReturnDiagnostics")
 	}
 
 	// Turn on diagnostic collection
-	engine = cel.NewEngine(rules.CollectDiagnostics(true))
+	engine = cel.NewEngine(indigo.CollectDiagnostics(true))
 	err = engine.AddRule(makeEducationProtoRules())
 	is.NoErr(err)
 
-	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions", rules.ReturnDiagnostics(true))
+	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions", indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 
 	is.Equal(results.RulesEvaluated, 3)
@@ -289,30 +291,30 @@ func TestEvalOptions(t *testing.T) {
 	is := is.New(t)
 
 	cases := []struct {
-		opts []rules.EvalOption  // Options to pass to evaluate
-		chk  func(*rules.Result) // Function to check the results
+		opts []indigo.EvalOption  // Options to pass to evaluate
+		chk  func(*indigo.Result) // Function to check the results
 	}{
 		{
-			opts: []rules.EvalOption{rules.MaxDepth(0)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.MaxDepth(0)},
+			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 0) // No child results
 			},
 		},
 		{
-			opts: []rules.EvalOption{rules.StopIfParentNegative(true)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.StopIfParentNegative(true)},
+			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 0)
 			},
 		},
 		{
-			opts: []rules.EvalOption{rules.StopIfParentNegative(false)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.StopIfParentNegative(false)},
+			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 4)
 			},
 		},
 		{
-			opts: []rules.EvalOption{rules.StopFirstPositiveChild(true)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true)},
+			chk: func(r *indigo.Result) {
 				i := 0
 				for _, v := range r.Results {
 					if v.Pass {
@@ -323,8 +325,8 @@ func TestEvalOptions(t *testing.T) {
 			},
 		},
 		{
-			opts: []rules.EvalOption{rules.StopFirstNegativeChild(true)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true)},
+			chk: func(r *indigo.Result) {
 				i := 0
 				for _, v := range r.Results {
 					if !v.Pass {
@@ -335,27 +337,27 @@ func TestEvalOptions(t *testing.T) {
 			},
 		},
 		{
-			opts: []rules.EvalOption{rules.StopFirstNegativeChild(true), rules.StopFirstPositiveChild(true)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true)},
+			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 1)
 			},
 		},
 		{
-			opts: []rules.EvalOption{rules.ReturnFail(false), rules.ReturnPass(false)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.ReturnFail(false), indigo.ReturnPass(false)},
+			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 0)
 			},
 		},
 		{
-			opts: []rules.EvalOption{rules.ReturnPass(false)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.ReturnPass(false)},
+			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 2)
 			},
 		},
 
 		{
-			opts: []rules.EvalOption{rules.ReturnFail(false)},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{indigo.ReturnFail(false)},
+			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 2)
 			},
 		},
@@ -377,12 +379,12 @@ func TestRuleOptionOverride(t *testing.T) {
 	is := is.New(t)
 
 	cases := []struct {
-		opts []rules.EvalOption  // Options to pass to evaluate
-		chk  func(*rules.Result) // Function to check the results
+		opts []indigo.EvalOption  // Options to pass to evaluate
+		chk  func(*indigo.Result) // Function to check the results
 	}{
 		{
-			opts: []rules.EvalOption{},
-			chk: func(r *rules.Result) {
+			opts: []indigo.EvalOption{},
+			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 3) // rules a, b and E
 
 				// Check how many positives there are in rule D;
@@ -446,10 +448,10 @@ func BenchmarkSimpleRule(b *testing.B) {
 	education := makeEducationSchema()
 	data := makeStudentData()
 
-	rule := rules.Rule{
+	rule := indigo.Rule{
 		ID:     "student_actions",
 		Schema: education,
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"a": {
 				ID:     "at_risk",
 				Schema: education,
@@ -470,14 +472,14 @@ func BenchmarkSimpleRule(b *testing.B) {
 
 func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 
-	engine := cel.NewEngine(rules.CollectDiagnostics(true), rules.ForceDiagnosticsAllRules(true))
+	engine := cel.NewEngine(indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 	education := makeEducationSchema()
 	data := makeStudentData()
 
-	rule := rules.Rule{
+	rule := indigo.Rule{
 		ID:     "student_actions",
 		Schema: education,
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"a": {
 				ID:     "at_risk",
 				Schema: education,
@@ -500,10 +502,10 @@ func BenchmarkRuleWithArray(b *testing.B) {
 	engine := cel.NewEngine()
 	education := makeEducationSchema()
 
-	rule := rules.Rule{
+	rule := indigo.Rule{
 		ID:     "student_actions",
 		Schema: education,
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"a": {
 				ID:     "honors_student",
 				Schema: education,
@@ -527,20 +529,20 @@ func BenchmarkProtoWithSelf(b *testing.B) {
 
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
-	schema := rules.Schema{
-		Elements: []rules.DataElement{
-			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "now", Type: rules.Timestamp{}},
-			{Name: "self", Type: rules.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "self", Type: indigo.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 
 	engine := cel.NewEngine()
 
-	rule := rules.Rule{
+	rule := indigo.Rule{
 		ID:     "student_actions",
 		Schema: schema,
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"a": {
 				ID:   "at_risk",
 				Expr: `student.GPA < self.Minimum_GPA || student.Status == school.Student.status_type.PROBATION`,
@@ -579,19 +581,19 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
-	schema := rules.Schema{
-		Elements: []rules.DataElement{
-			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "now", Type: rules.Timestamp{}},
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
 		},
 	}
 
 	engine := cel.NewEngine()
 
-	rule := rules.Rule{
+	rule := indigo.Rule{
 		ID:     "student_actions",
 		Schema: schema,
-		Rules: map[string]rules.Rule{
+		Rules: map[string]indigo.Rule{
 			"a": {
 				ID:   "at_risk",
 				Expr: `student.GPA < 2.5 || student.Status == school.Student.status_type.PROBATION`,

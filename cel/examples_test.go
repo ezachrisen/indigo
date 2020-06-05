@@ -3,17 +3,17 @@ package cel_test
 import (
 	"fmt"
 
-	"github.com/ezachrisen/rules"
-	"github.com/ezachrisen/rules/cel"
-	"github.com/ezachrisen/rules/testdata/school"
+	"github.com/ezachrisen/indigo"
+	"github.com/ezachrisen/indigo/cel"
+	"github.com/ezachrisen/indigo/testdata/school"
 	"github.com/golang/protobuf/ptypes"
 )
 
 // Calculate a student's 2-semester GPA
 func ExampleCalculation() {
-	education := rules.Schema{
-		Elements: []rules.DataElement{
-			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
 		},
 	}
 
@@ -34,10 +34,10 @@ func ExampleCalculation() {
 }
 
 func ExampleTimestampComparison() {
-	schema := rules.Schema{
-		Elements: []rules.DataElement{
-			{Name: "then", Type: rules.String{}},
-			{Name: "now", Type: rules.Timestamp{}},
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "then", Type: indigo.String{}},
+			{Name: "now", Type: indigo.Timestamp{}},
 		},
 	}
 
@@ -46,7 +46,7 @@ func ExampleTimestampComparison() {
 		"now":  ptypes.TimestampNow(),
 	}
 
-	rule := rules.Rule{
+	rule := indigo.Rule{
 		ID:     "time_check",
 		Schema: schema,
 		Expr:   `now > timestamp(then)`,
@@ -70,9 +70,9 @@ func ExampleTimestampComparison() {
 
 func ExampleExists() {
 
-	education := rules.Schema{
-		Elements: []rules.DataElement{
-			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
 		},
 	}
 
@@ -82,7 +82,7 @@ func ExampleExists() {
 		},
 	}
 
-	rule := rules.Rule{
+	rule := indigo.Rule{
 		ID:     "grade_check",
 		Schema: education,
 		Expr:   `student.Grades.exists(g, g < 2.0)`,
@@ -104,19 +104,19 @@ func ExampleExists() {
 	// Output: false
 }
 
+// Demonstrates using the exists macro to inspect the value of nested messages in the list
 func ExampleExistsNested() {
 
-	education := rules.Schema{
-		Elements: []rules.DataElement{
-			{Name: "student", Type: rules.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: rules.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
 		},
 	}
 
 	data := map[string]interface{}{
 		"student": school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
-			XYZ:    &school.Student_Suspension{Cause: "Being funny"},
 			Suspensions: []*school.Student_Suspension{
 				&school.Student_Suspension{Cause: "Cheating"},
 				&school.Student_Suspension{Cause: "Fighting"},
@@ -124,10 +124,11 @@ func ExampleExistsNested() {
 		},
 	}
 
-	rule := rules.Rule{
+	// Check if the student was ever suspended for fighting
+	rule := indigo.Rule{
 		ID:     "fighting_check",
 		Schema: education,
-		Expr:   `student.XYZ.Cause == "Blah"`,
+		Expr:   `student.Suspensions.exists(s, s.Cause == "Fighting")`,
 	}
 
 	engine := cel.NewEngine()
@@ -142,6 +143,60 @@ func ExampleExistsNested() {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
-	fmt.Println("RESULT: ", results.Value)
-	// Output: false
+	fmt.Println(results.Value)
+	// Output: true
+}
+
+// Demonstrate constructing a proto message in an expression
+func ExampleProtoConstruction() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"student": school.Student{
+			Grades: []float64{3.0, 2.9, 4.0, 2.1},
+			Suspensions: []*school.Student_Suspension{
+				&school.Student_Suspension{Cause: "Cheating"},
+				&school.Student_Suspension{Cause: "Fighting"},
+			},
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:     "create_summary",
+		Schema: education,
+		Expr: `
+			school.StudentSummary {
+				GPA: student.GPA,
+				RiskFactor: 2.0 + 3.0,
+				Tenure: duration("12h")
+			}`,
+	}
+
+	engine := cel.NewEngine()
+	err := engine.AddRule(rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Evaluate(data, "create_summary")
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	// The result is a fully-formed school.StudentSummary message.
+	// There is no need to convert it.
+	fmt.Printf("%T\n", results.Value)
+	summ := results.Value.(*school.StudentSummary)
+	fmt.Println(summ.RiskFactor)
+	// Output: *school.StudentSummary
+	// 5
 }

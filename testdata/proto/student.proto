@@ -4,6 +4,7 @@ package school;
 option go_package = ".;school";
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
 
 message Student {
   double ID = 1;
@@ -31,3 +32,8 @@ message Student {
   repeated Suspension Suspensions = 8;
 }
 
+message StudentSummary {
+  double GPA = 1;
+  double RiskFactor = 2;
+  google.protobuf.Duration Tenure = 3;
+}
