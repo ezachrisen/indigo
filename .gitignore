@@ -17,3 +17,4 @@
 .vscode
 .emacs.desktop
 *.code-workspace
+.DS_Store
