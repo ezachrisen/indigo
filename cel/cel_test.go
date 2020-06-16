@@ -1,6 +1,7 @@
 package cel_test
 
 import (
+	"fmt"
 	"log"
 	"testing"
 	"time"
@@ -277,7 +278,7 @@ func TestDiagnosticOptions(t *testing.T) {
 	is.Equal(results.RulesEvaluated, 3)
 
 	for _, c := range results.Results {
-		//		fmt.Println(c.Diagnostics)
+		fmt.Println(c.Diagnostics)
 		is.Equal(c.RulesEvaluated, 1)
 		if len(c.Diagnostics) < 100 {
 			t.Errorf("Wanted diagnostics for rule %s, got %s", c.RuleID, c.Diagnostics)

@@ -40,6 +40,10 @@ type Engine interface {
 	// Number of (top level) rules
 	RuleCount() int
 
+	// Retrieve the top level rules.
+	// From there you can traverse the rule hierarchy.
+	Rules() map[string]Rule
+
 	// Evaluate a rule agains the the data.
 	// See the list of options available.
 	// Note that the options can be overriden by individual rules.
@@ -296,6 +300,8 @@ func PrintResults(r *Result, n ...int) {
 // when rules are evaluated.
 type Schema struct {
 	ID       string
+	Name     string
+	Meta     interface{}
 	Elements []DataElement
 }
 

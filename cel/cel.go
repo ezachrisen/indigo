@@ -72,6 +72,10 @@ func (e *CELEngine) Rule(id string) (indigo.Rule, bool) {
 	return r, ok
 }
 
+func (e *CELEngine) Rules() map[string]indigo.Rule {
+	return e.rules
+}
+
 func (e *CELEngine) PrintStructure() {
 	fmt.Println("-------------------------------------------------- RULES")
 	//	fmt.Printf("%v\n", e.rules)
@@ -387,13 +391,13 @@ func (e *CELEngine) compileRule(env *cel.Env, r indigo.Rule) (cel.Program, error
 	// Parse the rule expression to an AST
 	p, iss := env.Parse(r.Expr)
 	if iss != nil && iss.Err() != nil {
-		return nil, fmt.Errorf("parsing rule %s, %w", r.ID, iss.Err())
+		return nil, fmt.Errorf("parsing rule %s:\n%s", r.ID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
 	}
 
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(p)
 	if iss != nil && iss.Err() != nil {
-		return nil, fmt.Errorf("checking rule %s, %w", r.ID, iss.Err())
+		return nil, fmt.Errorf("checking rule %s:\n%w", r.ID, iss.Err())
 	}
 
 	if e.opts.CollectDiagnostics {
@@ -456,7 +460,7 @@ func (e *CELEngine) addRuleWithSchema(r indigo.Rule, s indigo.Schema) error {
 	if r.Expr != "" {
 		prg, err := e.compileRule(env, r)
 		if err != nil {
-			return fmt.Errorf("compiling rule %s: %w", r.ID, err)
+			return fmt.Errorf("compiling rule %s\n%w", r.ID, err)
 		}
 		e.programs[r.ID] = prg
 	}
