@@ -209,6 +209,13 @@ type Rule struct {
 	// (This is common if the rule is used as a container for other rules)
 	Expr string
 
+	// The output type of the expression. Compilers with the ability to check
+	// whether an expression produces the desired output should return an error
+	// if the expression does not. If you are using an underlying rules engine
+	// that does not support type checking, this value is for your information
+	// only.
+	ResultType Type
+
 	// The schema describing the data provided in the Evaluate input. (optional)
 	// Some implementations of Rules require a schema.
 	Schema Schema
@@ -327,7 +334,7 @@ type DataElement struct {
 
 // Type of data element represented in a schema
 type Type interface {
-	TypeName()
+	String() string
 }
 
 type String struct{}
@@ -354,14 +361,13 @@ type Map struct {
 	ValueType Type
 }
 
-// Dummy implementations to satisfy the Type interface
-func (t Int) TypeName()       {}
-func (t Bool) TypeName()      {}
-func (t String) TypeName()    {}
-func (t List) TypeName()      {}
-func (t Map) TypeName()       {}
-func (t Any) TypeName()       {}
-func (t Duration) TypeName()  {}
-func (t Timestamp) TypeName() {}
-func (t Float) TypeName()     {}
-func (t Proto) TypeName()     {}
+func (t Int) String() string       { return "int" }
+func (t Bool) String() string      { return "bool" }
+func (t String) String() string    { return "string" }
+func (t List) String() string      { return "list" }
+func (t Map) String() string       { return "map" }
+func (t Any) String() string       { return "any" }
+func (t Duration) String() string  { return "duration" }
+func (t Timestamp) String() string { return "timestamp" }
+func (t Float) String() string     { return "float" }
+func (t Proto) String() string     { return "proto " + t.Protoname }

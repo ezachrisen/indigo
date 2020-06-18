@@ -54,8 +54,9 @@ func makeEducationRules() []indigo.Rule {
 		Schema: makeEducationSchema(),
 		Rules: map[string]indigo.Rule{
 			"a": {
-				ID:   "honors_student",
-				Expr: `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+				ID:         "honors_student",
+				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+				ResultType: indigo.Bool{},
 			},
 			"b": {
 				ID:   "at_risk",
@@ -433,6 +434,69 @@ func TestRemoveRule(t *testing.T) {
 
 	engine.RemoveRule("student_actions")
 	is.Equal(engine.RuleCount(), 2)
+}
+
+func TestRuleResultTypes(t *testing.T) {
+
+	cases := []struct {
+		rule indigo.Rule
+		err  error
+	}{
+		{
+			indigo.Rule{
+				ID:         "shouldBeBool",
+				Schema:     makeEducationSchema(),
+				ResultType: indigo.Bool{},
+				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+			},
+			nil,
+		},
+		{
+			indigo.Rule{
+				ID:         "shouldBeBFloat",
+				Schema:     makeEducationSchema(),
+				ResultType: indigo.Float{},
+				Expr:       `student.GPA + 1.0`,
+			},
+			nil,
+		},
+		{
+			indigo.Rule{
+				ID:         "shouldBeStudent",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.Proto{Protoname: "school.Student"},
+				Expr:       `school.Student { GPA: 1.2 }`,
+			},
+			nil,
+		},
+		{
+			indigo.Rule{
+				ID:         "NEGATIVEshouldBeBFloat",
+				Schema:     makeEducationSchema(),
+				ResultType: indigo.Bool{},
+				Expr:       `student.GPA + 1.0`,
+			},
+			fmt.Errorf("Should be an error"),
+		},
+		{
+			indigo.Rule{
+				ID:         "NEGATIVEshouldBeStudent",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.Proto{Protoname: "school.HonorsConfiguration"},
+				Expr:       `school.Student { GPA: 1.2 }`,
+			},
+			fmt.Errorf("Should be an error"),
+		},
+	}
+
+	engine := cel.NewEngine()
+
+	for _, c := range cases {
+		err := engine.AddRule(c.rule)
+		if c.err == nil && err != nil {
+			t.Errorf("For rule %s, wanted err = %v, got %v", c.rule.ID, c.err, err)
+		}
+	}
 }
 
 // ------------------------------------------------------------------------------------------
