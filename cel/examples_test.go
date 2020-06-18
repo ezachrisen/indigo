@@ -169,8 +169,9 @@ func ExampleProtoConstruction() {
 	}
 
 	rule := indigo.Rule{
-		ID:     "create_summary",
-		Schema: education,
+		ID:         "create_summary",
+		Schema:     education,
+		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
 			school.StudentSummary {
 				GPA: student.GPA,

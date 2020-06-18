@@ -353,9 +353,10 @@ func (e *CELEngine) Calculate(data map[string]interface{}, expr string, schema i
 	prg, found := e.programs[expr]
 	if !found {
 		r := indigo.Rule{
-			ID:     expr,
-			Expr:   expr,
-			Schema: schema,
+			ID:         expr,
+			Expr:       expr,
+			Schema:     schema,
+			ResultType: indigo.Float{},
 		}
 		err := e.AddRule(r)
 		if err != nil {
@@ -400,12 +401,21 @@ func (e *CELEngine) compileRule(env *cel.Env, r indigo.Rule) (cel.Program, error
 		return nil, fmt.Errorf("checking rule %s:\n%w", r.ID, iss.Err())
 	}
 
+	if r.ResultType != nil {
+
+		err := doTypesMatch(c.ResultType(), r.ResultType)
+		if err != nil {
+			return nil, fmt.Errorf("Error compiling rule: %w", err)
+		}
+	}
+
 	if e.opts.CollectDiagnostics {
 		e.asts[r.ID] = p
 	}
 
 	// Generate an evaluable program
-	// 	cel.EvalOptions(cel.OptTrackState)
+	// Turn this on to force diagnostic collection for all rules.
+	// cel.EvalOptions(cel.OptTrackState)
 
 	options := cel.EvalOptions()
 	if e.opts.CollectDiagnostics {
@@ -472,6 +482,59 @@ func (e *CELEngine) addRuleWithSchema(r indigo.Rule, s indigo.Schema) error {
 		}
 	}
 	return nil
+}
+
+func doTypesMatch(result *exprbp.Type, expected indigo.Type) error {
+
+	// Convert the CEL result type to an Indigo type
+	indigoResultType, err := indigoType(result)
+	if err != nil {
+		return err
+	}
+
+	switch e := expected.(type) {
+	case indigo.Proto:
+		resultAsProto, ok := indigoResultType.(indigo.Proto)
+		if !ok {
+			return fmt.Errorf("Rule.ResultValue is a proto message. Result from rule compilation is %T", result)
+		}
+		if resultAsProto.Protoname != e.Protoname {
+			return fmt.Errorf("Rule.ResultValue is a proto message with type %s, the result from compilation is a proto message with type %s", e.Protoname, resultAsProto.Protoname)
+		}
+	case indigo.Bool:
+		_, ok := indigoResultType.(indigo.Bool)
+		if !ok {
+			return fmt.Errorf("Rule.ResultValue is a boolean. Result from rule compilation is %T", result)
+		}
+	case indigo.Float:
+		_, ok := indigoResultType.(indigo.Float)
+		if !ok {
+			return fmt.Errorf("Rule.ResultValue is a float. Result from rule compilation is %T", result)
+		}
+	}
+
+	return nil
+}
+
+// indigoType convertes from a CEL type to an indigo.Type
+// TODO: cover more types
+func indigoType(t *exprbp.Type) (indigo.Type, error) {
+
+	switch v := t.TypeKind.(type) {
+	case *exprbp.Type_MessageType:
+		return indigo.Proto{Protoname: t.GetMessageType()}, nil
+	case *exprbp.Type_Primitive:
+		switch t.GetPrimitive() {
+		case exprbp.Type_BOOL:
+			return indigo.Bool{}, nil
+		case exprbp.Type_DOUBLE:
+			return indigo.Float{}, nil
+		default:
+			return nil, fmt.Errorf("Unexpected primitive type %v", v)
+		}
+	default:
+		return nil, fmt.Errorf("Unexpected type %v", v)
+	}
 }
 
 // celType converts from a indigo.Type to a CEL type
