@@ -439,15 +439,15 @@ func StructureToHTML(e Engine) (string, error) {
 	}
 
 	data := struct {
-		Rules  map[string]Rule
-		Selves map[interface{}][]Rule
+		Rules  map[string]*Rule
+		Selves map[interface{}][]*Rule
 	}{
 		Rules:  e.Rules(),
-		Selves: map[interface{}][]Rule{},
+		Selves: map[interface{}][]*Rule{},
 	}
 
-	for _, r := range e.Rules() {
-		addSelfToMap(r, data.Selves)
+	for k := range e.Rules() {
+		addSelfToMap(e.Rules()[k], data.Selves)
 	}
 
 	buf := new(bytes.Buffer)
@@ -458,14 +458,15 @@ func StructureToHTML(e Engine) (string, error) {
 	return buf.String(), nil
 }
 
-func addSelfToMap(r Rule, selves map[interface{}][]Rule) {
+func addSelfToMap(r *Rule, selves map[interface{}][]*Rule) {
 	if r.Self != nil {
 		selves[r.Self] = append(selves[r.Self], r)
 		fmt.Println("Adding self: " + structNameOrID(r.Self, "defaultValue string"))
 	}
 
-	for _, c := range r.Rules {
-		addSelfToMap(c, selves)
+	for k := range r.Rules {
+		r := r.Rules[k]
+		addSelfToMap(r, selves)
 	}
 
 }

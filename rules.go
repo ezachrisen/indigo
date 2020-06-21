@@ -1,3 +1,10 @@
+// Package Indigo provides a rules engine process that uses an instance of the
+// Evaluator interface to perform evaluation of rules.
+//
+// Indigo itself does not specify a language for rules, relying instead on the Evaluator's
+// rule language.
+//
+//
 package indigo
 
 import (
@@ -5,63 +12,46 @@ import (
 	"strings"
 )
 
-// --------------------------------------------------
-// Constants
-
 const (
 	// Default recursive depth for evaluate.
 	// Override with options.
-	DefaultDepth = 100
+	defaultDepth = 100
 
 	// If the rule includes a Self object, it will be made available in the input
-	// data with the key SelfKey.
-	SelfKey = "self"
+	// data with this key name.
+	selfKey = "self"
+
+	// Path separator character when creating child rule IDs for use by Evaluator
+	idPathSeparator = "/"
+
+	// These characters are not allowed in rule IDs
+	bannedIDCharacters = "/"
 )
 
-// --------------------------------------------------
-// Rules Engine
+// Evaluator is the interface implemented by types that can evaluate expressions defined in
+// the rules. The interface includes a Compile step that the Engine calls before evaluation.
+// This gives the Evaluator the option of pre-processing the rule for efficiency. At a minimum
+// the Compile step should give the user feedback on whether the provided rule conforms to its
+// specificiations.
+type Evaluator interface {
+	// Compile a rule, checking for correctness and preparing the rule to be
+	// evaluated later.
+	Compile(ruleID string, expr string, resultType Type, s Schema, collectDiagnostics bool) error
 
-// The Engine interface represents a rules engine capable of evaluating rules
-// against supplied data.
-
-type Engine interface {
-
-	// Add the rule(s) to the engine.
-	// The rule must have an ID that is unique among the root rules.
-	// An existing rule with the same ID will be replaced.
-	AddRule(...Rule) error
-
-	// Return the rule with the ID
-	Rule(id string) (Rule, bool)
-
-	// Remove the rule with the ID
-	RemoveRule(id string)
-
-	// Number of (top level) rules
-	RuleCount() int
-
-	// Retrieve the top level rules.
-	// From there you can traverse the rule hierarchy.
-	Rules() map[string]Rule
-
-	// Evaluate a rule agains the the data.
-	// See the list of options available.
-	// Note that the options can be overriden by individual rules.
-	// Will recursively evaluate child rules up to the default limit (see const DefaultDepth)
-	// or the option. No error is returned if the limit is reached.
-	Evaluate(data map[string]interface{}, id string, opts ...EvalOption) (*Result, error)
-
-	// Calculate the expression and return the result.
-	Calculate(data map[string]interface{}, expr string, schema Schema) (float64, error)
+	// Eval tests the rule expression  against the data.
+	// The result is one of Indigo's types.
+	// resultType: the type of result value the rule expects
+	Eval(data map[string]interface{}, ruleID string, expr string, resultType Type, opt EvalOptions) (Value, string, error)
 }
 
-// Rule Evaluation Options
-// Pass these to Evaluate to change the behavior of the engine.
-// All of these options can also be specified at the individual rule level. TODO: HOW?
+// EvalOptions specify how the Engine and the Evaluator process rules.
+// Pass these to Evaluate to change the behavior of the engine, or
+// set options on a rule.
 // If specified at the rule level, the option applies to the rule and its child rules.
+type EvalOption func(f *EvalOptions)
 
 // Determines how far to recurse through child rules.
-// The default is rules.DefaultDepth.
+// The default is rules.defaultDepth.
 func MaxDepth(d int) EvalOption {
 	return func(f *EvalOptions) {
 		f.MaxDepth = d
@@ -78,6 +68,7 @@ func StopIfParentNegative(b bool) EvalOption {
 
 // Stops the evaluation of child rules when the first positive child is encountered.
 // Results will be partial. Only the child rules that were evaluated will be in the results.
+// By default rules are evaluated in alphabetical order.
 // Use case: role-based access; allow action if any child rule (permission rule) allows it.
 func StopFirstPositiveChild(b bool) EvalOption {
 	return func(f *EvalOptions) {
@@ -87,6 +78,7 @@ func StopFirstPositiveChild(b bool) EvalOption {
 
 // Stops the evaluation of child rules when the first negative child is encountered.
 // Results will be partial. Only the child rules that were evaluated will be in the results.
+// By default rules are evaluated in alphabetical order.
 // Use case: you require ALL child rules to be satisifed.
 func StopFirstNegativeChild(b bool) EvalOption {
 	return func(f *EvalOptions) {
@@ -120,15 +112,25 @@ func ReturnDiagnostics(b bool) EvalOption {
 	}
 }
 
-// Internal use
-func ApplyEvalOptions(o *EvalOptions, opts ...EvalOption) {
+// Include diagnostic information with the results.
+// To enable this option, you must first turn on diagnostic
+// collection at the engine level with the CollectDiagnostics EngineOption.
+// Default: off
+func SortFunc(s func(i, j int) bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.SortFunc = s
+	}
+}
+
+func applyEvalOptions(o *EvalOptions, opts ...EvalOption) {
 	for _, opt := range opts {
 		opt(o)
 	}
 }
 
-// Internal use
-// See the function definitions above for the meaning.
+// EvalOptions holds the result of applying the functional options
+// to a rule. This struct is passed to the Evaluator's Eval function.
+// See the corresponding functions for documentation.
 type EvalOptions struct {
 	MaxDepth               int
 	StopIfParentNegative   bool
@@ -137,64 +139,35 @@ type EvalOptions struct {
 	ReturnPass             bool
 	ReturnFail             bool
 	ReturnDiagnostics      bool
+	SortFunc               func(i, j int) bool
 }
 
-type EvalOption func(f *EvalOptions)
-
-// Internal use
-// See the functional definitions below for the meaning.
-type EngineOptions struct {
-	CollectDiagnostics       bool
-	ForceDiagnosticsAllRules bool
-}
-
-type EngineOption func(f *EngineOptions)
-
-// Internal use
-func ApplyEngineOptions(o *EngineOptions, opts ...EngineOption) {
-	for _, opt := range opts {
-		opt(o)
-	}
-}
-
-// Collect diagnostic information from the engine.
-// Default: off
-func CollectDiagnostics(b bool) EngineOption {
-	return func(f *EngineOptions) {
-		f.CollectDiagnostics = b
-	}
-}
-
-// Force the return of diagnostic information for all rules, regardless of
-// the setting on each rule. If you don't set this option, you can enable
-// the return of diagnostic information for individual rules by setting an option
-// on the rule itself.
-// Default: off
-func ForceDiagnosticsAllRules(b bool) EngineOption {
-	return func(f *EngineOptions) {
-		f.ForceDiagnosticsAllRules = b
-	}
-}
-
-// --------------------------------------------------
 // A Rule defines an expression that can be evaluated by the
 // Engine. The language used in the expression is dependent
 // on the implementation of Engine.
 //
-// A Rule also has child rules, so that a Rule can serve the
-// purpose of being a container for other rules.
+// A Rule can also have child rules, so that a Rule can serve the
+// purpose of being a container for other rules. Options can be
+// set via EvalOptions on each rule to determine how to process
+// the child rules.
 //
-// Example Structures
+// Example Rule Structures
 //
 //   Rule with expression, no child rules
-//   - Expression is evaluated and result returned
+//   - Parent rule expression is evaluated and result returned
 //
 //  Rule with expression and child rules
-//  - Expression is evaluated, and so are the child
-//    rules.
-//  - User can use the expression result to determine what
-//    to do with the results of the children
-
+//  No options specified
+//  - Parent rule xpression is evaluated, and so are all the child rules.
+//  - All children and their evaluation results are returned
+//
+//  Rule with expression and child rules
+//  Option set: StopIfParentNegative
+//  - Parent rule expression is evaluated
+//  - If the parent rule is a boolean, and it returns FALSE,
+//    the children are NOT evaluated
+//  - If the parent rule returns TRUE, or if it's not a
+//    boolean, all the children and their resulsts are returned
 type Rule struct {
 	// A rule identifer. (required)
 	// No two root rules can have the same identifier.
@@ -225,7 +198,7 @@ type Rule struct {
 	// For example, in a rule determining if the temperature is in the specified range,
 	// set Self = Thermostat, where Thermostat holds the user's temperature preference.
 	// When evaluating the rules, the Thermostat object will be included in the data
-	// with the key rules.SelfKey. Rules can then reference the user's temperature preference
+	// with the key rules.selfKey. Rules can then reference the user's temperature preference
 	// in the rule expression. This allows rule inputs to be changed without recompiling
 	// the rule.
 	Self interface{}
@@ -236,7 +209,11 @@ type Rule struct {
 	AsynchAction Doer
 
 	// A set of child rules.
-	Rules map[string]Rule
+	Rules map[string]*Rule
+
+	// Sorted list of child rule keys.
+	// Child rules will be evaluated in this order.
+	sortedKeys []string
 
 	// A reference to any object.
 	Meta interface{}
@@ -281,10 +258,18 @@ type Result struct {
 	RulesEvaluated int
 }
 
-func PrintResults(r *Result, n ...int) {
+type Value struct {
+	Val interface{}
+	Typ Type
+}
 
+// SummarizeResults produces a list of rules (including child rules) executed and the result of the evaluation.
+func SummarizeResults(r *Result, n ...int) string {
+	s := strings.Builder{}
+
+	// n is variadic to allow the SummarizeResults call to omit it
 	if len(n) == 0 {
-		fmt.Println("---------- Result Diagnostic ----------")
+		s.WriteString("---------- Result Diagnostic ----------\n")
 		n = append(n, 0)
 	}
 	indent := strings.Repeat(" ", (n[0] * 3))
@@ -292,82 +277,9 @@ func PrintResults(r *Result, n ...int) {
 	if !r.Pass {
 		boolString = "FAIL"
 	}
-	fmt.Printf("%-60s %-10s %v %d\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString, r.Value, len(r.Results))
+	s.WriteString(fmt.Sprintf("%-60s %-10s %v %d\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString, r.Value, len(r.Results)))
 	for _, c := range r.Results {
-		PrintResults(c, n[0]+1)
+		s.WriteString(SummarizeResults(c, n[0]+1))
 	}
-
+	return s.String()
 }
-
-// --------------------------------------------------
-// Schema
-
-// Schema defines the keys (variable names) and their data types used in a
-// rule expression. The same keys and types must be supplied in the data map
-// when rules are evaluated.
-type Schema struct {
-	ID       string
-	Name     string
-	Meta     interface{}
-	Elements []DataElement
-}
-
-// DataElement defines a named variable in a schema
-type DataElement struct {
-	// Short, user-friendly name of the variable. This is the name
-	// that will be used in rules to refer to data passed in.
-	//
-	// RESERVED NAMES:
-	//   SelfKey (see const)
-	Name string
-
-	// One of the Type interface defined.
-	Type Type
-
-	// Optional description of the type.
-	Description string
-}
-
-// --------------------------------------------------
-// Data Types in a Schema
-// Not all implementations of Engine support all types.
-
-// Type of data element represented in a schema
-type Type interface {
-	String() string
-}
-
-type String struct{}
-type Int struct{}
-type Float struct{}
-type Any struct{}
-type Bool struct{}
-type Duration struct{}
-type Timestamp struct{}
-
-type Proto struct {
-	Protoname string
-	Message   interface{}
-}
-
-// List is an array of items
-type List struct {
-	ValueType Type
-}
-
-// Map is a map of items. Maps can be nested.
-type Map struct {
-	KeyType   Type
-	ValueType Type
-}
-
-func (t Int) String() string       { return "int" }
-func (t Bool) String() string      { return "bool" }
-func (t String) String() string    { return "string" }
-func (t List) String() string      { return "list" }
-func (t Map) String() string       { return "map" }
-func (t Any) String() string       { return "any" }
-func (t Duration) String() string  { return "duration" }
-func (t Timestamp) String() string { return "timestamp" }
-func (t Float) String() string     { return "float" }
-func (t Proto) String() string     { return "proto " + t.Protoname }
