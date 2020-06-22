@@ -270,14 +270,17 @@ func SummarizeResults(r *Result, n ...int) string {
 	// n is variadic to allow the SummarizeResults call to omit it
 	if len(n) == 0 {
 		s.WriteString("---------- Result Diagnostic ----------\n")
+		s.WriteString("                     Pass Chil-\n")
+		s.WriteString("Rule                 Fail dren Value\n")
+		s.WriteString("---------------------------------------\n")
 		n = append(n, 0)
 	}
-	indent := strings.Repeat(" ", (n[0] * 3))
+	indent := strings.Repeat(" ", (n[0]))
 	boolString := "PASS"
 	if !r.Pass {
 		boolString = "FAIL"
 	}
-	s.WriteString(fmt.Sprintf("%-60s %-10s %v %d\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString, r.Value, len(r.Results)))
+	s.WriteString(fmt.Sprintf("%-20s %-4s %4d %v\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString, len(r.Results), r.Value))
 	for _, c := range r.Results {
 		s.WriteString(SummarizeResults(c, n[0]+1))
 	}
