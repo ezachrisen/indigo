@@ -4,7 +4,7 @@ Indigo is a rule engine created to enable application developers to build system
 
 
 ### Google's Common Expression Language
-Indigo supports the CEL language as an evaluation back-end. See https://github.com/google/cel-go and https://opensource.google/projects/cel for more information about CEL and the Go implementation of it. CEL is a rich expression language, providing not only boolean expression output, but also calculations and object construction. 
+Indigo supports the CEL language as an evaluation back-end. See https://github.com/google/cel-go and https://opensource.google/projects/cel for more information about CEL and the Go implementation of it. CEL is a rich expression language, providing not only boolean expression output, but also calculations and object construction. Particularly powerful is the "native" use of protocol buffers in CEL's schema, rule language and return types. 
 
 
 ### Usage
@@ -53,6 +53,6 @@ func ExampleHelloWorld() {
 ```
 
 ### Beyond Basic Usage 
-
+While there is a lot of power in expression evaluation, Indigo organizes rules in a tree-based hierarchy, allowing precise control over what rules are evaluated and how. Check out the examples and the test files for more information on how to use rule hierarchies and the evaluation options. 
 
 
