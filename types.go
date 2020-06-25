@@ -1,6 +1,5 @@
 package indigo
 
-
 // Schema defines the keys (variable names) and their data types used in a
 // rule expression. The same keys and types must be supplied in the data map
 // when rules are evaluated.
@@ -55,6 +54,10 @@ type Map struct {
 	ValueType Type
 }
 
+type Struct struct {
+	Name string
+}
+
 func (t Int) String() string       { return "int" }
 func (t Bool) String() string      { return "bool" }
 func (t String) String() string    { return "string" }
@@ -65,3 +68,4 @@ func (t Duration) String() string  { return "duration" }
 func (t Timestamp) String() string { return "timestamp" }
 func (t Float) String() string     { return "float" }
 func (t Proto) String() string     { return "proto " + t.Protoname }
+func (t Struct) String() string    { return "struct " + t.Name }

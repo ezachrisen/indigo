@@ -18,3 +18,4 @@
 .emacs.desktop
 *.code-workspace
 .DS_Store
+gentype_generated.cel.go

@@ -20,7 +20,7 @@ import (
 )
 
 type CELEvaluator struct {
-
+	typeProvider *AttributeProvider
 	// Rules are parsed, checked and stored as runnable CEL programs
 	// Key = rule ID
 	programs map[string]cel.Program
@@ -34,11 +34,13 @@ type CELEvaluator struct {
 
 // Initialize a new CEL Evaluator
 // The evaluator contains internal data used to facilitate CEL expression evaluation.
-func NewEvaluator() *CELEvaluator {
+func NewEvaluator(ap *AttributeProvider) *CELEvaluator {
 	e := CELEvaluator{
-		programs: make(map[string]cel.Program),
-		asts:     make(map[string]*cel.Ast),
+		programs:     make(map[string]cel.Program),
+		asts:         make(map[string]*cel.Ast),
+		typeProvider: ap,
 	}
+
 	return &e
 }
 
@@ -64,6 +66,10 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 
 	if opts == nil || len(opts) == 0 {
 		return fmt.Errorf("No valid schema for rule %s", ruleID)
+	}
+
+	if e.typeProvider != nil {
+		opts = append(opts, cel.CustomTypeProvider(e.typeProvider))
 	}
 
 	env, err := cel.NewEnv(opts...)
@@ -240,16 +246,9 @@ func celType(t indigo.Type) (*expr.Type, error) {
 			return nil, fmt.Errorf("Setting value of %v list: %w", v.ValueType, err)
 		}
 		return decls.NewListType(val), nil
+	case indigo.Struct:
+		return decls.NewObjectType(v.Name), nil
 	case indigo.Proto:
-		//		protoMessage, ok := v.Message.(protoiface.MessageV1)
-		//		if !ok {
-		//			return nil, fmt.Errorf("Casting to proto message %v", v.Protoname)
-		//		}
-		//		_, err := pb.DefaultDb.RegisterMessage(protoMessage)
-
-		// if err != nil {
-		// 	return nil, fmt.Errorf("registering proto message %v: %w", v.Protoname, err)
-		// }
 		return decls.NewObjectType(v.Protoname), nil
 	}
 	return decls.Any, nil
@@ -278,7 +277,6 @@ func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, error) {
 	opts := []cel.EnvOption{}
 	opts = append(opts, cel.Declarations(declarations...))
 	opts = append(opts, cel.Types(protoTypes...))
-
 	return opts, nil
 }
 

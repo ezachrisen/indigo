@@ -3,6 +3,7 @@ package cel_test
 import (
 	"fmt"
 	"log"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,11 +149,27 @@ func makeEducationRules() []*indigo.Rule {
 
 }
 
+func makeEducationRulesWithIncorrectTypes() *indigo.Rule {
+	rule1 := &indigo.Rule{
+		ID:     "student_actions",
+		Meta:   "d04ab6d9-f59d-9474-5c38-34d65380c612",
+		Schema: makeEducationSchema(),
+		Rules: map[string]*indigo.Rule{
+			"a": {
+				ID:         "honors_student",
+				Expr:       `student.GPA != "3.6" && student.Status > 2.0`,
+				ResultType: indigo.Bool{},
+			},
+		},
+	}
+	return rule1
+}
+
 func TestBasicRules(t *testing.T) {
 
 	is := is.New(t)
 
-	evaluator := cel.NewEvaluator()
+	evaluator := cel.NewEvaluator(nil)
 	engine := indigo.NewEngine(evaluator)
 	rule := makeEducationRules()
 
@@ -223,10 +240,27 @@ func makeStudentProtoData() map[string]interface{} {
 
 }
 
+// Make sure that type mismatches between schema and rule are caught at compile time
+func TestCompileErrors(t *testing.T) {
+
+	is := is.New(t)
+
+	evaluator := cel.NewEvaluator(nil)
+	engine := indigo.NewEngine(evaluator)
+	rule := makeEducationRulesWithIncorrectTypes()
+
+	err := engine.AddRule(rule)
+	if err == nil {
+		is.Fail() // expected compile error here
+	}
+	is.True(strings.Contains(err.Error(), "1:13: found no matching overload for '_!=_' applied to '(double, string)'"))
+	is.True(strings.Contains(err.Error(), "1:40: found no matching overload for '_>_' applied to '(string, double)'"))
+}
+
 func TestProtoMessage(t *testing.T) {
 
 	is := is.New(t)
-	eval := cel.NewEvaluator()
+	eval := cel.NewEvaluator(nil)
 	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 
 	err := engine.AddRule(makeEducationProtoRules())
@@ -245,7 +279,7 @@ func TestDiagnosticOptions(t *testing.T) {
 	is := is.New(t)
 
 	// Turn off diagnostic collection
-	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(false))
+	engine := indigo.NewEngine(cel.NewEvaluator(nil), indigo.CollectDiagnostics(false))
 	err := engine.AddRule(makeEducationProtoRules())
 	is.NoErr(err)
 
@@ -255,7 +289,7 @@ func TestDiagnosticOptions(t *testing.T) {
 	}
 
 	// Turn on diagnostic collection
-	engine = indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true))
+	engine = indigo.NewEngine(cel.NewEvaluator(nil), indigo.CollectDiagnostics(true))
 	err = engine.AddRule(makeEducationProtoRules())
 	is.NoErr(err)
 
@@ -325,7 +359,7 @@ func TestRuleResultTypes(t *testing.T) {
 		},
 	}
 
-	eval := cel.NewEvaluator()
+	eval := cel.NewEvaluator(nil)
 	engine := indigo.NewEngine(eval)
 
 	for _, c := range cases {
@@ -346,7 +380,7 @@ func TestRuleResultTypes(t *testing.T) {
 
 func BenchmarkSimpleRule(b *testing.B) {
 
-	engine := indigo.NewEngine(cel.NewEvaluator())
+	engine := indigo.NewEngine(cel.NewEvaluator(nil))
 
 	education := makeEducationSchema()
 	data := makeStudentData()
@@ -375,7 +409,7 @@ func BenchmarkSimpleRule(b *testing.B) {
 
 func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 
-	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
+	engine := indigo.NewEngine(cel.NewEvaluator(nil), indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 	education := makeEducationSchema()
 	data := makeStudentData()
 
@@ -403,7 +437,7 @@ func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 
 func BenchmarkRuleWithArray(b *testing.B) {
 
-	engine := indigo.NewEngine(cel.NewEvaluator())
+	engine := indigo.NewEngine(cel.NewEvaluator(nil))
 	education := makeEducationSchema()
 
 	rule := indigo.Rule{
@@ -441,7 +475,7 @@ func BenchmarkProtoWithSelf(b *testing.B) {
 		},
 	}
 
-	engine := indigo.NewEngine(cel.NewEvaluator())
+	engine := indigo.NewEngine(cel.NewEvaluator(nil))
 
 	rule := indigo.Rule{
 		ID:     "student_actions",
@@ -492,7 +526,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 		},
 	}
 
-	engine := indigo.NewEngine(cel.NewEvaluator())
+	engine := indigo.NewEngine(cel.NewEvaluator(nil))
 
 	rule := indigo.Rule{
 		ID:     "student_actions",
