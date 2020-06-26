@@ -1,3 +1,4 @@
+// Note: a lot of this code was copied from PaceDev's OTO framework.
 package main
 
 import (
