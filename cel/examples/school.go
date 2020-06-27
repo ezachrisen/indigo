@@ -20,3 +20,7 @@ type StudentSummary struct {
 	RiskFactor float64
 	//	Tenure time.Duration
 }
+
+type StudentService interface {
+	Enroll(Student) EnrollResponse
+}
