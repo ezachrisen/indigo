@@ -12,7 +12,7 @@ func ExampleSchool() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Struct{Name: "examples.Student"}},
+			{Name: "student", Type: indigo.Struct{Name: "examples.Student", Struct: &examples.Student{}}},
 		},
 	}
 
@@ -31,7 +31,7 @@ func ExampleSchool() {
 	}
 
 	ap := cel.NewAttributeProvider()
-	ap.RegisterType(&examples.Student{})
+	//	ap.RegisterType(&examples.Student{})
 
 	evaluator := cel.NewEvaluator(ap)
 	engine := indigo.NewEngine(evaluator)
