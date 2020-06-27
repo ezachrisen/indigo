@@ -224,6 +224,10 @@ type Rule struct {
 	EvalOpts []EvalOption
 }
 
+func (r *Rule) AddChild(c *Rule) {
+	r.Rules[c.ID] = c
+}
+
 // Doer performs an action as a result of a rule qualifying.
 type Doer interface {
 	Do(map[string]interface{}) error
