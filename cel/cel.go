@@ -20,7 +20,9 @@ import (
 )
 
 type CELEvaluator struct {
+	// A custom attrubute provider to suppor Go structs natively
 	typeProvider *AttributeProvider
+
 	// Rules are parsed, checked and stored as runnable CEL programs
 	// Key = rule ID
 	programs map[string]cel.Program
@@ -59,7 +61,7 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 	var opts []cel.EnvOption
 	var err error
 
-	opts, err = schemaToDeclarations(s)
+	opts, structs, err := schemaToDeclarations(s)
 	if err != nil {
 		return err
 	}
@@ -70,6 +72,12 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 
 	if e.typeProvider != nil {
 		opts = append(opts, cel.CustomTypeProvider(e.typeProvider))
+
+		for _, o := range structs {
+			if s, ok := o.(CustomType); ok {
+				e.typeProvider.RegisterType(s)
+			}
+		}
 	}
 
 	env, err := cel.NewEnv(opts...)
@@ -257,27 +265,30 @@ func celType(t indigo.Type) (*expr.Type, error) {
 
 // schemaToDeclarations converts from a rules/Schema to a set of CEL declarations that
 // are passed to the CEL engine
-func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, error) {
+func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, []interface{}, error) {
 	declarations := []*expr.Decl{}
-	protoTypes := []interface{}{}
+	types := []interface{}{}
+	structs := []interface{}{}
 
 	for _, d := range s.Elements {
 		typ, err := celType(d.Type)
 		if err != nil {
-			return nil, err
+			return nil, structs, err
 		}
 		declarations = append(declarations, decls.NewVar(d.Name, typ))
 
 		switch v := d.Type.(type) {
 		case indigo.Proto:
-			protoTypes = append(protoTypes, v.Message)
+			types = append(types, v.Message)
+		case indigo.Struct:
+			structs = append(structs, v.Struct)
 		}
 
 	}
 	opts := []cel.EnvOption{}
 	opts = append(opts, cel.Declarations(declarations...))
-	opts = append(opts, cel.Types(protoTypes...))
-	return opts, nil
+	opts = append(opts, cel.Types(types...))
+	return opts, structs, nil
 }
 
 // --------------------------------------------------------------------------- DIAGNOSTICS

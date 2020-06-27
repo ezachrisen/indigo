@@ -55,7 +55,8 @@ type Map struct {
 }
 
 type Struct struct {
-	Name string
+	Name   string
+	Struct interface{}
 }
 
 func (t Int) String() string       { return "int" }
