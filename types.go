@@ -55,8 +55,8 @@ type Map struct {
 }
 
 type Struct struct {
-	Name   string
-	Struct interface{}
+	Struct  interface{}
+	Imports []interface{}
 }
 
 func (t Int) String() string       { return "int" }
@@ -69,4 +69,4 @@ func (t Duration) String() string  { return "duration" }
 func (t Timestamp) String() string { return "timestamp" }
 func (t Float) String() string     { return "float" }
 func (t Proto) String() string     { return "proto " + t.Protoname }
-func (t Struct) String() string    { return "struct " + t.Name }
+func (t Struct) String() string    { return "Go struct" }

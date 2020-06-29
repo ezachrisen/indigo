@@ -2,6 +2,7 @@ package examples_test
 
 import (
 	"fmt"
+	"testing"
 	"time"
 
 	"github.com/ezachrisen/indigo"
@@ -10,7 +11,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 )
 
-func ExampleSchool() {
+func BenchmarkStruct(b *testing.B) {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
@@ -71,12 +72,7 @@ func ExampleSchool() {
 		return
 	}
 
-	results, err := engine.Evaluate(data, "checks")
-	if err != nil {
-		fmt.Printf("Error evaluating: %v", err)
-		return
+	for i := 0; i < b.N; i++ {
+		engine.Evaluate(data, "checks")
 	}
-	//	fmt.Println("Evaluated ", rule.Expr, "\nResult: ", results.Value)
-	fmt.Println(results.Value)
-	// Output: true
 }

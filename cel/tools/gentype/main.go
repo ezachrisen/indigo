@@ -78,17 +78,15 @@ func run(stdout io.Writer, args []string) error {
 		}
 		return nil
 	}
-
-	// b, err := ioutil.ReadFile(template)
-	// if err != nil {
-	// 	return err
-	// }
 	out, err := render(def)
 	if err != nil {
 		return err
 	}
 
-	outfile := "gentype_generated.cel.go"
+	// Prefix the output file with the name of the file where go generate was called from
+	// This is necessary in case go generate is called multiple times in a package
+	outputFilePrefix := strings.Split(os.Getenv("GOFILE"), ".")[0]
+	outfile := "generated_" + outputFilePrefix + "_.cel.go"
 	var w io.Writer = stdout
 	if outfile != "" {
 		f, err := os.Create(outfile)
