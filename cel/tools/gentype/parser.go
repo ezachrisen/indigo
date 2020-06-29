@@ -52,17 +52,24 @@ type object struct {
 }
 
 type field struct {
-	Name      string    `json:"name,omitempty"`
-	Type      fieldType `json:"type,omitempty"`
-	OmitEmpty bool      `json:"omitEmpty,omitempty"`
+	Name       string    `json:"name,omitempty"`
+	Type       fieldType `json:"type,omitempty"`
+	OmitEmpty  bool      `json:"omitEmpty,omitempty"`
+	Conversion string
 }
 
 type fieldType struct {
-	TypeID   string `json:"typeID"`
-	TypeName string `json:"typeName"`
-	Multiple bool   `json:"multiple"`
-	Package  string `json:"package"`
-	IsObject bool   `json:"isObject"`
+	TypeID         string `json:"typeID"`
+	TypeName       string `json:"typeName"`
+	Multiple       bool   `json:"multiple"`
+	Package        string `json:"package"`
+	IsObject       bool   `json:"isObject"`
+	IsSlice        bool
+	SliceElem      string
+	IsMap          bool
+	MapKey         string
+	MapElem        string
+	TypeConversion string
 }
 
 func (f fieldType) JSType() (string, error) {
@@ -83,7 +90,7 @@ func (f fieldType) JSType() (string, error) {
 		"float32", "float64":
 		return "number", nil
 	}
-	return "", errors.Errorf("oto: type not supported: %s", f.TypeName)
+	return "", errors.Errorf("gentype: type not supported: %s", f.TypeName)
 }
 
 type parser struct {
@@ -251,15 +258,43 @@ func (p *parser) parseObject(pkg *packages.Package, o types.Object, v *types.Str
 	}
 	obj.TypeID = o.Pkg().Path() + "." + obj.Name
 	for i := 0; i < st.NumFields(); i++ {
+		//		fmt.Println("v: field", st.Field(i).Type())
 		field, err := p.parseField(pkg, st.Field(i))
 		if err != nil {
 			return err
 		}
+		//		fmt.Println("v: After parsefield", field.Type)
 		obj.Fields = append(obj.Fields, field)
 	}
 	p.def.Objects = append(p.def.Objects, obj)
 	p.objects[obj.Name] = struct{}{}
 	return nil
+}
+
+// Values to be used in the Get(index ref.Val) func of the struct
+func CELTypeConversionGet(ft fieldType) string {
+
+	// Check if we know this type
+	switch ft.TypeName {
+	case "int":
+		return `types.Int(v.{{ .Name }})`
+	case "float64":
+		return `types.Double(v.{{ .Name }})`
+	case "string":
+		return `types.String(v.{{ .Name }})`
+	case "time.Time":
+		return `types.Timestamp{timestamppb.New(v.{{ .Name }})}`
+	}
+
+	// Check if it's a slice
+	if ft.IsSlice {
+		return `types.NewDynamicList(attributeProvider{}, v.{{ .Name}})`
+	}
+
+	if ft.IsMap {
+		return `types.NewDynamicMap(attributeProvider{}, v.{{ .Name}})`
+	}
+	return ""
 }
 
 func (p *parser) parseField(pkg *packages.Package, v *types.Var) (field, error) {
@@ -270,6 +305,8 @@ func (p *parser) parseField(pkg *packages.Package, v *types.Var) (field, error) 
 	}
 	var err error
 	f.Type, err = p.parseFieldType(pkg, v)
+	fmt.Println("v: Done with fType: ", f.Type)
+	f.Conversion = CELTypeConversionGet(f.Type)
 	if err != nil {
 		return f, errors.Wrap(err, "parse type")
 	}
@@ -284,7 +321,9 @@ func (p *parser) parseFieldType(pkg *packages.Package, obj types.Object) (fieldT
 			if p.def.Imports == nil {
 				p.def.Imports = make(map[string]string)
 			}
-			p.def.Imports[other.Path()] = other.Name()
+			if other.Name() != "time" {
+				p.def.Imports[other.Path()] = other.Name()
+			}
 			ftype.Package = other.Path()
 			pkgPath = other.Path()
 			return other.Name()
@@ -294,8 +333,19 @@ func (p *parser) parseFieldType(pkg *packages.Package, obj types.Object) (fieldT
 	typ := obj.Type()
 	if slice, ok := obj.Type().(*types.Slice); ok {
 		typ = slice.Elem()
+		ftype.SliceElem = typ.String()
 		ftype.Multiple = true
+		ftype.IsSlice = true
+
 	}
+	if maptype, ok := obj.Type().(*types.Map); ok {
+		typ = obj.Type()
+		ftype.Multiple = true
+		ftype.IsMap = true
+		ftype.MapKey = maptype.Key().String()
+		ftype.MapElem = maptype.Elem().String()
+	}
+
 	if named, ok := typ.(*types.Named); ok {
 		if structure, ok := named.Underlying().(*types.Struct); ok {
 			if err := p.parseObject(pkg, named.Obj(), structure); err != nil {
@@ -304,6 +354,7 @@ func (p *parser) parseFieldType(pkg *packages.Package, obj types.Object) (fieldT
 			ftype.IsObject = true
 		}
 	}
+
 	ftype.TypeName = types.TypeString(typ, resolver)
 	typeNameWithoutPackage := types.TypeString(typ, func(other *types.Package) string { return "" })
 	ftype.TypeID = pkgPath + "." + typeNameWithoutPackage

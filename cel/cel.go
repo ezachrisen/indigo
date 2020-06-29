@@ -16,6 +16,7 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
@@ -255,7 +256,11 @@ func celType(t indigo.Type) (*expr.Type, error) {
 		}
 		return decls.NewListType(val), nil
 	case indigo.Struct:
-		return decls.NewObjectType(v.Name), nil
+		ref, ok := v.Struct.(ref.Val)
+		if ok {
+			return decls.NewObjectType(ref.Type().TypeName()), nil
+		}
+		return nil, nil
 	case indigo.Proto:
 		return decls.NewObjectType(v.Protoname), nil
 	}
@@ -282,6 +287,9 @@ func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, []interface{}, erro
 			types = append(types, v.Message)
 		case indigo.Struct:
 			structs = append(structs, v.Struct)
+			for i := range v.Imports {
+				structs = append(structs, v.Imports[i])
+			}
 		}
 
 	}
