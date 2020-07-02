@@ -33,7 +33,6 @@ func (e *Engine) AddRule(rules ...*Rule) error {
 
 	for i := range rules {
 		r := rules[i]
-
 		if len(strings.Trim(r.ID, " ")) == 0 {
 			return fmt.Errorf("Required rule ID for rule with expression %s", r.Expr)
 		}

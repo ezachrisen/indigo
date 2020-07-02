@@ -564,3 +564,48 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 	}
 
 }
+
+func BenchmarkProtoCreation(b *testing.B) {
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+		},
+	}
+
+	// data := map[string]interface{}{
+	// 	"student": school.Student{
+	// 		Grades: []float64{3.0, 2.9, 4.0, 2.1},
+	// 		Suspensions: []*school.Student_Suspension{
+	// 			&school.Student_Suspension{Cause: "Cheating"},
+	// 			&school.Student_Suspension{Cause: "Fighting"},
+	// 		},
+	// 	},
+	// }
+
+	rule := indigo.Rule{
+		ID:         "create_summary",
+		Schema:     education,
+		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		Expr: `
+			school.StudentSummary {
+				GPA: student.GPA,
+				RiskFactor: 2.0 + 3.0,
+				Tenure: duration("12h")
+			}`,
+	}
+
+	evaluator := cel.NewEvaluator(nil)
+	engine := indigo.NewEngine(evaluator)
+	err := engine.AddRule(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	for i := 0; i < b.N; i++ {
+		engine.Evaluate(map[string]interface{}{}, "create_summary")
+	}
+
+}

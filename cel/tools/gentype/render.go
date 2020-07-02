@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"html/template"
+	"text/template"
 )
 
 // render renders the template using the definition.
