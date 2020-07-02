@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"log"
 	"sort"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/tools/go/packages"
@@ -305,7 +306,7 @@ func (p *parser) parseField(pkg *packages.Package, v *types.Var) (field, error) 
 	}
 	var err error
 	f.Type, err = p.parseFieldType(pkg, v)
-	fmt.Println("v: Done with fType: ", f.Type)
+	//fmt.Println("v: Done with fType: ", f.Type)
 	f.Conversion = CELTypeConversionGet(f.Type)
 	if err != nil {
 		return f, errors.Wrap(err, "parse type")
@@ -330,10 +331,12 @@ func (p *parser) parseFieldType(pkg *packages.Package, obj types.Object) (fieldT
 		}
 		return "" // no package prefix
 	}
+
+	ftype.Package = pkg.Name
 	typ := obj.Type()
 	if slice, ok := obj.Type().(*types.Slice); ok {
-		typ = slice.Elem()
-		ftype.SliceElem = typ.String()
+
+		ftype.SliceElem = getLocalTypeName(slice.Elem().String(), ftype.Package)
 		ftype.Multiple = true
 		ftype.IsSlice = true
 
@@ -342,8 +345,8 @@ func (p *parser) parseFieldType(pkg *packages.Package, obj types.Object) (fieldT
 		typ = obj.Type()
 		ftype.Multiple = true
 		ftype.IsMap = true
-		ftype.MapKey = maptype.Key().String()
-		ftype.MapElem = maptype.Elem().String()
+		ftype.MapKey = getLocalTypeName(maptype.Key().String(), ftype.Package)
+		ftype.MapElem = getLocalTypeName(maptype.Elem().String(), ftype.Package)
 	}
 
 	if named, ok := typ.(*types.Named); ok {
@@ -359,6 +362,30 @@ func (p *parser) parseFieldType(pkg *packages.Package, obj types.Object) (fieldT
 	typeNameWithoutPackage := types.TypeString(typ, func(other *types.Package) string { return "" })
 	ftype.TypeID = pkgPath + "." + typeNameWithoutPackage
 	return ftype, nil
+}
+
+// Since our generated code will live in this package, remove package references from all local types,
+// and leave the package name on imported types.
+// E.g.,  when called with
+//    fullName = github.com/ezachrisen/indigo/cel/examples.Grade
+//    localPackage = examples
+// return
+//    Grade
+func getLocalTypeName(fullName string, localPackage string) string {
+
+	partsSlash := strings.Split(fullName, "/") // github.com/ezachrisen/indigo/cel/examples.Grade -> [github.com, ezachrisen, ...]
+	lastPart := partsSlash[len(partsSlash)-1]  // examples.Grade
+	partsDot := strings.Split(lastPart, ".")   // [examples, Grade]
+
+	if len(partsDot) < 2 { // [Grade] or []
+		return fullName
+	}
+
+	if partsDot[0] == localPackage { // [0] == examples
+		return partsDot[1] // Grade
+	}
+
+	return lastPart // examples.Grade
 }
 
 // addOutputFields adds built-in fields to the response objects

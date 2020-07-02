@@ -2,7 +2,6 @@ package indigo
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"reflect"
 	"text/template"
@@ -461,7 +460,6 @@ func StructureToHTML(e Engine) (string, error) {
 func addSelfToMap(r *Rule, selves map[interface{}][]*Rule) {
 	if r.Self != nil {
 		selves[r.Self] = append(selves[r.Self], r)
-		fmt.Println("Adding self: " + structNameOrID(r.Self, "defaultValue string"))
 	}
 
 	for k := range r.Rules {

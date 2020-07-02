@@ -20,12 +20,13 @@ type AttributeProvider struct {
 
 type CustomType interface {
 	ProvideStructDefintion() StructDefinition
+	MakeFromFieldMap(map[string]ref.Val) CustomType
 }
 
 type StructDefinition struct {
 	Name   string
 	Fields map[string]*ref.FieldType
-	Self   ref.Val
+	Self   CustomType
 }
 
 func (ap *AttributeProvider) RegisterType(t CustomType) {
@@ -63,7 +64,8 @@ func (ap *AttributeProvider) FindIdent(identName string) (ref.Val, bool) {
 func (ap *AttributeProvider) FindType(typeName string) (*ex.Type, bool) {
 	//log.Println("FindType:", typeName)
 	if _, ok := ap.structs[typeName]; ok {
-		return decls.NewObjectType(typeName), true
+		return decls.NewTypeType(decls.NewObjectType(typeName)), true
+		//return decls.NewObjectType(typeName), true
 	}
 	return ap.protos.FindType(typeName)
 }
@@ -78,7 +80,13 @@ func (ap *AttributeProvider) FindFieldType(messageName string, fieldName string)
 }
 
 func (ap *AttributeProvider) NewValue(typeName string, fields map[string]ref.Val) ref.Val {
-	//log.Println("NewValue", typeName, fields)
+	sdef := ap.structs[typeName]
+	if sdef.Self != nil {
+		val := sdef.Self.MakeFromFieldMap(fields)
+		if refval, ok := val.(ref.Val); ok {
+			return refval
+		}
+	}
 	return nil
 }
 

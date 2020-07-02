@@ -6,9 +6,10 @@ var src = `
 package {{ .PackageName }}
 
 import (
-    "reflect"
+
     "fmt"
     "time"
+	"reflect"
 
     "github.com/ezachrisen/indigo/cel"
 	"github.com/google/cel-go/checker/decls"
@@ -16,25 +17,28 @@ import (
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/common/types/traits"
     "google.golang.org/protobuf/types/known/timestamppb"
-    "github.com/golang/protobuf/ptypes"
+	
+	"github.com/golang/protobuf/ptypes"
+	durationpb "github.com/golang/protobuf/ptypes/duration"
+
 
 	{{ range $key, $value :=  .Imports }}
 	{{ $value }} "{{ $key }}"
 	{{ end }}
 )
 
-func dummyFunc() {
-    t := time.Now()
-    d := time.Since(t)
-    ptypes.DurationProto(d)
-}
-var dummyTime timestamppb.Timestamp 
+// Ensure import sanity
+var _ ptypes.DynamicAny 
+var _ timestamppb.Timestamp 
+var _ time.Time  
+var _ durationpb.Duration
+
 
 {{$packageName:=.PackageName}}
 
 {{ range .Objects }}
 
-    var {{ .Name }}Type = types.NewTypeValue("{{.TypeID}}", traits.IndexerType)
+    var {{ .Name }}Type = types.NewTypeValue("{{$packageName}}.{{.Name}}", traits.IndexerType)
 
     func (v {{ .Name }}) ConvertToNative(typeDesc reflect.Type) (interface{}, error) {
 	//log.Println("{{ .Name }}ConvertToNative")
@@ -75,7 +79,8 @@ var dummyTime timestamppb.Timestamp
 
 	/* Code generation debug information
 	    Type: {{ .Type }}
-	    Name: {{ .Type.TypeName }}
+		TNme: {{ .Type.TypeName }}
+		Pkg : {{ .Type.Package }}
 	    Mult: {{ .Type.Multiple }}
 	    ID  : {{ .Type.TypeID }}		
 	    Obj : {{ .Type.IsObject }}
@@ -112,9 +117,123 @@ var dummyTime timestamppb.Timestamp
        }
     }
 
+	func (v {{ .Name }}) MakeFromFieldMap(fields map[string]ref.Val) cel.CustomType {
+		s := {{ .Name }}{}
+	
+		for fieldName, val := range fields {
+			switch fieldName {
+			{{ range .Fields }}
+			case "{{ .Name }}": 
+				{{ if .Type.IsSlice }} 		
+					
+				 	var ok bool
+					var l traits.Lister
+					l, ok  = val.(traits.Lister)
+					if !ok {
+						return nil
+					}
+
+					var elemCount int64
+					if elemCount, ok = l.Size().Value().(int64); !ok {
+						return nil
+					}
+
+					for i := int64(0); i < elemCount; i++ {
+						elem := l.Get(types.Int(i))
+						if convElem, ok := elem.Value().({{.Type.SliceElem}}); ok {
+							s.{{.Name}} = append(s.{{.Name}}, convElem)
+						} else {
+							return nil
+						}
+					}
+
+				{{ else if .Type.IsMap }}		
+
+					var ok bool
+					var l traits.Mapper
+					l, ok  = val.(traits.Mapper)
+					if !ok {
+						return nil
+					}
+
+					var elemCount int64
+					if elemCount, ok = l.Size().Value().(int64); !ok {
+						return nil
+					}
+					s.{{.Name}} = make(map[{{.Type.MapKey}}]{{.Type.MapElem}}, int(elemCount))
+				
+					it := l.Iterator()
+					for it.HasNext() == types.True {
+						key := it.Next()
+						var nativeKey {{.Type.MapKey}}
+						if nativeKey, ok = key.Value().({{.Type.MapKey}}); !ok {
+							return nil
+						}
+						fieldValue := l.Get(key)
+						var nativeFieldValue {{.Type.MapElem}}
+						if nativeFieldValue, ok = fieldValue.Value().({{.Type.MapElem}}); !ok {
+							return nil
+						}
+						s.{{.Name}}[nativeKey] = nativeFieldValue
+					}
+				{{ else if eq .Type.TypeName "int" }}
+					if nv, ok := val.Value().(int64); ok {
+						s.{{ .Name }} = int(nv)
+					} else {
+						return nil
+					}
+				{{ else if eq .Type.TypeName  "time.Duration" }}	
+					dur, ok  := val.Value().(*durationpb.Duration)
+					if !ok {
+						return nil
+					}
+					timeDur, err := ptypes.Duration(dur)					
+					if err != nil {
+						return nil
+					}
+					s.{{ .Name }} = timeDur
+
+				{{ else if eq .Type.TypeName  "time.Time" }}	
+
+					tm, ok  := val.Value().(*timestamppb.Timestamp)
+					if !ok {
+						return nil
+					}
+					tmReal, err := ptypes.Timestamp(tm)					
+					if err != nil {
+						return nil
+					}
+					s.{{ .Name }} = tmReal
+
+					// timeVal, err := val.ConvertToNative(reflect.TypeOf(s.{{.Name}}))
+					// if err != nil {
+					// 	return nil
+					// }
+					// var  ok bool
+					// s.{{.Name}}, ok = timeVal.(time.Time)
+					// if !ok {
+					// 	return nil
+					// }
+				{{ else }}
+					if nv, ok := val.Value().({{.Type.TypeName}}); ok {
+						s.{{ .Name }} = nv
+					} else {
+						return nil
+					}		
+				{{ end }}
+			{{ end }} 	
+			default:
+				return nil
+			}
+		}
+		return s
+	}
+
+
     func (v {{ .Name }}) ProvideStructDefintion() cel.StructDefinition {
     	 return cel.StructDefinition{
-	   Name: "{{.TypeID}}",
+	   Name: "{{$packageName}}.{{.Name}}",
+	   Self: {{.Name}}{},
 	   Fields: map[string]*ref.FieldType{
 	      {{ range .Fields }}
 	      "{{ .Name }}": 
@@ -133,7 +252,7 @@ var dummyTime timestamppb.Timestamp
 	              {{ else if eq .Type.TypeName  "time.Duration" }}
      		         &ref.FieldType{Type: decls.Duration}, 
                  {{ else if .Type.IsObject }}
-                    &ref.FieldType{Type: decls.NewObjectType("{{.Type.TypeID}}")},
+                    &ref.FieldType{Type: decls.NewObjectType("{{.Type.Package}}.{{.Type.TypeName}}")},
  				 {{ end }}
 		   {{ end }}			 
 		  },		   			   	   

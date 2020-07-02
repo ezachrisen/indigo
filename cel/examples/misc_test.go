@@ -76,3 +76,54 @@ func BenchmarkStruct(b *testing.B) {
 		engine.Evaluate(data, "checks")
 	}
 }
+
+func BenchmarkCreateStruct(b *testing.B) {
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student",
+				Type: indigo.Struct{
+					Struct: &examples.Student{},
+					Imports: []interface{}{
+						&examples.Grade{},
+						&examples.StudentSummary{},
+					},
+				},
+			},
+			{Name: "now", Type: indigo.Timestamp{}},
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:     "makestruct",
+		Schema: education,
+		Expr: `examples.Student {
+			GPA: 1.2,
+			Age: 17,
+			Grades: [2.45, 3.14],
+			EnrollmentDate: timestamp("2019-03-12T12:11:20.021-04:00"),
+			Teachers: {"gym":"Carlson", "math":"Johnson"},
+			Summary: examples.StudentSummary{ RiskFactor: 0.2, ClassesTaken: 99, Tenure: duration("24h") },
+			GradeBook: [
+					examples.Grade{
+							NumericGrade: 2.0,
+							LetterGrade: "D"
+						}
+					]
+			}`,
+	}
+
+	ap := cel.NewAttributeProvider()
+	evaluator := cel.NewEvaluator(ap)
+	engine := indigo.NewEngine(evaluator)
+
+	err := engine.AddRule(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	for i := 0; i < b.N; i++ {
+		engine.Evaluate(map[string]interface{}{}, "makestruct")
+	}
+
+}
