@@ -285,6 +285,7 @@ func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, []interface{}, erro
 		switch v := d.Type.(type) {
 		case indigo.Proto:
 			types = append(types, v.Message)
+			//fmt.Printf("Added a new type: %T with name %s\n", v.Message, v.Protoname)
 		case indigo.Struct:
 			structs = append(structs, v.Struct)
 			for i := range v.Imports {
