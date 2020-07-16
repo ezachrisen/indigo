@@ -1,3 +1,6 @@
+// This provides *EXPERIMENTAL* support for native Go structs in CEL expressions.
+// Only some features of Go structs are implemented.
+
 package examples_test
 
 import (
