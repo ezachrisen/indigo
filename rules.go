@@ -268,12 +268,12 @@ type Value struct {
 }
 
 // SummarizeResults produces a list of rules (including child rules) executed and the result of the evaluation.
+// n[0] is the indent level, passed as a variadic solely to allow callers to omit it
 func SummarizeResults(r *Result, n ...int) string {
 	s := strings.Builder{}
 
-	// n is variadic to allow the SummarizeResults call to omit it
 	if len(n) == 0 {
-		s.WriteString("---------- Result Diagnostic --------------------------\n")
+		s.WriteString("\n---------- Result Diagnostic --------------------------\n")
 		s.WriteString("                                         Pass Chil-\n")
 		s.WriteString("Rule                                     Fail dren Value\n")
 		s.WriteString("--------------------------------------------------------\n")

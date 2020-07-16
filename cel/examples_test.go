@@ -220,3 +220,67 @@ func ExampleProtoConstruction() {
 	// Output: *school.StudentSummary
 	// 5
 }
+
+// Demonstrate using the ? : operator to conditionally construct a proto message
+func ExampleConditionalProtoConstruction() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"student": school.Student{
+			GPA:    3.6,
+			Grades: []float64{3.0, 2.9, 4.0, 2.1},
+			Suspensions: []*school.Student_Suspension{
+				&school.Student_Suspension{Cause: "Cheating"},
+				&school.Student_Suspension{Cause: "Fighting"},
+			},
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:         "create_summary",
+		Schema:     education,
+		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		Expr: `
+			student.GPA > 3.0 ? 
+				school.StudentSummary {
+					GPA: student.GPA,
+					RiskFactor: 0.0
+				}
+			:
+				school.StudentSummary {
+					GPA: student.GPA,
+					RiskFactor: 2.0 + 3.0,
+					Tenure: duration("12h")
+				}
+			`,
+	}
+
+	evaluator := cel.NewEvaluator(nil)
+	engine := indigo.NewEngine(evaluator)
+	err := engine.AddRule(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Evaluate(data, "create_summary")
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	// The result is a fully-formed school.StudentSummary message.
+	// There is no need to convert it.
+	fmt.Printf("%T\n", results.Value)
+	summ := results.Value.(*school.StudentSummary)
+	fmt.Println(summ.RiskFactor)
+	// Output: *school.StudentSummary
+	// 0
+}
