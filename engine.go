@@ -1,6 +1,7 @@
 package indigo
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,6 +18,8 @@ type Engine struct {
 	// Options used by the engine during compilation and evaluation
 	opts EngineOptions
 }
+
+var ErrRuleNotFound = errors.New("rule not found")
 
 // Initialize a new engine
 func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
@@ -148,7 +151,7 @@ func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOp
 
 	rule, ok := e.rules[id]
 	if !ok {
-		return nil, fmt.Errorf("Rule not found")
+		return nil, fmt.Errorf("%w: %s", ErrRuleNotFound, id)
 	}
 
 	return e.eval(data, rule, "", 0, o)
@@ -253,7 +256,7 @@ func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, 
 		if res != nil {
 			if (!res.Pass && opt.ReturnFail) ||
 				(res.Pass && opt.ReturnPass) {
-				pr.Results[c.ID] = res
+				pr.Results[k] = res
 			}
 			pr.RulesEvaluated += res.RulesEvaluated
 		}

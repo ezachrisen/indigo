@@ -7,7 +7,6 @@ package cel
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"strings"
 	"time"
 
@@ -127,9 +126,8 @@ func (e *CELEvaluator) Eval(data map[string]interface{}, ruleID string, expr str
 	// If the rule has an expression, evaluate it
 	if program != nil && found {
 		rawValue, details, err := program.Eval(data)
-		if err != nil {
-			return indigo.Value{}, "", fmt.Errorf("Error evaluating rule %s:%w", ruleID, err)
-		}
+		// Do not check the error yet. Grab the diagnostics first
+		// TODO: Return diagnostics with errors
 
 		// TODO: Check return type
 		// Determine if the value produced matched the rule's expectations
@@ -140,6 +138,10 @@ func (e *CELEvaluator) Eval(data map[string]interface{}, ruleID string, expr str
 		var diagnostics string
 		if opt.ReturnDiagnostics {
 			diagnostics = collectDiagnostics(e.asts[ruleID], details, data)
+		}
+
+		if err != nil {
+			return indigo.Value{}, diagnostics, fmt.Errorf("Error evaluating rule %s:%w", ruleID, err)
 		}
 
 		switch v := rawValue.Value().(type) {
@@ -315,15 +317,15 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 		switch v := evaluatedValue.(type) {
 		case types.Duration:
 			dur := time.Duration(v.Seconds * int64(math.Pow10(9)))
-			value = fmt.Sprintf("%30s", dur)
+			value = fmt.Sprintf("%60s", dur)
 		case types.Timestamp:
-			value = fmt.Sprintf("%30s", time.Unix(v.Seconds, 0))
+			value = fmt.Sprintf("%60s", time.Unix(v.Seconds, 0))
 		default:
-			value = fmt.Sprintf("%30s", fmt.Sprintf("%v", evaluatedValue))
+			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", evaluatedValue))
 		}
 		valueSource = "E"
 	} else {
-		value = fmt.Sprintf("%30s", "?")
+		value = fmt.Sprintf("%60s (%v)", "?", ex.Id)
 	}
 
 	switch i := ex.GetExprKind().(type) {
@@ -347,15 +349,16 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 		operandName := getSelectIdent(i)
 		fieldName := i.SelectExpr.Field
 
-		inputValue, ok := data[operandName+"."+fieldName]
+		dottedName := operandName + "." + fieldName
+		inputValue, ok := data[dottedName]
 		if ok {
-			value = fmt.Sprintf("%30s", fmt.Sprintf("%v", inputValue))
+			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", inputValue))
 			valueSource = "I"
 		} else {
 			obj, ok := data[operandName]
 			if ok {
-				x := reflect.ValueOf(obj).Elem()
-				value = fmt.Sprintf("%30s", fmt.Sprintf("%v", x.FieldByName(fieldName)))
+				//x := reflect.ValueOf(obj).Elem()
+				value = fmt.Sprintf("%60s", fmt.Sprintf("%v", obj)) //fmt.Sprintf("%v", x.FieldByName(fieldName)))
 				valueSource = "I"
 			}
 		}
@@ -422,7 +425,7 @@ func collectDiagnostics(ast *cel.Ast, details *cel.EvalDetails, data map[string]
 	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
 	s.WriteString(fmt.Sprintf("                                          EVALUATION TREE\n"))
 	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
-	s.WriteString(fmt.Sprintf("%30s    %-30s\n", "VALUE", "EXPRESSION"))
+	s.WriteString(fmt.Sprintf("%60s    %-30s\n", "VALUE", "EXPRESSION"))
 	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
 	s.WriteString(printAST(ast.Expr(), 0, details, data))
 	return s.String()

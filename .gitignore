@@ -8,13 +8,12 @@
 # Test binary, built with `go test -c`
 *.test
 
-# Output of the go coverage tool, specifically when used with LiteIDE
+# Output of the go coverage tool
 *.out
 *.prof
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
-.vscode
 .emacs.desktop
 *.code-workspace
 .DS_Store
