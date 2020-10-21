@@ -112,10 +112,10 @@ func ReturnDiagnostics(b bool) EvalOption {
 	}
 }
 
-// Include diagnostic information with the results.
-// To enable this option, you must first turn on diagnostic
-// collection at the engine level with the CollectDiagnostics EngineOption.
-// Default: off
+// Specify the function used to sort the child rules before evaluation.
+// Useful in scenarios where you are asking the engine to stop evaluating
+// after either the first negative or first positive child.
+// Default: sort by the key name
 func SortFunc(s func(i, j int) bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.SortFunc = s
@@ -133,7 +133,7 @@ func applyEvalOptions(o *EvalOptions, opts ...EvalOption) {
 // See the corresponding functions for documentation.
 type EvalOptions struct {
 	MaxDepth               int
-	StopIfParentNegative   bool
+	StopIfParentNegative   bool // TODO: add StopIfParentPositive
 	StopFirstPositiveChild bool
 	StopFirstNegativeChild bool
 	ReturnPass             bool
@@ -229,6 +229,7 @@ func (r *Rule) AddChild(c *Rule) {
 }
 
 // Doer performs an action as a result of a rule qualifying.
+// Unused at this time
 type Doer interface {
 	Do(map[string]interface{}) error
 }
@@ -238,6 +239,7 @@ type Result struct {
 	// The Rule that was evaluated
 	RuleID string
 
+	// Reference to a value set when the rule was added to the engine.
 	Meta interface{}
 
 	// Whether the rule yielded a TRUE logical value.
@@ -254,6 +256,7 @@ type Result struct {
 	// Results of evaluating the child rules.
 	Results map[string]*Result
 
+	// Unused at this time
 	Action      Doer
 	AsyncAction Doer
 

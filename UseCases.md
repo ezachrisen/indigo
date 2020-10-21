@@ -144,7 +144,7 @@ The players from teams with winning records are in ``r.Results`.
 
 
 ## Case 5: Why was the request denied? 
-When a rule expression is evaluated, it is either true or false, and the reason why (which predicate was false) is not immediately obvious. If you enable diagnostics you can get this information from CEL, but diagnostics are very performance expensive.
+When a rule expression is evaluated, it is either true or false, and the reason why (which predicate was false) is not immediately obvious. If you enable diagnostics you can get this information from CEL, but diagnostics are very performance expensive. You could also achieve a similar effect with conditional object construction (see  cel/examples_test.go), but that also has a performance penalty. 
 
 Instead, break the rule into child rules, and attach an explanation to each of the child rules. 
 
@@ -186,5 +186,6 @@ r, err := indigo.Evaluate(data, "enrollment_qualification")
 
 ### Results
 Whether the enrollment was successful will be in the parent result (``r.Pass``). The reasons why not will be in ``r.Results``. The calling application must inspect the Meta field of each result to get the user-friendly message. 
+
 
 
