@@ -15,3 +15,4 @@ clean:
 
 test: $(pbfiles)
 	go test -v -run ExampleSchool ./... 
+
