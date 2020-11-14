@@ -203,11 +203,6 @@ type Rule struct {
 	// the rule.
 	Self interface{}
 
-	// Actions to execute when this rule qualifies and the client specifies that
-	// actions should be executed.
-	Action       Doer
-	AsynchAction Doer
-
 	// A set of child rules.
 	Rules map[string]*Rule
 

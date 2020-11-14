@@ -169,7 +169,7 @@ func TestBasicRules(t *testing.T) {
 
 	is := is.New(t)
 
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 	rule := makeEducationRules()
 
@@ -245,7 +245,7 @@ func TestCompileErrors(t *testing.T) {
 
 	is := is.New(t)
 
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 	rule := makeEducationRulesWithIncorrectTypes()
 
@@ -260,7 +260,7 @@ func TestCompileErrors(t *testing.T) {
 func TestProtoMessage(t *testing.T) {
 
 	is := is.New(t)
-	eval := cel.NewEvaluator(nil)
+	eval := cel.NewEvaluator()
 	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 
 	err := engine.AddRule(makeEducationProtoRules())
@@ -279,7 +279,7 @@ func TestDiagnosticOptions(t *testing.T) {
 	is := is.New(t)
 
 	// Turn off diagnostic collection
-	engine := indigo.NewEngine(cel.NewEvaluator(nil), indigo.CollectDiagnostics(false))
+	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(false))
 	err := engine.AddRule(makeEducationProtoRules())
 	is.NoErr(err)
 
@@ -289,7 +289,7 @@ func TestDiagnosticOptions(t *testing.T) {
 	}
 
 	// Turn on diagnostic collection
-	engine = indigo.NewEngine(cel.NewEvaluator(nil), indigo.CollectDiagnostics(true))
+	engine = indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true))
 	err = engine.AddRule(makeEducationProtoRules())
 	is.NoErr(err)
 
@@ -359,7 +359,7 @@ func TestRuleResultTypes(t *testing.T) {
 		},
 	}
 
-	eval := cel.NewEvaluator(nil)
+	eval := cel.NewEvaluator()
 	engine := indigo.NewEngine(eval)
 
 	for _, c := range cases {
@@ -380,7 +380,7 @@ func TestRuleResultTypes(t *testing.T) {
 
 func BenchmarkSimpleRule(b *testing.B) {
 
-	engine := indigo.NewEngine(cel.NewEvaluator(nil))
+	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	education := makeEducationSchema()
 	data := makeStudentData()
@@ -409,7 +409,7 @@ func BenchmarkSimpleRule(b *testing.B) {
 
 func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 
-	engine := indigo.NewEngine(cel.NewEvaluator(nil), indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
+	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 	education := makeEducationSchema()
 	data := makeStudentData()
 
@@ -437,7 +437,7 @@ func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 
 func BenchmarkRuleWithArray(b *testing.B) {
 
-	engine := indigo.NewEngine(cel.NewEvaluator(nil))
+	engine := indigo.NewEngine(cel.NewEvaluator())
 	education := makeEducationSchema()
 
 	rule := indigo.Rule{
@@ -476,7 +476,7 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 		},
 	}
 
-	engine := indigo.NewEngine(cel.NewEvaluator(nil))
+	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	rule := indigo.Rule{
 		ID:     "student_actions",
@@ -528,7 +528,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 		},
 	}
 
-	engine := indigo.NewEngine(cel.NewEvaluator(nil))
+	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	rule := indigo.Rule{
 		ID:     "student_actions",
@@ -598,7 +598,7 @@ func BenchmarkProtoCreation(b *testing.B) {
 			}`,
 	}
 
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 	err := engine.AddRule(&rule)
 	if err != nil {
@@ -624,7 +624,7 @@ func BenchmarkProto20KX(b *testing.B) {
 		},
 	}
 
-	engine := indigo.NewEngine(cel.NewEvaluator(nil), indigo.CollectDiagnostics(false))
+	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(false))
 
 	rule := &indigo.Rule{
 		ID:     "student_actions",

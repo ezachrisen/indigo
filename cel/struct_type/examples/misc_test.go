@@ -62,8 +62,8 @@ func BenchmarkStruct(b *testing.B) {
 && student.GradeBook.all(g, g.LetterGrade != "A") && student.Summary.ClassesTaken == 12 && student.Summary.Tenure < duration("13h")`,
 	}
 
-	ap := cel.NewAttributeProvider()
-	evaluator := cel.NewEvaluator(ap)
+	evaluator := cel.NewEvaluator()
+	evaluator.SetAttributeProvider(cel.NewAttributeProvider())
 	engine := indigo.NewEngine(evaluator)
 
 	err = engine.AddRule(&rule)
@@ -112,8 +112,8 @@ func BenchmarkCreateStruct(b *testing.B) {
 			}`,
 	}
 
-	ap := cel.NewAttributeProvider()
-	evaluator := cel.NewEvaluator(ap)
+	evaluator := cel.NewEvaluator()
+	evaluator.SetAttributeProvider(cel.NewAttributeProvider())
 	engine := indigo.NewEngine(evaluator)
 
 	err := engine.AddRule(&rule)

@@ -7,8 +7,10 @@ import (
 	"text/template"
 )
 
-// This file contains functions that enable users to inspect an engine's
-// rules and structure.
+// This file contains functions to output an engine's
+// rules and struture to a web page. This enables users to visualize the rules
+// and identify configuration errors. As this will print a lot of detail per rule, 
+// it mostly useful for smaller rule sets.
 
 // StructureToTmpFile is a convenience wrapper around StructureToHTML.
 // It writes the HTML to a temporary file and returns the file name.

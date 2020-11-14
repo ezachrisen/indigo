@@ -27,7 +27,7 @@ func ExampleHelloWorld() {
 
 	// Step 3: Create Indigo and give it an evaluator
 	// In this case, CEL
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 
 	// Step 4: Add the rule to the engine. The rule
@@ -67,7 +67,7 @@ func ExampleTimestampComparison() {
 		Expr:   `now > timestamp(then)`,
 	}
 
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 	err := engine.AddRule(&rule)
 	if err != nil {
@@ -104,7 +104,7 @@ func ExampleExists() {
 		Expr:   `student.Grades.exists(g, g < 2.0)`,
 	}
 
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 	err := engine.AddRule(&rule)
 	if err != nil {
@@ -148,7 +148,7 @@ func ExampleExistsNested() {
 		Expr:   `student.Suspensions.exists(s, s.Cause == "Fighting")`,
 	}
 
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 	err := engine.AddRule(&rule)
 	if err != nil {
@@ -198,7 +198,7 @@ func ExampleProtoConstruction() {
 			}`,
 	}
 
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 	err := engine.AddRule(&rule)
 	if err != nil {
@@ -262,7 +262,7 @@ func ExampleConditionalProtoConstruction() {
 			`,
 	}
 
-	evaluator := cel.NewEvaluator(nil)
+	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 	err := engine.AddRule(&rule)
 	if err != nil {
