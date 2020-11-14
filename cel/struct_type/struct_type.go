@@ -1,6 +1,6 @@
 // This provides *EXPERIMENTAL* support for native Go structs in CEL expressions.
 //
-package cel
+package struct_type
 
 import (
 	"fmt"
@@ -13,6 +13,14 @@ import (
 
 	ex "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
+
+// The Struct type and the accompanying string function are used by Indigo's type system
+type Struct struct {
+	Struct  interface{}
+	Imports []interface{}
+}
+
+func (t Proto) String() string { return "proto " + t.Protoname }
 
 type AttributeProvider struct {
 	// fallback proto-based type provider

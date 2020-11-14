@@ -64,8 +64,9 @@ func ExampleSchool() {
 && student.GradeBook.all(g, g.LetterGrade != "A") && student.Summary.ClassesTaken == 12 && student.Summary.Tenure < duration("13h")`,
 	}
 
+	evaluator := cel.NewEvaluator()
 	ap := cel.NewAttributeProvider()
-	evaluator := cel.NewEvaluator(ap)
+	evaluator.SetAttributeProvider(ap)
 	engine := indigo.NewEngine(evaluator)
 
 	err = engine.AddRule(&rule)
@@ -119,8 +120,8 @@ func ExampleCreateStruct() {
 			}`,
 	}
 
-	ap := cel.NewAttributeProvider()
-	evaluator := cel.NewEvaluator(ap)
+	evaluator := cel.NewEvaluator()
+	evaluator.SetAttributeProvider(cel.NewAttributeProvider())
 	engine := indigo.NewEngine(evaluator)
 
 	err := engine.AddRule(&rule)

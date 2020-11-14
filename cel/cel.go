@@ -21,7 +21,7 @@ import (
 
 type CELEvaluator struct {
 	// A custom attrubute provider to suppor Go structs natively
-	typeProvider *AttributeProvider
+	typeProvider ref.TypeRegistry
 
 	// Rules are parsed, checked and stored as runnable CEL programs
 	// Key = rule ID
@@ -36,14 +36,20 @@ type CELEvaluator struct {
 
 // Initialize a new CEL Evaluator
 // The evaluator contains internal data used to facilitate CEL expression evaluation.
-func NewEvaluator(ap *AttributeProvider) *CELEvaluator {
+func NewEvaluator() *CELEvaluator {
 	e := CELEvaluator{
-		programs:     make(map[string]cel.Program),
-		asts:         make(map[string]*cel.Ast),
-		typeProvider: ap,
+		programs: make(map[string]cel.Program),
+		asts:     make(map[string]*cel.Ast),
 	}
-
 	return &e
+}
+
+// Change CEL's attribute provider. An attribute provider is an adaapter
+// that tells CEL how to interpret a type. We are using this to enable
+// CEL to use Go Structs as data types instead of protobufs.
+// This feature is experimental.
+func (e *CELEvaluator) SetAttributeProvider(ap ref.TypeProvider) {
+	e.typeProvider = ap
 }
 
 func (e *CELEvaluator) PrintInternalStructure() {

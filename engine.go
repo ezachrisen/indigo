@@ -200,10 +200,8 @@ func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, 
 	}
 
 	pr := Result{
-		RuleID:      rule.ID,
-		Meta:        rule.Meta,
-		Action:      rule.Action,
-		AsyncAction: rule.AsynchAction,
+		RuleID: rule.ID,
+		Meta:   rule.Meta,
 		Pass:        true,
 		Results:     make(map[string]*Result, len(rule.Rules)),
 	}
