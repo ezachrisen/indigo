@@ -63,3 +63,4 @@ func (t Any) String() string       { return "any" }
 func (t Duration) String() string  { return "duration" }
 func (t Timestamp) String() string { return "timestamp" }
 func (t Float) String() string     { return "float" }
+func (t Proto) String() string     { return "proto " + t.Protoname }

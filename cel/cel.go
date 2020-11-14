@@ -15,13 +15,10 @@ import (
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
-	"github.com/google/cel-go/common/types/ref"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
 type CELEvaluator struct {
-	// A custom attrubute provider to suppor Go structs natively
-	typeProvider ref.TypeRegistry
 
 	// Rules are parsed, checked and stored as runnable CEL programs
 	// Key = rule ID
@@ -44,14 +41,6 @@ func NewEvaluator() *CELEvaluator {
 	return &e
 }
 
-// Change CEL's attribute provider. An attribute provider is an adaapter
-// that tells CEL how to interpret a type. We are using this to enable
-// CEL to use Go Structs as data types instead of protobufs.
-// This feature is experimental.
-func (e *CELEvaluator) SetAttributeProvider(ap ref.TypeProvider) {
-	e.typeProvider = ap
-}
-
 func (e *CELEvaluator) PrintInternalStructure() {
 	for k, _ := range e.programs {
 		fmt.Println("Rule id", k)
@@ -67,23 +56,13 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 	var opts []cel.EnvOption
 	var err error
 
-	opts, structs, err := schemaToDeclarations(s)
+	opts, err = schemaToDeclarations(s)
 	if err != nil {
 		return err
 	}
 
 	if opts == nil || len(opts) == 0 {
 		return fmt.Errorf("No valid schema for rule %s", ruleID)
-	}
-
-	if e.typeProvider != nil {
-		opts = append(opts, cel.CustomTypeProvider(e.typeProvider))
-
-		for _, o := range structs {
-			if s, ok := o.(CustomType); ok {
-				e.typeProvider.RegisterType(s)
-			}
-		}
 	}
 
 	env, err := cel.NewEnv(opts...)
@@ -263,12 +242,6 @@ func celType(t indigo.Type) (*expr.Type, error) {
 			return nil, fmt.Errorf("Setting value of %v list: %w", v.ValueType, err)
 		}
 		return decls.NewListType(val), nil
-	case indigo.Struct:
-		ref, ok := v.Struct.(ref.Val)
-		if ok {
-			return decls.NewObjectType(ref.Type().TypeName()), nil
-		}
-		return nil, nil
 	case indigo.Proto:
 		return decls.NewObjectType(v.Protoname), nil
 	}
@@ -278,15 +251,14 @@ func celType(t indigo.Type) (*expr.Type, error) {
 
 // schemaToDeclarations converts from a rules/Schema to a set of CEL declarations that
 // are passed to the CEL engine
-func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, []interface{}, error) {
+func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, error) {
 	declarations := []*expr.Decl{}
 	types := []interface{}{}
-	structs := []interface{}{}
 
 	for _, d := range s.Elements {
 		typ, err := celType(d.Type)
 		if err != nil {
-			return nil, structs, err
+			return nil, err
 		}
 		declarations = append(declarations, decls.NewVar(d.Name, typ))
 
@@ -294,18 +266,13 @@ func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, []interface{}, erro
 		case indigo.Proto:
 			types = append(types, v.Message)
 			//fmt.Printf("Added a new type: %T with name %s\n", v.Message, v.Protoname)
-		case indigo.Struct:
-			structs = append(structs, v.Struct)
-			for i := range v.Imports {
-				structs = append(structs, v.Imports[i])
-			}
 		}
 
 	}
 	opts := []cel.EnvOption{}
 	opts = append(opts, cel.Declarations(declarations...))
 	opts = append(opts, cel.Types(types...))
-	return opts, structs, nil
+	return opts, nil
 }
 
 // --------------------------------------------------------------------------- DIAGNOSTICS
