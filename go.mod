@@ -3,15 +3,14 @@ module github.com/ezachrisen/indigo
 go 1.15
 
 require (
-	github.com/antlr/antlr4 v0.0.0-20200622152914-7a6db6a50abf // indirect
-	github.com/golang/protobuf v1.4.2
-	github.com/google/cel-go v0.5.1
-	github.com/matryer/is v1.3.0
-	golang.org/x/net v0.0.0-20200602114024-627f9648deb9 // indirect
-	golang.org/x/sys v0.0.0-20200622214017-ed371f2e16b4 // indirect
-	golang.org/x/text v0.3.3 // indirect
-	google.golang.org/genproto v0.0.0-20200624020401-64a14ca9d1ad
-	google.golang.org/grpc v1.30.0 // indirect
+	github.com/antlr/antlr4 v0.0.0-20201029161626-9a95f0cc3d7c // indirect
+	github.com/golang/protobuf v1.4.3
+	github.com/google/cel-go v0.6.0
+	github.com/matryer/is v1.4.0
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b // indirect
+	golang.org/x/text v0.3.4 // indirect
+	google.golang.org/genproto v0.0.0-20201113130914-ce600e9a6f9e
+	google.golang.org/grpc v1.33.2 // indirect
 	google.golang.org/protobuf v1.25.0
 
 )
