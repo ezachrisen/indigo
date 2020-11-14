@@ -1,6 +1,6 @@
 
 # Indigo 
-Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules. Rules are expressions (such as "a > b") that are evaluated, and the outcomes used to direct appliation logic. Indigo does not itself provide a language for expressions, relying instead on a backend evaluator (interface Evaluator) to provide that. You can create your own backend evaluator, or use the default one, CEL. 
+Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules. Rules are expressions (such as "a > b") that are evaluated, and the outcomes used to direct appliation logic. Indigo does not itself provide a language for expressions, relying instead on a backend evaluator (```interface Evaluator```) to provide that. You can create your own backend evaluator, or use the default one, Google's Common Expression Language, CEL. 
 
 
 ### Google's Common Expression Language
@@ -52,7 +52,10 @@ func ExampleHelloWorld() {
 }
 ```
 
-### Beyond Basic Usage 
-While there is a lot of power in expression evaluation, Indigo organizes rules in a tree-based hierarchy, allowing precise control over what rules are evaluated and how. Check out the examples and the test files for more information on how to use rule hierarchies and the evaluation options. 
+### For More Information
+While there is a lot of power in expression evaluation, Indigo organizes rules in a tree-based hierarchy, allowing precise control over what rules are evaluated and how. 
+
+- Check out the [use cases](UseCases.md) for examples of ways you can struture rules in Indigo.
+- Check out the examples and the test files in the Indigo and cel packages.
 
 
