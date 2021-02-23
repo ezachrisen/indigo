@@ -9,7 +9,7 @@ type Schema struct {
 	// User-friendly name for the schema
 	Name string
 	// A user-friendly description of the schema
-	Descrption string
+	Description string
 	// User-defined value
 	Meta interface{}
 	// List of data elements supported by this schema
