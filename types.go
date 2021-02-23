@@ -4,9 +4,15 @@ package indigo
 // rule expression. The same keys and types must be supplied in the data map
 // when rules are evaluated.
 type Schema struct {
-	ID       string
-	Name     string
-	Meta     interface{}
+	// Identifier for the schema. Useful for the hosting application; not used by Indigo internally.
+	ID string
+	// User-friendly name for the schema
+	Name string
+	// A user-friendly description of the schema
+	Descrption string
+	// User-defined value
+	Meta interface{}
+	// List of data elements supported by this schema
 	Elements []DataElement
 }
 
