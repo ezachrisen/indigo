@@ -198,7 +198,7 @@ type Rule struct {
 	// For example, in a rule determining if the temperature is in the specified range,
 	// set Self = Thermostat, where Thermostat holds the user's temperature preference.
 	// When evaluating the rules, the Thermostat object will be included in the data
-	// with the key rules.selfKey. Rules can then reference the user's temperature preference
+	// with the key rules.selfKey. Rules can then reference the user's temperaturE preference
 	// in the rule expression. This allows rule inputs to be changed without recompiling
 	// the rule.
 	Self interface{}

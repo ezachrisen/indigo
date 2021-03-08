@@ -117,21 +117,70 @@ func (e *Engine) addRuleWithSchema(r *Rule, parentRuleID string, s Schema, o Eva
 }
 
 // Find a rule with the given ID
-// TODO: make this return a copy of the rule
+// Returns a copy of the rule
 func (e *Engine) Rule(id string) (*Rule, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	r, ok := e.rules[id]
-	return r, ok
+
+	if !ok {
+		return nil, false
+	}
+
+	return copyRule(r), true
 }
 
-// Rules provides a reference to the rules held in the engine.
-// Callers should not attempt to modify the rules in the map.
-// Doing so will lead to unexpected results, as rules must be compiled
-// and added in a particular way for rule evaluation to work.
-// TODO: make this return a copy of the rules
+// Rules provides a copy of the engine's rules.
+// If the engine contains a lot of rules, this is an expensive
+// operation.
 func (e *Engine) Rules() map[string]*Rule {
-	return e.rules
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return copyRules(e.rules)
+}
+
+func copySortedKeys(a []string) []string {
+	b := make([]string, len(a))
+	for _, s := range a {
+		b = append(b, s)
+	}
+	return b
+}
+
+func copyEvalOpts(a []EvalOption) []EvalOption {
+	b := make([]EvalOption, len(a))
+	for _, o := range a {
+		b = append(b, o)
+	}
+	return b
+}
+
+func copyRules(m map[string]*Rule) map[string]*Rule {
+
+	mn := make(map[string]*Rule, len(m))
+
+	for k := range m {
+		cc := copyRule(m[k])
+		mn[cc.ID] = cc
+	}
+	return mn
+}
+
+func copyRule(r *Rule) *Rule {
+
+	nr := Rule{
+		ID:         r.ID,
+		Expr:       r.ID,
+		ResultType: r.ResultType,
+		Schema:     r.Schema,
+		Self:       r.Self,
+		Rules:      copyRules(r.Rules),
+		sortedKeys: copySortedKeys(r.sortedKeys),
+		Meta:       r.Meta,
+		EvalOpts:   copyEvalOpts(r.EvalOpts),
+	}
+
+	return &nr
 }
 
 // RuleCount is the number of rules in the engine.
