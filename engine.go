@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type Engine struct {
 
 	// The rules map holds the rules passed by the user of the engine
 	rules map[string]*Rule
+
+	// Mutex for the map
+	mu sync.RWMutex
 
 	// The Evaluator that will be used to evaluate rules in this engine
 	evaluator Evaluator
@@ -33,6 +37,9 @@ func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
 
 // AddRule compiles the rule and adds it to the engine, ready to be evaluated.
 func (e *Engine) AddRule(rules ...*Rule) error {
+	// When adding a rule, locking the rule engine for all access
+	e.mu.Lock()
+	defer e.mu.Unlock()
 
 	for i := range rules {
 		r := rules[i]
@@ -110,7 +117,10 @@ func (e *Engine) addRuleWithSchema(r *Rule, parentRuleID string, s Schema, o Eva
 }
 
 // Find a rule with the given ID
+// TODO: make this return a copy of the rule
 func (e *Engine) Rule(id string) (*Rule, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	r, ok := e.rules[id]
 	return r, ok
 }
@@ -119,12 +129,15 @@ func (e *Engine) Rule(id string) (*Rule, bool) {
 // Callers should not attempt to modify the rules in the map.
 // Doing so will lead to unexpected results, as rules must be compiled
 // and added in a particular way for rule evaluation to work.
+// TODO: make this return a copy of the rules
 func (e *Engine) Rules() map[string]*Rule {
 	return e.rules
 }
 
 // RuleCount is the number of rules in the engine.
 func (e *Engine) RuleCount() int {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return len(e.rules)
 }
 
@@ -132,6 +145,8 @@ func (e *Engine) RuleCount() int {
 // All rules will be evaluated, descending down through child rules up to the maximum depth
 // Set EvalOptions to control which rules are evaluated, and what results are returned.
 func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOption) (*Result, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 
 	o := EvalOptions{
 		MaxDepth:   defaultDepth,
@@ -200,10 +215,10 @@ func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, 
 	}
 
 	pr := Result{
-		RuleID: rule.ID,
-		Meta:   rule.Meta,
-		Pass:        true,
-		Results:     make(map[string]*Result, len(rule.Rules)),
+		RuleID:  rule.ID,
+		Meta:    rule.Meta,
+		Pass:    true,
+		Results: make(map[string]*Result, len(rule.Rules)),
 	}
 
 	// Apply options for this rule evaluation

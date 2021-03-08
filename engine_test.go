@@ -3,7 +3,9 @@ package indigo_test
 import (
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ezachrisen/indigo"
 	"github.com/matryer/is"
@@ -102,6 +104,56 @@ func TestAddRules(t *testing.T) {
 	is.NoErr(err)
 
 	is.Equal(e.Rules()["B"].Meta, "B1") // B1 should not be overwritten by its child with same ID
+}
+
+func makeRuleWithID(id string) *indigo.Rule {
+	rule1 := &indigo.Rule{
+		ID:   id,
+		Expr: `true`,
+		Rules: map[string]*indigo.Rule{
+			"D": &indigo.Rule{
+				ID:   "D",
+				Expr: `true`,
+				Rules: map[string]*indigo.Rule{
+					"d1": {
+						ID:   "d1",
+						Expr: `true`,
+					},
+					"d2": {
+						ID:   "d2",
+						Expr: `false`,
+					},
+					"d3": {
+						ID:   "d3",
+						Expr: `true`,
+					},
+				},
+			},
+			"B": {
+				ID:   "B",
+				Expr: `false`,
+			},
+			"E": {
+				ID:   "E",
+				Expr: `false`,
+				Rules: map[string]*indigo.Rule{
+					"e1": {
+						ID:   "e1",
+						Expr: `true`,
+					},
+					"e2": {
+						ID:   "e2",
+						Expr: `false`,
+					},
+					"e3": {
+						ID:   "e3",
+						Expr: `true`,
+					},
+				},
+			},
+		},
+	}
+	return rule1
 }
 
 func makeRuleNoOptions() *indigo.Rule {
@@ -555,5 +607,43 @@ func TestDiagnosticOptions(t *testing.T) {
 	for _, c := range r.Results {
 		is.Equal(c.Diagnostics, "diagnostics here")
 	}
+
+}
+
+func TestConcurrency(t *testing.T) {
+	is := is.New(t)
+
+	m := NoOpEvaluator{}
+	e := indigo.NewEngine(m)
+
+	var wg sync.WaitGroup
+
+	for i := 1; i < 50_000; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			err := e.AddRule(makeRuleWithID(fmt.Sprintf("rule%d", i)))
+			is.NoErr(err)
+			r, err := e.Evaluate(nil, fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
+			is.NoErr(err)
+			is.Equal(r.RulesEvaluated, 10)
+		}(i)
+		time.Sleep(time.Duration(time.Millisecond) * 1)
+	}
+
+	wg.Wait()
+}
+
+type NoOpEvaluator struct{}
+
+func (n NoOpEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool) error {
+	return nil
+}
+
+func (n NoOpEvaluator) Eval(data map[string]interface{}, ruleID string, expr string, resultType indigo.Type, opt indigo.EvalOptions) (indigo.Value, string, error) {
+	return indigo.Value{
+		Val: false,
+		Typ: indigo.Bool{},
+	}, "", nil
 
 }
