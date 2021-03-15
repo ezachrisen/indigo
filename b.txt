@@ -1,0 +1,15 @@
+PASS
+ok  	github.com/ezachrisen/indigo	0.053s
+goos: linux
+goarch: amd64
+pkg: github.com/ezachrisen/indigo/cel
+cpu: Intel(R) Xeon(R) CPU
+BenchmarkSimpleRuleCEL-2                  	 1213173	       999.0 ns/op
+BenchmarkSimpleRuleWithDiagnosticsCEL-2   	   63188	     18695 ns/op
+BenchmarkRuleWithArrayCEL-2               	 1172847	      1017 ns/op
+BenchmarkProtoWithSelfXCEL-2              	  805740	      1459 ns/op
+BenchmarkProtoWithoutSelfCEL-2            	  923608	      1312 ns/op
+BenchmarkProtoCreationCEL-2               	  496980	      2123 ns/op
+BenchmarkProto20KXCEL-2                   	     229	   4474825 ns/op
+PASS
+ok  	github.com/ezachrisen/indigo/cel	35.885s
