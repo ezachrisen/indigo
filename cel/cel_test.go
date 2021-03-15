@@ -3,7 +3,9 @@ package cel_test
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -195,9 +197,9 @@ func makeEducationProtoSchema() indigo.Schema {
 	}
 }
 
-func makeEducationProtoRules() *indigo.Rule {
+func makeEducationProtoRules(id string) *indigo.Rule {
 	return &indigo.Rule{
-		ID:     "student_actions",
+		ID:     id,
 		Schema: makeEducationProtoSchema(),
 		Rules: map[string]*indigo.Rule{
 			"a": {
@@ -263,7 +265,7 @@ func TestProtoMessage(t *testing.T) {
 	eval := cel.NewEvaluator()
 	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 
-	err := engine.AddRule(makeEducationProtoRules())
+	err := engine.AddRule(makeEducationProtoRules("student_actions"))
 	is.NoErr(err)
 
 	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions")
@@ -280,7 +282,7 @@ func TestDiagnosticOptions(t *testing.T) {
 
 	// Turn off diagnostic collection
 	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(false))
-	err := engine.AddRule(makeEducationProtoRules())
+	err := engine.AddRule(makeEducationProtoRules("student_actions"))
 	is.NoErr(err)
 
 	_, err = engine.Evaluate(makeStudentProtoData(), "student_actions", indigo.ReturnDiagnostics(true))
@@ -290,7 +292,7 @@ func TestDiagnosticOptions(t *testing.T) {
 
 	// Turn on diagnostic collection
 	engine = indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true))
-	err = engine.AddRule(makeEducationProtoRules())
+	err = engine.AddRule(makeEducationProtoRules("student_actions"))
 	is.NoErr(err)
 
 	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions", indigo.ReturnDiagnostics(true))
@@ -370,6 +372,34 @@ func TestRuleResultTypes(t *testing.T) {
 	}
 }
 
+func TestConcurrency(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	is := is.New(t)
+	rand.Seed(time.Now().Unix())
+
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	var wg sync.WaitGroup
+
+	for i := 1; i < 50; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			err := e.AddRule(makeEducationProtoRules(fmt.Sprintf("rule%d", i)))
+			is.NoErr(err)
+			r, err := e.Evaluate(makeStudentProtoData(), fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
+			is.NoErr(err)
+			is.Equal(r.RulesEvaluated, 4)
+		}(i)
+		time.Sleep(time.Duration(rand.Intn(3) * int(time.Millisecond)))
+	}
+
+	wg.Wait()
+}
+
 // // ------------------------------------------------------------------------------------------
 // // BENCHMARKS
 // //
@@ -378,7 +408,7 @@ func TestRuleResultTypes(t *testing.T) {
 // //
 // //
 
-func BenchmarkSimpleRule(b *testing.B) {
+func BenchmarkSimpleRuleCEL(b *testing.B) {
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
@@ -407,7 +437,7 @@ func BenchmarkSimpleRule(b *testing.B) {
 	}
 }
 
-func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
+func BenchmarkSimpleRuleWithDiagnosticsCEL(b *testing.B) {
 
 	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 	education := makeEducationSchema()
@@ -435,7 +465,7 @@ func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 	}
 }
 
-func BenchmarkRuleWithArray(b *testing.B) {
+func BenchmarkRuleWithArrayCEL(b *testing.B) {
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 	education := makeEducationSchema()
@@ -463,7 +493,7 @@ func BenchmarkRuleWithArray(b *testing.B) {
 	}
 }
 
-func BenchmarkProtoWithSelfX(b *testing.B) {
+func BenchmarkProtoWithSelfXCEL(b *testing.B) {
 	b.StopTimer()
 
 	pb.DefaultDb.RegisterMessage(&school.Student{})
@@ -517,7 +547,7 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 
 }
 
-func BenchmarkProtoWithoutSelf(b *testing.B) {
+func BenchmarkProtoWithoutSelfCEL(b *testing.B) {
 
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
@@ -567,7 +597,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 
 }
 
-func BenchmarkProtoCreation(b *testing.B) {
+func BenchmarkProtoCreationCEL(b *testing.B) {
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
 			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
@@ -612,7 +642,7 @@ func BenchmarkProtoCreation(b *testing.B) {
 
 }
 
-func BenchmarkProto20KX(b *testing.B) {
+func BenchmarkProto20KXCEL(b *testing.B) {
 	b.StopTimer()
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 

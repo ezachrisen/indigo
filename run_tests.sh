@@ -1,16 +1,27 @@
 #!/bin/bash
-echo "Running all tests"
-go test ./...
-echo "Running benchmarks"
+# run_test.sh runs all tests in the module:
+#  - normal tests
+#  - benchmarks
+#  - normal tests with the -race detector turned on
+echo "----- Test run takes 3-6 minutes -----"
+echo "----- Invalidating test cache"
+go clean -testcache ./...
+
+echo "----- Running all tests"
+go test -short ./...
+
+echo "----- Running benchmarks"
 if ! [ -x "$(command -v benchstat)" ]
 then
-    echo "benchstat is not installed"
-    go test -bench=. ./...
+    echo "benchstat is not installed; not saving benchmark output"
+    go test -run=XXX -bench=. ./...
 else
-    echo "benchstat is installed; showing comparison after completion"
-    go test -bench=. ./... > ./testdata/benchmarks/after.txt
+    echo "benchstat is installed; showing comparison with reference after completion"
+    echo "   Results saved in ./testdata/benchmarks/after.txt"
+    echo "   Update ./testdata/benchmarks/reference.txt to set a new 'before' point."
+    go test -run=XXX -bench=. ./... > ./testdata/benchmarks/after.txt
     benchstat ./testdata/benchmarks/reference.txt ./testdata/benchmarks/after.txt
 fi
 
-echo "Running race condition tests"
+echo "----- Running race condition tests"
 go test -race ./...

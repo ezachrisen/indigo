@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ezachrisen/indigo"
@@ -18,6 +19,8 @@ import (
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
+// CELEvaluator implements the indigo.Evaluator interface.
+// It uses the CEL-Go package to compile and evaluate rules.
 type CELEvaluator struct {
 
 	// Rules are parsed, checked and stored as runnable CEL programs
@@ -25,10 +28,16 @@ type CELEvaluator struct {
 	programs map[string]cel.Program
 
 	// ASTs are the result of compiling a rule into a program. It is not necessary to keep
-	// the ASTs for rule evaluation, but it is required to providproper diagnostic information.
+	// the ASTs for rule evaluation, but it is required to provide proper diagnostic information.
 	// This informaton is only populated if enabled via options.
 	// Key = rule ID
 	asts map[string]*cel.Ast
+
+	// Mutex for the program map
+	programMu sync.RWMutex
+
+	// Mutext for the AST map
+	astMu sync.RWMutex
 }
 
 // Initialize a new CEL Evaluator
@@ -42,6 +51,9 @@ func NewEvaluator() *CELEvaluator {
 }
 
 func (e *CELEvaluator) PrintInternalStructure() {
+	e.programMu.RLock()
+	defer e.programMu.RUnlock()
+
 	for k, _ := range e.programs {
 		fmt.Println("Rule id", k)
 	}
@@ -76,7 +88,6 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 		// Remove some wonky formatting from CEL's error message.
 		return fmt.Errorf("parsing rule %s:\n%s", ruleID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
 	}
-
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(p)
 	if iss != nil && iss.Err() != nil {
@@ -92,7 +103,7 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 
 	options := cel.EvalOptions()
 	if collectDiagnostics {
-		e.asts[ruleID] = p
+
 		options = cel.EvalOptions(cel.OptTrackState)
 	}
 
@@ -100,11 +111,22 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 	if err != nil {
 		return fmt.Errorf("generating program %s, %w", ruleID, err)
 	}
+
+	e.programMu.Lock()
+	defer e.programMu.Unlock()
 	e.programs[ruleID] = prg
+	if collectDiagnostics {
+		e.astMu.Lock()
+		defer e.astMu.Unlock()
+		e.asts[ruleID] = p
+	}
 	return nil
 }
 
 func (e *CELEvaluator) Eval(data map[string]interface{}, ruleID string, expr string, resultType indigo.Type, opt indigo.EvalOptions) (indigo.Value, string, error) {
+
+	e.programMu.RLock()
+	defer e.programMu.RUnlock()
 
 	program, found := e.programs[ruleID]
 
@@ -122,7 +144,9 @@ func (e *CELEvaluator) Eval(data map[string]interface{}, ruleID string, expr str
 
 		var diagnostics string
 		if opt.ReturnDiagnostics {
+			e.astMu.RLock()
 			diagnostics = collectDiagnostics(e.asts[ruleID], details, data)
+			e.astMu.RUnlock()
 		}
 
 		if err != nil {
