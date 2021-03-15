@@ -36,6 +36,7 @@ func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
 }
 
 // AddRule compiles the rule and adds it to the engine, ready to be evaluated.
+// If a rule does not have a schema, it inherits its parent's schema.
 func (e *Engine) AddRule(rules ...*Rule) error {
 	// When adding a rule, locking the rule engine for all access
 	e.mu.Lock()
@@ -194,6 +195,11 @@ func (e *Engine) RuleCount() int {
 // All rules will be evaluated, descending down through child rules up to the maximum depth
 // Set EvalOptions to control which rules are evaluated, and what results are returned.
 func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOption) (*Result, error) {
+
+	// if data == nil {
+	// 	return nil, fmt.Errorf("indigo.Evaluate called with nil data")
+	// }
+
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 

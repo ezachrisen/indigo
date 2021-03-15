@@ -2,6 +2,7 @@ package indigo_test
 
 import (
 	"fmt"
+	"math/rand"
 	"reflect"
 	"sync"
 	"testing"
@@ -611,14 +612,19 @@ func TestDiagnosticOptions(t *testing.T) {
 }
 
 func TestConcurrency(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
 	is := is.New(t)
+	rand.Seed(time.Now().Unix())
 
 	m := NoOpEvaluator{}
 	e := indigo.NewEngine(m)
 
 	var wg sync.WaitGroup
 
-	for i := 1; i < 50_000; i++ {
+	for i := 1; i < 50; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -628,7 +634,7 @@ func TestConcurrency(t *testing.T) {
 			is.NoErr(err)
 			is.Equal(r.RulesEvaluated, 10)
 		}(i)
-		time.Sleep(time.Duration(time.Millisecond) * 1)
+		time.Sleep(time.Duration(rand.Intn(3) * int(time.Millisecond)))
 	}
 
 	wg.Wait()
