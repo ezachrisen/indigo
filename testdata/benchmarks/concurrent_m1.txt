@@ -1,0 +1,14 @@
+PASS
+ok  	github.com/ezachrisen/indigo	0.182s
+goos: darwin
+goarch: amd64
+pkg: github.com/ezachrisen/indigo/cel
+BenchmarkSimpleRule-8                  	 1581475	       749 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8   	   78907	     14077 ns/op
+BenchmarkRuleWithArray-8               	 1563835	       761 ns/op
+BenchmarkProtoWithSelfX-8              	  988074	      1225 ns/op
+BenchmarkProtoWithoutSelf-8            	 1141377	      1046 ns/op
+BenchmarkProtoCreation-8               	  712191	      1681 ns/op
+BenchmarkProto20KX-8                   	     435	   2500478 ns/op
+PASS
+ok  	github.com/ezachrisen/indigo/cel	28.984s
