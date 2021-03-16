@@ -408,7 +408,7 @@ func TestConcurrency(t *testing.T) {
 // //
 // //
 
-func BenchmarkSimpleRuleCEL(b *testing.B) {
+func BenchmarkSimpleRule(b *testing.B) {
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
@@ -437,7 +437,7 @@ func BenchmarkSimpleRuleCEL(b *testing.B) {
 	}
 }
 
-func BenchmarkSimpleRuleWithDiagnosticsCEL(b *testing.B) {
+func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 
 	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
 	education := makeEducationSchema()
@@ -465,7 +465,7 @@ func BenchmarkSimpleRuleWithDiagnosticsCEL(b *testing.B) {
 	}
 }
 
-func BenchmarkRuleWithArrayCEL(b *testing.B) {
+func BenchmarkRuleWithArray(b *testing.B) {
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 	education := makeEducationSchema()
@@ -493,7 +493,7 @@ func BenchmarkRuleWithArrayCEL(b *testing.B) {
 	}
 }
 
-func BenchmarkProtoWithSelfXCEL(b *testing.B) {
+func BenchmarkProtoWithSelfX(b *testing.B) {
 	b.StopTimer()
 
 	pb.DefaultDb.RegisterMessage(&school.Student{})
@@ -547,7 +547,7 @@ func BenchmarkProtoWithSelfXCEL(b *testing.B) {
 
 }
 
-func BenchmarkProtoWithoutSelfCEL(b *testing.B) {
+func BenchmarkProtoWithoutSelf(b *testing.B) {
 
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
@@ -597,7 +597,7 @@ func BenchmarkProtoWithoutSelfCEL(b *testing.B) {
 
 }
 
-func BenchmarkProtoCreationCEL(b *testing.B) {
+func BenchmarkProtoCreation(b *testing.B) {
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
 			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
@@ -642,7 +642,7 @@ func BenchmarkProtoCreationCEL(b *testing.B) {
 
 }
 
-func BenchmarkProto20KXCEL(b *testing.B) {
+func BenchmarkProto20KX(b *testing.B) {
 	b.StopTimer()
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
