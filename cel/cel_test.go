@@ -3,9 +3,7 @@ package cel_test
 import (
 	"fmt"
 	"log"
-	"math/rand"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -223,6 +221,22 @@ func makeEducationProtoRules(id string) *indigo.Rule {
 
 }
 
+func makeEducationProtoRulesSimple(id string) *indigo.Rule {
+	return &indigo.Rule{
+		ID:     id,
+		Schema: makeEducationProtoSchema(),
+		Rules: map[string]*indigo.Rule{
+			"a": {
+				ID:   "honor_student",
+				Expr: `student.GPA >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
+				Self: &school.HonorsConfiguration{Minimum_GPA: 3.7},
+				Meta: true,
+			},
+		},
+	}
+
+}
+
 func makeStudentProtoData() map[string]interface{} {
 	s := school.Student{
 		Age:            16,
@@ -372,41 +386,89 @@ func TestRuleResultTypes(t *testing.T) {
 	}
 }
 
-func TestConcurrency(t *testing.T) {
+func TestConcurrencyNoDiagnostics(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
 
 	is := is.New(t)
-	rand.Seed(time.Now().Unix())
+	e := indigo.NewEngine(cel.NewEvaluator(), indigo.DryRun(true))
 
-	e := indigo.NewEngine(cel.NewEvaluator())
+	// How large to make the channel depends on the capacity of the system
+	// Because AddRule is slow, a large capacity channel will exhaust the number of
+	// allowable goroutines.
+	buf := make(chan int, 8_000)
+	start := time.Now()
+	printDebug := false
 
-	var wg sync.WaitGroup
+	go func() {
+		for i := 1; i < 50_000; i++ {
+			if i%1000 == 0 && printDebug {
+				fmt.Println("---- Sent ", i)
+			}
+			buf <- i
+		}
+		close(buf)
+	}()
 
-	for i := 1; i < 50; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			err := e.AddRule(makeEducationProtoRules(fmt.Sprintf("rule%d", i)))
-			is.NoErr(err)
-			r, err := e.Evaluate(makeStudentProtoData(), fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
-			is.NoErr(err)
-			is.Equal(r.RulesEvaluated, 4)
-		}(i)
-		time.Sleep(time.Duration(rand.Intn(3) * int(time.Millisecond)))
+	for i := range buf {
+		err := e.AddRule(makeEducationProtoRulesSimple(fmt.Sprintf("rule%d", i)))
+		is.NoErr(err)
+		r, err := e.Evaluate(makeStudentProtoData(), fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
+		is.NoErr(err)
+		is.Equal(r.RulesEvaluated, 2)
+		if i%1000 == 0 && printDebug {
+			fmt.Println("---- Done ", i, " in ", time.Since(start))
+		}
+
 	}
-
-	wg.Wait()
 }
 
-// // ------------------------------------------------------------------------------------------
-// // BENCHMARKS
-// //
-// //
-// //
-// //
-// //
+func TestConcurrencyCollectDiagnostics(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	is := is.New(t)
+	e := indigo.NewEngine(cel.NewEvaluator(), indigo.DryRun(true), indigo.ForceDiagnosticsAllRules(true), indigo.CollectDiagnostics(true))
+
+	// How large to make the channel depends on the capacity of the system
+	// Because AddRule is slow, a large capacity channel will exhaust the number of
+	// allowable goroutines.
+	buf := make(chan int, 8_000)
+	start := time.Now()
+	printDebug := false
+
+	go func() {
+		for i := 1; i < 50_000; i++ {
+			if i%1000 == 0 && printDebug {
+				fmt.Println("---- Sent ", i)
+			}
+			buf <- i
+		}
+		close(buf)
+	}()
+
+	for i := range buf {
+		err := e.AddRule(makeEducationProtoRulesSimple(fmt.Sprintf("rule%d", i)))
+		is.NoErr(err)
+		r, err := e.Evaluate(makeStudentProtoData(), fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
+		is.NoErr(err)
+		is.Equal(r.RulesEvaluated, 2)
+		if i%1000 == 0 && printDebug {
+			fmt.Println("---- Done ", i, " in ", time.Since(start))
+		}
+
+	}
+}
+
+// ------------------------------------------------------------------------------------------
+// BENCHMARKS
+//
+//
+//
+//
+//
 
 func BenchmarkSimpleRule(b *testing.B) {
 
@@ -693,5 +755,15 @@ func BenchmarkProto20KX(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		engine.Evaluate(data, "student_actions")
+	}
+}
+
+func BenchmarkAddRule(b *testing.B) {
+	is := is.New(b)
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	for i := 1; i < b.N; i++ {
+		err := e.AddRule(makeEducationProtoRules(fmt.Sprintf("rule%d", i)))
+		is.NoErr(err)
 	}
 }

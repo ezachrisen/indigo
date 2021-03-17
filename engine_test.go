@@ -23,7 +23,7 @@ func NewMockEvaluator() *MockEvaluator {
 		ruleOptions: make(map[string]indigo.EvalOptions, 10),
 	}
 }
-func (m *MockEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool) error {
+func (m *MockEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool, dryRun bool) error {
 	m.rules = append(m.rules, ruleID)
 	return nil
 }
@@ -624,7 +624,7 @@ func TestConcurrency(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for i := 1; i < 50; i++ {
+	for i := 1; i < 50_000; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -642,7 +642,7 @@ func TestConcurrency(t *testing.T) {
 
 type NoOpEvaluator struct{}
 
-func (n NoOpEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool) error {
+func (n NoOpEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool, dryRun bool) error {
 	return nil
 }
 

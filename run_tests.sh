@@ -7,13 +7,12 @@ echo "----- Test run takes 3-6 minutes -----"
 echo "----- Invalidating test cache"
 go clean -testcache ./...
 
-echo "----- Running all tests"
+echo "----- Running tests (with -short flag)"
 go test -short ./...
 
 echo "----- Running benchmarks"
 if ! [ -x "$(command -v benchstat)" ]
 then
-    echo "benchstat is not installed; not saving benchmark output"
     go test -run=XXX -bench=. ./...
 else
     echo "benchstat is installed; showing comparison with reference after completion"
