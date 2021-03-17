@@ -36,7 +36,7 @@ const (
 type Evaluator interface {
 	// Compile a rule, checking for correctness and preparing the rule to be
 	// evaluated later.
-	Compile(ruleID string, expr string, resultType Type, s Schema, collectDiagnostics bool) error
+	Compile(ruleID string, expr string, resultType Type, s Schema, collectDiagnostics bool, dryRun bool) error
 
 	// Eval tests the rule expression  against the data.
 	// The result is one of Indigo's types.
@@ -139,6 +139,7 @@ type EvalOptions struct {
 	ReturnPass             bool
 	ReturnFail             bool
 	ReturnDiagnostics      bool
+	DryRun                 bool
 	SortFunc               func(i, j int) bool
 }
 

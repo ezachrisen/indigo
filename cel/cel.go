@@ -59,7 +59,7 @@ func (e *CELEvaluator) PrintInternalStructure() {
 	}
 }
 
-func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool) error {
+func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool, dryRun bool) error {
 
 	if expr == "" {
 		return nil
@@ -82,43 +82,54 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 		return err
 	}
 
-	// Parse the rule expression to an AST
-	p, iss := env.Parse(expr)
-	if iss != nil && iss.Err() != nil {
-		// Remove some wonky formatting from CEL's error message.
-		return fmt.Errorf("parsing rule %s:\n%s", ruleID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
-	}
-	// Type-check the parsed AST against the declarations
-	c, iss := env.Check(p)
-	if iss != nil && iss.Err() != nil {
-		return fmt.Errorf("checking rule %s:\n%w", ruleID, iss.Err())
-	}
+	var prg cel.Program
+	var p *cel.Ast
 
-	if resultType != nil {
-		err := doTypesMatch(c.ResultType(), resultType)
-		if err != nil {
-			return fmt.Errorf("Error compiling rule: %w", err)
+	if !dryRun {
+
+		// Parse the rule expression to an AST
+		var iss *cel.Issues
+		p, iss = env.Parse(expr)
+		if iss != nil && iss.Err() != nil {
+			// Remove some wonky formatting from CEL's error message.
+			return fmt.Errorf("parsing rule %s:\n%s", ruleID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
 		}
+		// Type-check the parsed AST against the declarations
+		c, iss := env.Check(p)
+		if iss != nil && iss.Err() != nil {
+			return fmt.Errorf("checking rule %s:\n%w", ruleID, iss.Err())
+		}
+
+		if resultType != nil {
+			err := doTypesMatch(c.ResultType(), resultType)
+			if err != nil {
+				return fmt.Errorf("Error compiling rule: %w", err)
+			}
+		}
+
+		options := cel.EvalOptions()
+		if collectDiagnostics {
+			options = cel.EvalOptions(cel.OptTrackState)
+		}
+
+		prg, err = env.Program(c, options)
+		if err != nil {
+			return fmt.Errorf("generating program %s, %w", ruleID, err)
+		}
+	} else {
+		prg = nil
+		p = nil
 	}
 
-	options := cel.EvalOptions()
-	if collectDiagnostics {
-
-		options = cel.EvalOptions(cel.OptTrackState)
-	}
-
-	prg, err := env.Program(c, options)
-	if err != nil {
-		return fmt.Errorf("generating program %s, %w", ruleID, err)
-	}
-
+	//	start := time.Now()
 	e.programMu.Lock()
-	defer e.programMu.Unlock()
 	e.programs[ruleID] = prg
+	e.programMu.Unlock()
+	//	fmt.Printf("Unlocked programs after %s\n", time.Since(start))
 	if collectDiagnostics {
 		e.astMu.Lock()
-		defer e.astMu.Unlock()
 		e.asts[ruleID] = p
+		e.astMu.Unlock()
 	}
 	return nil
 }
@@ -126,12 +137,11 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 func (e *CELEvaluator) Eval(data map[string]interface{}, ruleID string, expr string, resultType indigo.Type, opt indigo.EvalOptions) (indigo.Value, string, error) {
 
 	e.programMu.RLock()
-	defer e.programMu.RUnlock()
-
 	program, found := e.programs[ruleID]
+	e.programMu.RUnlock()
 
 	// If the rule has an expression, evaluate it
-	if program != nil && found {
+	if program != nil && found && !opt.DryRun {
 		rawValue, details, err := program.Eval(data)
 		// Do not check the error yet. Grab the diagnostics first
 		// TODO: Return diagnostics with errors

@@ -13,7 +13,7 @@ type Engine struct {
 	// The rules map holds the rules passed by the user of the engine
 	rules map[string]*Rule
 
-	// Mutex for the map
+	// Mutex for the rules map
 	mu sync.RWMutex
 
 	// The Evaluator that will be used to evaluate rules in this engine
@@ -39,8 +39,8 @@ func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
 // If a rule does not have a schema, it inherits its parent's schema.
 func (e *Engine) AddRule(rules ...*Rule) error {
 	// When adding a rule, locking the rule engine for all access
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	// e.mu.Lock()
+	// defer e.mu.Unlock()
 
 	for i := range rules {
 		r := rules[i]
@@ -68,7 +68,9 @@ func (e *Engine) AddRule(rules ...*Rule) error {
 			return err
 		}
 
+		e.mu.Lock()
 		e.rules[r.ID] = r
+		e.mu.Unlock()
 	}
 	return nil
 }
@@ -95,10 +97,13 @@ func (e *Engine) addRuleWithSchema(r *Rule, parentRuleID string, s Schema, o Eva
 	// Therefore we must ensure that rule IDs are globally unique
 	id := makeChildRuleID(parentRuleID, r.ID)
 
-	err := e.evaluator.Compile(id, r.Expr, r.ResultType, s, e.opts.CollectDiagnostics)
+	//	start := time.Now()
+
+	err := e.evaluator.Compile(id, r.Expr, r.ResultType, s, e.opts.CollectDiagnostics, e.opts.DryRun)
 	if err != nil {
 		return err
 	}
+	//	fmt.Printf("   Finished compile in %s\n", time.Since(start))
 
 	r.sortedKeys = childKeys(r.Rules)
 	if o.SortFunc != nil {
@@ -200,9 +205,6 @@ func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOp
 	// 	return nil, fmt.Errorf("indigo.Evaluate called with nil data")
 	// }
 
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	o := EvalOptions{
 		MaxDepth:   defaultDepth,
 		ReturnFail: true,
@@ -219,7 +221,9 @@ func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOp
 		return nil, fmt.Errorf("option set to return diagnostic, but engine does not have CollectDiagnostics option set")
 	}
 
+	e.mu.RLock()
 	rule, ok := e.rules[id]
+	e.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrRuleNotFound, id)
 	}
@@ -231,6 +235,7 @@ func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOp
 type EngineOptions struct {
 	CollectDiagnostics       bool
 	ForceDiagnosticsAllRules bool
+	DryRun                   bool
 }
 
 type EngineOption func(f *EngineOptions)
@@ -259,6 +264,16 @@ func CollectDiagnostics(b bool) EngineOption {
 func ForceDiagnosticsAllRules(b bool) EngineOption {
 	return func(f *EngineOptions) {
 		f.ForceDiagnosticsAllRules = b
+	}
+}
+
+// Run through all iterations and logic, but do not
+// - compile
+// - evaluate
+// By default this is off.
+func DryRun(b bool) EngineOption {
+	return func(f *EngineOptions) {
+		f.DryRun = b
 	}
 }
 

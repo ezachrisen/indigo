@@ -1,15 +1,14 @@
 PASS
-ok  	github.com/ezachrisen/indigo	0.003s
-goos: linux
+ok  	github.com/ezachrisen/indigo	0.183s
+goos: darwin
 goarch: amd64
 pkg: github.com/ezachrisen/indigo/cel
-cpu: Intel(R) Xeon(R) CPU
-BenchmarkSimpleRule-2                  	 1179549	       998.5 ns/op
-BenchmarkSimpleRuleWithDiagnostics-2   	   59346	     20560 ns/op
-BenchmarkRuleWithArray-2               	 1156740	      1035 ns/op
-BenchmarkProtoWithSelfX-2              	  783984	      1498 ns/op
-BenchmarkProtoWithoutSelf-2            	  887734	      1329 ns/op
-BenchmarkProtoCreation-2               	  559836	      2154 ns/op
-BenchmarkProto20KX-2                   	     166	   8671759 ns/op
+BenchmarkSimpleRule-8                  	 1633898	       721 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8   	   79094	     14148 ns/op
+BenchmarkRuleWithArray-8               	 1621924	       746 ns/op
+BenchmarkProtoWithSelfX-8              	  966384	      1235 ns/op
+BenchmarkProtoWithoutSelf-8            	 1137385	      1062 ns/op
+BenchmarkProtoCreation-8               	  704827	      1702 ns/op
+BenchmarkProto20KX-8                   	     489	   2481986 ns/op
 PASS
-ok  	github.com/ezachrisen/indigo/cel	37.917s
+ok  	github.com/ezachrisen/indigo/cel	29.358s
