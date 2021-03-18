@@ -1,15 +1,16 @@
 PASS
-ok  	github.com/ezachrisen/indigo	0.182s
+ok  	github.com/ezachrisen/indigo	0.161s
 goos: darwin
 goarch: amd64
 pkg: github.com/ezachrisen/indigo/cel
-BenchmarkSimpleRule-8                  	 1622797	       735 ns/op
-BenchmarkSimpleRuleWithDiagnostics-8   	   79748	     14119 ns/op
-BenchmarkRuleWithArray-8               	 1607530	       750 ns/op
-BenchmarkProtoWithSelfX-8              	  977602	      1194 ns/op
-BenchmarkProtoWithoutSelf-8            	 1149908	      1032 ns/op
-BenchmarkProtoCreation-8               	  713109	      1717 ns/op
-BenchmarkProto20KX-8                   	     489	   2566836 ns/op
-BenchmarkAddRule-8                     	     130	   8994449 ns/op
+cpu: VirtualApple @ 2.50GHz
+BenchmarkSimpleRule-8                  	 1645561	       728.1 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8   	   79944	     13820 ns/op
+BenchmarkRuleWithArray-8               	 1603616	       738.7 ns/op
+BenchmarkProtoWithSelfX-8              	 1000000	      1176 ns/op
+BenchmarkProtoWithoutSelf-8            	 1193852	       997.6 ns/op
+BenchmarkProtoCreation-8               	  737322	      1623 ns/op
+BenchmarkProto20KX-8                   	     489	   2469119 ns/op
+BenchmarkAddRule-8                     	     135	   8718542 ns/op
 PASS
-ok  	github.com/ezachrisen/indigo/cel	31.755s
+ok  	github.com/ezachrisen/indigo/cel	30.855s
