@@ -183,6 +183,11 @@ type Rule struct {
 	// (This is common if the rule is used as a container for other rules)
 	Expr string
 
+	// Program is a compiled representation of the expression.
+	// Evaluators may attach a compiled representation of the
+	// rule.
+	Program interface{}
+
 	// The output type of the expression. Compilers with the ability to check
 	// whether an expression produces the desired output should return an error
 	// if the expression does not. If you are using an underlying rules engine
@@ -212,6 +217,7 @@ type Rule struct {
 	sortedKeys []string
 
 	// A reference to any object.
+	// Useful for external processes to attach an object to the rule.
 	Meta interface{}
 
 	// Set options for how the engine should evaluate this rule and the child
@@ -222,6 +228,63 @@ type Rule struct {
 
 func (r *Rule) AddChild(c *Rule) {
 	r.Rules[c.ID] = c
+}
+
+// Find a rule with the given path
+// The rule path is the concatenation of the
+// rule IDs in a hierarchy, separated by /
+// For example, given this hierarchy of rule IDs:
+//  rule1
+//    b
+//    c
+//      c1
+//      c2
+//
+// c1 can be identified with the path
+// rule1/c/c1
+// Returns a copy of the rule
+
+func (r *Rule) FindChild(path string) (*Rule, bool) {
+
+	elems := strings.Split(path, "/")
+	c, ok := r.Rules[elems[0]]
+	if !ok {
+		return nil, false
+	}
+
+	if len(elems) == 1 {
+		return c, true
+	}
+
+	return c.FindChild(strings.Join(elems[1:len(elems)], "/"))
+}
+
+func copyRules(m map[string]*Rule) map[string]*Rule {
+
+	mn := make(map[string]*Rule, len(m))
+
+	for k := range m {
+		cc := copyRule(m[k])
+		mn[cc.ID] = cc
+	}
+	return mn
+}
+
+func copyRule(r *Rule) *Rule {
+
+	nr := Rule{
+		ID:         r.ID,
+		Expr:       r.ID,
+		ResultType: r.ResultType,
+		Schema:     r.Schema,
+		Self:       r.Self,
+		Rules:      copyRules(r.Rules),
+		sortedKeys: copySortedKeys(r.sortedKeys),
+		Meta:       r.Meta,
+		EvalOpts:   copyEvalOpts(r.EvalOpts),
+	}
+
+	return &nr
 }
 
 // Doer performs an action as a result of a rule qualifying.

@@ -38,9 +38,6 @@ func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
 // AddRule compiles the rule and adds it to the engine, ready to be evaluated.
 // If a rule does not have a schema, it inherits its parent's schema.
 func (e *Engine) AddRule(rules ...*Rule) error {
-	// When adding a rule, locking the rule engine for all access
-	// e.mu.Lock()
-	// defer e.mu.Unlock()
 
 	for i := range rules {
 		r := rules[i]
@@ -75,6 +72,38 @@ func (e *Engine) AddRule(rules ...*Rule) error {
 	return nil
 }
 
+func (e *Engine) ReplaceRule(path string, n *Rule) error {
+
+	elems := strings.Split(path, "/")
+
+	if len(elems) == 0 {
+		return fmt.Errorf("missing path argument")
+	}
+
+	// From now on we must lock the rules so no other
+	// modification can take place
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	root, ok := e.rules[elems[0]]
+	if !ok {
+		return fmt.Errorf("rule with path '%s' not found", path)
+	}
+
+	r, ok := root.FindChild(strings.Join(elems[1:len(elems)], "/"))
+	if !ok {
+		return fmt.Errorf("rule with path '%s' not found", path)
+	}
+
+	//	e.prepareRule(n)
+	*r = *n
+	return nil
+
+}
+
+// childKeys extracts the keys from a map of rules
+// The resulting slice of keys is used to sort rules
+// when rules are added to the engine
 func childKeys(r map[string]*Rule) []string {
 	keys := make([]string, 0, len(r))
 	for k := range r {
@@ -96,7 +125,6 @@ func (e *Engine) addRuleWithSchema(r *Rule, parentRuleID string, s Schema, o Eva
 	// In the Evaluator world, rules are not necessarily stored in a nested hierarchy
 	// Therefore we must ensure that rule IDs are globally unique
 	id := makeChildRuleID(parentRuleID, r.ID)
-
 	//	start := time.Now()
 
 	err := e.evaluator.Compile(id, r.Expr, r.ResultType, s, e.opts.CollectDiagnostics, e.opts.DryRun)
@@ -128,12 +156,51 @@ func (e *Engine) Rule(id string) (*Rule, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	r, ok := e.rules[id]
-
 	if !ok {
 		return nil, false
 	}
 
 	return copyRule(r), true
+}
+
+// Find a rule with the given path
+// The rule path is the concatenation of the
+// rule IDs in a hierarchy, separated by /
+// For example, given this hierarchy of rule IDs:
+//  rule1
+//    b
+//    c
+//      c1
+//      c2
+//
+// c1 can be identified with the path
+// rule1/c/c1
+// Returns a pointer to the rule itself
+// CAUTION
+func (e *Engine) RuleWithPath(path string) (*Rule, bool) {
+	if len(strings.Trim(path, " ")) == 0 {
+		return nil, false
+	}
+
+	elems := strings.Split(path, "/")
+
+	e.mu.RLock()
+	r, ok := e.rules[elems[0]]
+	e.mu.RUnlock()
+
+	if !ok {
+		return nil, false
+	}
+
+	if len(elems) == 1 {
+		return copyRule(r), true
+	}
+
+	c, ok := r.FindChild(strings.Join(elems[1:len(elems)], "/"))
+	if !ok {
+		return nil, false
+	}
+	return c, true
 }
 
 // Rules provides a copy of the engine's rules.
@@ -159,34 +226,6 @@ func copyEvalOpts(a []EvalOption) []EvalOption {
 		b = append(b, o)
 	}
 	return b
-}
-
-func copyRules(m map[string]*Rule) map[string]*Rule {
-
-	mn := make(map[string]*Rule, len(m))
-
-	for k := range m {
-		cc := copyRule(m[k])
-		mn[cc.ID] = cc
-	}
-	return mn
-}
-
-func copyRule(r *Rule) *Rule {
-
-	nr := Rule{
-		ID:         r.ID,
-		Expr:       r.ID,
-		ResultType: r.ResultType,
-		Schema:     r.Schema,
-		Self:       r.Self,
-		Rules:      copyRules(r.Rules),
-		sortedKeys: copySortedKeys(r.sortedKeys),
-		Meta:       r.Meta,
-		EvalOpts:   copyEvalOpts(r.EvalOpts),
-	}
-
-	return &nr
 }
 
 // RuleCount is the number of rules in the engine.

@@ -105,6 +105,7 @@ func TestAddRules(t *testing.T) {
 	is.NoErr(err)
 
 	is.Equal(e.Rules()["B"].Meta, "B1") // B1 should not be overwritten by its child with same ID
+
 }
 
 func makeRuleWithID(id string) *indigo.Rule {
@@ -295,6 +296,57 @@ func inArray(a []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// Test that all rules are evaluated in the correct order in the default configuration
+func TestRuleAccess(t *testing.T) {
+	is := is.New(t)
+
+	m := NewMockEvaluator()
+	e := indigo.NewEngine(m)
+
+	e.AddRule(makeRuleWithOptions())
+
+	r1, ok := e.Rule("rule1")
+	is.True(ok)
+	is.Equal(r1.ID, "rule1")
+
+	r11, ok := e.RuleWithPath("rule1")
+	is.True(ok)
+	is.Equal(r11.ID, "rule1")
+
+	b41, ok := e.RuleWithPath("rule1/B/b4/b4-1")
+	is.True(ok)
+	is.Equal(b41.ID, "b4-1")
+
+	separate := makeRuleWithOptions()
+
+	b41x, ok := separate.FindChild("B/b4/b4-1")
+	is.True(ok)
+	is.Equal(b41x.ID, "b4-1")
+
+}
+
+func TestRuleReplace(t *testing.T) {
+	is := is.New(t)
+
+	m := NewMockEvaluator()
+	e := indigo.NewEngine(m)
+
+	e.AddRule(makeRuleWithOptions())
+
+	b41, ok := e.RuleWithPath("rule1/B/b4/b4-1")
+	is.True(ok)
+	is.Equal(b41.ID, "b4-1")
+	is.Equal(b41.Expr, "true")
+	b41.Expr = "updated"
+	is.Equal(b41.Expr, "updated")
+
+	b41x, ok := e.RuleWithPath("rule1/B/b4/b4-1")
+	is.True(ok)
+	is.Equal(b41x.ID, "b4-1")
+	is.Equal(b41x.Expr, "updated")
+
 }
 
 // Test that all rules are evaluated in the correct order in the default configuration
