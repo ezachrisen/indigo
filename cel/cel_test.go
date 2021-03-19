@@ -547,7 +547,7 @@ func TestConcurrencyMixed(t *testing.T) {
 	}
 
 	dryRun := true
-	n := 900_000
+	n := 100_000
 	randomDelay := true
 	maxDelayMicroseconds := 1000
 	printDebug := false

@@ -235,6 +235,31 @@ func (e *Engine) RuleWithPath(path string) (*Rule, *Rule, bool) {
 	return e.ruleWithPath(path)
 }
 
+// ruleParent identifies the parent of the rule given in the path string.
+// Sample path: rule1/b/b-1
+// Will return rule b
+func (e *Engine) ruleParent(parent *Rule, path string) *Rule {
+	// if len(strings.Trim(path, " ")) == 0 {
+	// 	return nil
+	// }
+
+	elems := strings.Split(path, "/")
+	fmt.Println(elems)
+
+	if len(elems) == 1 && parent != nil {
+		if p, ok := parent.Rules[elems[0]]; ok {
+			return p
+		}
+		return nil
+	}
+
+	// p, _, ok := p.FindChild(strings.Join(elems[1:len(elems)], "/"))
+	// if !ok {
+	// 	return p
+	// }
+	return nil
+}
+
 // ruleWithPath is an unexported version of ruleWithPath
 // Unlike the exported version, this does NOT lock the map.
 // It is intended to be called by other exported engine functions
