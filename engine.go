@@ -9,7 +9,6 @@ import (
 )
 
 type Engine struct {
-
 	// The rules map holds the rules passed by the user of the engine
 	rules map[string]*Rule
 
@@ -39,28 +38,16 @@ func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
 // If a rule does not have a schema, it inherits its parent's schema.
 func (e *Engine) AddRule(rules ...*Rule) error {
 
+	o := EvalOptions{
+		MaxDepth:   defaultDepth,
+		ReturnFail: true,
+		ReturnPass: true,
+	}
+
 	for i := range rules {
 		r := rules[i]
-		if len(strings.Trim(r.ID, " ")) == 0 {
-			return fmt.Errorf("Required rule ID for rule with expression %s", r.Expr)
-		}
+		err := e.compileRule(r, nil, o)
 
-		if strings.ContainsAny(r.ID, bannedIDCharacters) {
-			return fmt.Errorf("Rule ID is invalid (%s),  cannot contain any of '%s'", r.ID, bannedIDCharacters)
-		}
-
-		o := EvalOptions{
-			MaxDepth:   defaultDepth,
-			ReturnFail: true,
-			ReturnPass: true,
-		}
-
-		applyEvalOptions(&o, r.EvalOpts...)
-
-		// We pass in the rule's schema at the top of the rule tree.
-		// Child rules will inherit the schema of their parent if
-		// they do not have one specified.
-		err := e.addRuleWithSchema(r, "", r.Schema, o)
 		if err != nil {
 			return err
 		}
@@ -72,31 +59,123 @@ func (e *Engine) AddRule(rules ...*Rule) error {
 	return nil
 }
 
-func (e *Engine) ReplaceRule(path string, n *Rule) error {
+func (e *Engine) compileRule(r *Rule, s *Schema, o EvalOptions) error {
 
-	elems := strings.Split(path, "/")
-
-	if len(elems) == 0 {
-		return fmt.Errorf("missing path argument")
+	if len(strings.Trim(r.ID, " ")) == 0 {
+		return fmt.Errorf("Required rule ID for rule with expression %s", r.Expr)
 	}
 
-	// From now on we must lock the rules so no other
-	// modification can take place
+	if strings.ContainsAny(r.ID, bannedIDCharacters) {
+		return fmt.Errorf("Rule ID is invalid (%s),  cannot contain any of '%s'", r.ID, bannedIDCharacters)
+	}
+
+	applyEvalOptions(&o, r.EvalOpts...)
+
+	if len(r.Schema.Elements) == 0 && s != nil {
+		r.Schema = *s
+	}
+
+	err := e.evaluator.Compile(r, e.opts.CollectDiagnostics, e.opts.DryRun)
+	if err != nil {
+		return err
+	}
+
+	sortChildKeys(r, o)
+
+	for _, k := range r.sortedKeys {
+		child := r.Rules[k]
+		err := e.compileRule(child, &r.Schema, o)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func sortChildKeys(r *Rule, o EvalOptions) {
+	r.sortedKeys = childKeys(r.Rules)
+	if o.SortFunc != nil {
+		sort.Slice(r.sortedKeys, o.SortFunc)
+	} else {
+		sort.Strings(r.sortedKeys)
+	}
+}
+
+func (e *Engine) DeleteRule(path string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	root, ok := e.rules[elems[0]]
-	if !ok {
-		return fmt.Errorf("rule with path '%s' not found", path)
+	p, c, ok := e.ruleWithPath(path)
+
+	if !ok || c == nil {
+		return fmt.Errorf("Rule with path '%s' not found", path)
 	}
 
-	r, ok := root.FindChild(strings.Join(elems[1:len(elems)], "/"))
-	if !ok {
-		return fmt.Errorf("rule with path '%s' not found", path)
+	if p == nil {
+		// The child rule has no parent
+		// This means that the child rule is a top-level
+		// rule in the engine's list of rules
+		if _, ok := e.rules[c.ID]; !ok {
+			return fmt.Errorf("rule '%s' not found in engine rule list", c.ID)
+		}
+		delete(e.rules, c.ID)
+	} else {
+		if _, ok := p.Rules[c.ID]; !ok {
+			return fmt.Errorf("rule '%s' not found in rule list of '%s'", c.ID, p.ID)
+		}
+
+		delete(p.Rules, c.ID)
+		// Re-sort the child keys
+		// We've removed the rule from the map, but the sorted child keys list
+		// still has the key.
+		var o EvalOptions
+		applyEvalOptions(&o, p.EvalOpts...)
+		sortChildKeys(p, o)
 	}
 
-	//	e.prepareRule(n)
-	*r = *n
+	return nil
+}
+
+func (e *Engine) ReplaceRule(path string, n *Rule) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	p, c, ok := e.ruleWithPath(path)
+
+	if !ok || c == nil {
+		return fmt.Errorf("Rule with path '%s' not found", path)
+	}
+
+	o := EvalOptions{
+		MaxDepth:   defaultDepth,
+		ReturnFail: true,
+		ReturnPass: true,
+	}
+
+	var s *Schema
+	if p != nil {
+		s = &p.Schema
+	}
+
+	if c != nil {
+		s = &c.Schema
+	}
+
+	err := e.compileRule(n, s, o)
+	if err != nil {
+		return err
+	}
+
+	if p == nil {
+		// The child rule has no parent
+		// This means that the child rule is a top-level
+		// rule in the engine's list of rules
+		e.rules[c.ID] = n
+	} else {
+		p.Rules[c.ID] = n
+	}
+
 	return nil
 
 }
@@ -113,43 +192,6 @@ func childKeys(r map[string]*Rule) []string {
 	return keys
 }
 
-func (e *Engine) addRuleWithSchema(r *Rule, parentRuleID string, s Schema, o EvalOptions) error {
-
-	applyEvalOptions(&o, r.EvalOpts...)
-
-	// If the rule has a schema, use it, otherwise use the parent rule's
-	if len(r.Schema.Elements) > 0 {
-		s = r.Schema
-	}
-
-	// In the Evaluator world, rules are not necessarily stored in a nested hierarchy
-	// Therefore we must ensure that rule IDs are globally unique
-	id := makeChildRuleID(parentRuleID, r.ID)
-	//	start := time.Now()
-
-	err := e.evaluator.Compile(id, r.Expr, r.ResultType, s, e.opts.CollectDiagnostics, e.opts.DryRun)
-	if err != nil {
-		return err
-	}
-	//	fmt.Printf("   Finished compile in %s\n", time.Since(start))
-
-	r.sortedKeys = childKeys(r.Rules)
-	if o.SortFunc != nil {
-		sort.Slice(r.sortedKeys, o.SortFunc)
-	} else {
-		sort.Strings(r.sortedKeys)
-	}
-
-	for _, k := range r.sortedKeys {
-		child := r.Rules[k]
-		err := e.addRuleWithSchema(child, id, s, o)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Find a rule with the given ID
 // Returns a copy of the rule
 func (e *Engine) Rule(id string) (*Rule, bool) {
@@ -164,6 +206,14 @@ func (e *Engine) Rule(id string) (*Rule, bool) {
 }
 
 // Find a rule with the given path
+// Returns
+//  - The parent rule (parent)
+//  - The rule itself (child)
+//  - True/false if successful
+//
+// A nil parent rule means that the rule we've found is a top-level
+// rule in the engine.
+//
 // The rule path is the concatenation of the
 // rule IDs in a hierarchy, separated by /
 // For example, given this hierarchy of rule IDs:
@@ -175,32 +225,40 @@ func (e *Engine) Rule(id string) (*Rule, bool) {
 //
 // c1 can be identified with the path
 // rule1/c/c1
-// Returns a pointer to the rule itself
-// CAUTION
-func (e *Engine) RuleWithPath(path string) (*Rule, bool) {
+// In this case,
+//   - Parent = c
+//   - Child = c1
+// CAUTION: Returns pointers to the rules
+func (e *Engine) RuleWithPath(path string) (*Rule, *Rule, bool) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.ruleWithPath(path)
+}
+
+// ruleWithPath is an unexported version of ruleWithPath
+// Unlike the exported version, this does NOT lock the map.
+// It is intended to be called by other exported engine functions
+// and they are responsible for locking the map.
+func (e *Engine) ruleWithPath(path string) (*Rule, *Rule, bool) {
 	if len(strings.Trim(path, " ")) == 0 {
-		return nil, false
+		return nil, nil, false
 	}
 
 	elems := strings.Split(path, "/")
-
-	e.mu.RLock()
-	r, ok := e.rules[elems[0]]
-	e.mu.RUnlock()
-
+	p, ok := e.rules[elems[0]]
 	if !ok {
-		return nil, false
+		return nil, nil, false
 	}
 
 	if len(elems) == 1 {
-		return copyRule(r), true
+		return nil, p, true
 	}
 
-	c, ok := r.FindChild(strings.Join(elems[1:len(elems)], "/"))
+	p, c, ok := p.FindChild(strings.Join(elems[1:len(elems)], "/"))
 	if !ok {
-		return nil, false
+		return p, nil, false
 	}
-	return c, true
+	return p, c, true
 }
 
 // Rules provides a copy of the engine's rules.
@@ -240,6 +298,9 @@ func (e *Engine) RuleCount() int {
 // Set EvalOptions to control which rules are evaluated, and what results are returned.
 func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOption) (*Result, error) {
 
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	// if data == nil {
 	// 	return nil, fmt.Errorf("indigo.Evaluate called with nil data")
 	// }
@@ -260,10 +321,8 @@ func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOp
 		return nil, fmt.Errorf("option set to return diagnostic, but engine does not have CollectDiagnostics option set")
 	}
 
-	e.mu.RLock()
 	rule, ok := e.rules[id]
-	e.mu.RUnlock()
-	if !ok {
+	if !ok || rule == nil {
 		return nil, fmt.Errorf("%w: %s", ErrRuleNotFound, id)
 	}
 
@@ -318,6 +377,9 @@ func DryRun(b bool) EngineOption {
 
 // Recursively evaluate the rule and its children
 func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, n int, opt EvalOptions) (*Result, error) {
+	if rule == nil {
+		return nil, fmt.Errorf("rule not found in parent '%s'", parentID)
+	}
 
 	if n > opt.MaxDepth {
 		return nil, nil
@@ -344,7 +406,7 @@ func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, 
 
 	id := makeChildRuleID(parentID, rule.ID)
 
-	value, diagnostics, err := e.evaluator.Eval(data, id, rule.Expr, rule.ResultType, opt)
+	value, diagnostics, err := e.evaluator.Eval(data, rule, opt)
 	pr.RulesEvaluated++
 
 	if err != nil {

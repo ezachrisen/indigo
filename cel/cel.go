@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ezachrisen/indigo"
@@ -22,59 +21,54 @@ import (
 // CELEvaluator implements the indigo.Evaluator interface.
 // It uses the CEL-Go package to compile and evaluate rules.
 type CELEvaluator struct {
+}
 
-	// Rules are parsed, checked and stored as runnable CEL programs
-	// Key = rule ID
-	programs map[string]cel.Program
-
-	// ASTs are the result of compiling a rule into a program. It is not necessary to keep
-	// the ASTs for rule evaluation, but it is required to provide proper diagnostic information.
-	// This informaton is only populated if enabled via options.
-	// Key = rule ID
-	asts map[string]*cel.Ast
-
-	// Mutex for the program map
-	programMu sync.RWMutex
-
-	// Mutext for the AST map
-	astMu sync.RWMutex
+// CELProgram holds a compiled CEL Program and
+// (potentially) an AST. The AST is used if we're collecting diagnostics
+// for the engine.
+type CELProgram struct {
+	program cel.Program
+	ast     *cel.Ast
 }
 
 // Initialize a new CEL Evaluator
 // The evaluator contains internal data used to facilitate CEL expression evaluation.
 func NewEvaluator() *CELEvaluator {
-	e := CELEvaluator{
-		programs: make(map[string]cel.Program),
-		asts:     make(map[string]*cel.Ast),
-	}
+	e := CELEvaluator{}
 	return &e
 }
 
 func (e *CELEvaluator) PrintInternalStructure() {
-	e.programMu.RLock()
-	defer e.programMu.RUnlock()
 
-	for k, _ := range e.programs {
-		fmt.Println("Rule id", k)
-	}
+	// for k, _ := range e.programs {
+	// 	fmt.Println("Rule id", k)
+	// }
 }
 
-func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool, dryRun bool) error {
+func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun bool) error {
 
-	if expr == "" {
+	if dryRun {
+		return nil
+	}
+
+	prog := CELProgram{}
+
+	// There's nothing for us to do
+	if r.Expr == "" {
 		return nil
 	}
 
 	var opts []cel.EnvOption
 	var err error
 
-	opts, err = schemaToDeclarations(s)
+	// Convert from an Indigo schema to a set of CEL options
+	opts, err = schemaToDeclarations(r.Schema)
 	if err != nil {
 		return err
 	}
 
 	if opts == nil || len(opts) == 0 {
-		return fmt.Errorf("No valid schema for rule %s", ruleID)
+		return fmt.Errorf("No valid schema for rule %s", r.ID)
 	}
 
 	env, err := cel.NewEnv(opts...)
@@ -82,109 +76,89 @@ func (e *CELEvaluator) Compile(ruleID string, expr string, resultType indigo.Typ
 		return err
 	}
 
-	var prg cel.Program
-	var p *cel.Ast
+	// Parse the rule expression to an AST
+	ast, iss := env.Parse(r.Expr)
+	if iss != nil && iss.Err() != nil {
+		// Remove some wonky formatting from CEL's error message.
+		return fmt.Errorf("parsing rule %s:\n%s", r.ID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
+	}
+	// Type-check the parsed AST against the declarations
+	c, iss := env.Check(ast)
+	if iss != nil && iss.Err() != nil {
+		return fmt.Errorf("checking rule %s:\n%w", r.ID, iss.Err())
+	}
 
-	if !dryRun {
-
-		// Parse the rule expression to an AST
-		var iss *cel.Issues
-		p, iss = env.Parse(expr)
-		if iss != nil && iss.Err() != nil {
-			// Remove some wonky formatting from CEL's error message.
-			return fmt.Errorf("parsing rule %s:\n%s", ruleID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
-		}
-		// Type-check the parsed AST against the declarations
-		c, iss := env.Check(p)
-		if iss != nil && iss.Err() != nil {
-			return fmt.Errorf("checking rule %s:\n%w", ruleID, iss.Err())
-		}
-
-		if resultType != nil {
-			err := doTypesMatch(c.ResultType(), resultType)
-			if err != nil {
-				return fmt.Errorf("Error compiling rule: %w", err)
-			}
-		}
-
-		options := cel.EvalOptions()
-		if collectDiagnostics {
-			options = cel.EvalOptions(cel.OptTrackState)
-		}
-
-		prg, err = env.Program(c, options)
+	if r.ResultType != nil {
+		err := doTypesMatch(c.ResultType(), r.ResultType)
 		if err != nil {
-			return fmt.Errorf("generating program %s, %w", ruleID, err)
+			return fmt.Errorf("Error compiling rule: %w", err)
 		}
-	} else {
-		prg = nil
-		p = nil
 	}
 
-	//	start := time.Now()
-	e.programMu.Lock()
-	e.programs[ruleID] = prg
-	e.programMu.Unlock()
-	//	fmt.Printf("Unlocked programs after %s\n", time.Since(start))
+	options := cel.EvalOptions()
 	if collectDiagnostics {
-		e.astMu.Lock()
-		e.asts[ruleID] = p
-		e.astMu.Unlock()
+		options = cel.EvalOptions(cel.OptTrackState)
 	}
+
+	prog.program, err = env.Program(c, options)
+	if err != nil {
+		return fmt.Errorf("generating program %s, %w", r.ID, err)
+	}
+
+	if collectDiagnostics {
+		prog.ast = ast
+	}
+
+	r.Program = prog
+
 	return nil
 }
 
-func (e *CELEvaluator) Eval(data map[string]interface{}, ruleID string, expr string, resultType indigo.Type, opt indigo.EvalOptions) (indigo.Value, string, error) {
+func (e *CELEvaluator) Eval(data map[string]interface{}, r *indigo.Rule, opt indigo.EvalOptions) (indigo.Value, string, error) {
 
-	e.programMu.RLock()
-	program, found := e.programs[ruleID]
-	e.programMu.RUnlock()
+	program, ok := r.Program.(CELProgram)
 
-	// If the rule has an expression, evaluate it
-	if program != nil && found && !opt.DryRun {
-		rawValue, details, err := program.Eval(data)
-		// Do not check the error yet. Grab the diagnostics first
-		// TODO: Return diagnostics with errors
-
-		// TODO: Check return type
-		// Determine if the value produced matched the rule's expectations
-		// if r.ResulType != nil {
-		// 	err := doTypesMatch(result *expr.Type, r.ResultType)
-		// }
-
-		var diagnostics string
-		if opt.ReturnDiagnostics {
-			e.astMu.RLock()
-			diagnostics = collectDiagnostics(e.asts[ruleID], details, data)
-			e.astMu.RUnlock()
-		}
-
-		if err != nil {
-			return indigo.Value{}, diagnostics, fmt.Errorf("Error evaluating rule %s:%w", ruleID, err)
-		}
-
-		switch v := rawValue.Value().(type) {
-		case bool:
-			return indigo.Value{
-				Val: v,
-				Typ: indigo.Bool{},
-			}, diagnostics, nil
-		default:
-			return indigo.Value{
-				Val: v,
-				Typ: indigo.Any{},
-			}, diagnostics, nil
-		}
-
+	// If the rule doesn't have a program, or if we're just doing a dry run,
+	// return a default result
+	if !ok || opt.DryRun {
+		return indigo.Value{
+			Val: true,
+			Typ: indigo.Bool{},
+		}, "", nil
 	}
 
-	// If the rule has no expression default the result to true
-	// Likely this means that this rule is a container for child rules,
-	// and the user is only interested in the result of the children.
-	return indigo.Value{
-		Val: true,
-		Typ: indigo.Bool{},
-	}, "", nil
+	rawValue, details, err := program.program.Eval(data)
+	// Do not check the error yet. Grab the diagnostics first
+	// TODO: Return diagnostics with errors
+
+	// TODO: Check return type
+	// Determine if the value produced matched the rule's expectations
+	// if r.ResulType != nil {
+	// 	err := doTypesMatch(result *expr.Type, r.ResultType)
+	// }
+
+	var diagnostics string
+	if opt.ReturnDiagnostics {
+		diagnostics = collectDiagnostics(program.ast, details, data)
+	}
+
+	if err != nil {
+		return indigo.Value{}, diagnostics, fmt.Errorf("Error evaluating rule %s:%w", r.ID, err)
+	}
+
+	switch v := rawValue.Value().(type) {
+	case bool:
+		return indigo.Value{
+			Val: v,
+			Typ: indigo.Bool{},
+		}, diagnostics, nil
+	default:
+		return indigo.Value{
+			Val: v,
+			Typ: indigo.Any{},
+		}, diagnostics, nil
+	}
+
 }
 
 // --------------------------------------------------------------------------- COMPILATION

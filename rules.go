@@ -36,12 +36,12 @@ const (
 type Evaluator interface {
 	// Compile a rule, checking for correctness and preparing the rule to be
 	// evaluated later.
-	Compile(ruleID string, expr string, resultType Type, s Schema, collectDiagnostics bool, dryRun bool) error
+	Compile(rule *Rule, collectDiagnostics bool, dryRun bool) error
 
 	// Eval tests the rule expression  against the data.
 	// The result is one of Indigo's types.
 	// resultType: the type of result value the rule expects
-	Eval(data map[string]interface{}, ruleID string, expr string, resultType Type, opt EvalOptions) (Value, string, error)
+	Eval(data map[string]interface{}, rule *Rule, opt EvalOptions) (Value, string, error)
 }
 
 // EvalOptions specify how the Engine and the Evaluator process rules.
@@ -244,16 +244,17 @@ func (r *Rule) AddChild(c *Rule) {
 // rule1/c/c1
 // Returns a copy of the rule
 
-func (r *Rule) FindChild(path string) (*Rule, bool) {
+func (r *Rule) FindChild(path string) (*Rule, *Rule, bool) {
 
 	elems := strings.Split(path, "/")
 	c, ok := r.Rules[elems[0]]
 	if !ok {
-		return nil, false
+		return nil, nil, false
 	}
 
+	// If we're down to the last path element
 	if len(elems) == 1 {
-		return c, true
+		return r, c, true
 	}
 
 	return c.FindChild(strings.Join(elems[1:len(elems)], "/"))
