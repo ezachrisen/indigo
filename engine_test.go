@@ -826,7 +826,7 @@ func TestConcurrency(t *testing.T) {
 	is := is.New(t)
 	rand.Seed(time.Now().Unix())
 
-	m := NoOpEvaluator{}
+	m := indigo.NoOpEvaluator{}
 	e := indigo.NewEngine(m)
 
 	var wg sync.WaitGroup
@@ -845,18 +845,4 @@ func TestConcurrency(t *testing.T) {
 	}
 
 	wg.Wait()
-}
-
-type NoOpEvaluator struct{}
-
-func (n NoOpEvaluator) Compile(rule *indigo.Rule, collectDiagnostics bool, dryRun bool) error {
-	return nil
-}
-
-func (n NoOpEvaluator) Eval(data map[string]interface{}, rule *indigo.Rule, opt indigo.EvalOptions) (indigo.Value, string, error) {
-	return indigo.Value{
-		Val: false,
-		Typ: indigo.Bool{},
-	}, "", nil
-
 }
