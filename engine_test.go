@@ -23,14 +23,18 @@ func NewMockEvaluator() *MockEvaluator {
 		ruleOptions: make(map[string]indigo.EvalOptions, 10),
 	}
 }
-func (m *MockEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool, dryRun bool) error {
-	m.rules = append(m.rules, ruleID)
+func (m *MockEvaluator) Compile(rule *indigo.Rule, collectDiagnostics bool, dryRun bool) error {
+	m.rules = append(m.rules, rule.ID)
 	return nil
 }
 
+func (m *MockEvaluator) ResetRulesTested() {
+	m.rulesTested = []string{}
+}
+
 // The MockEvaluator only knows how to evaluate 1 string: `true`. If the expression is this, the evaluation is true, otherwise false.
-func (m *MockEvaluator) Eval(data map[string]interface{}, ruleID string, expr string, resultType indigo.Type, opt indigo.EvalOptions) (indigo.Value, string, error) {
-	m.rulesTested = append(m.rulesTested, ruleID)
+func (m *MockEvaluator) Eval(data map[string]interface{}, rule *indigo.Rule, opt indigo.EvalOptions) (indigo.Value, string, error) {
+	m.rulesTested = append(m.rulesTested, rule.ID)
 
 	diagnostics := ""
 
@@ -38,7 +42,7 @@ func (m *MockEvaluator) Eval(data map[string]interface{}, ruleID string, expr st
 		diagnostics = "diagnostics here"
 	}
 
-	if expr == `true` {
+	if rule.Expr == `true` {
 		return indigo.Value{
 			Val: true,
 			Typ: indigo.Bool{},
@@ -311,23 +315,24 @@ func TestRuleAccess(t *testing.T) {
 	is.True(ok)
 	is.Equal(r1.ID, "rule1")
 
-	r11, ok := e.RuleWithPath("rule1")
+	_, r11, ok := e.RuleWithPath("rule1")
 	is.True(ok)
 	is.Equal(r11.ID, "rule1")
 
-	b41, ok := e.RuleWithPath("rule1/B/b4/b4-1")
+	b4, b41, ok := e.RuleWithPath("rule1/B/b4/b4-1")
 	is.True(ok)
+	is.Equal(b4.ID, "b4")
 	is.Equal(b41.ID, "b4-1")
 
-	separate := makeRuleWithOptions()
+	// separate := makeRuleWithOptions()
 
-	b41x, ok := separate.FindChild("B/b4/b4-1")
-	is.True(ok)
-	is.Equal(b41x.ID, "b4-1")
+	// b41x, ok := separate.FindChild("B/b4/b4-1")
+	// is.True(ok)
+	// is.Equal(b41x.ID, "b4-1")
 
 }
 
-func TestRuleReplace(t *testing.T) {
+func TestRuleWithPath(t *testing.T) {
 	is := is.New(t)
 
 	m := NewMockEvaluator()
@@ -335,17 +340,17 @@ func TestRuleReplace(t *testing.T) {
 
 	e.AddRule(makeRuleWithOptions())
 
-	b41, ok := e.RuleWithPath("rule1/B/b4/b4-1")
+	_, b41, ok := e.RuleWithPath("rule1/B/b4/b4-1")
 	is.True(ok)
 	is.Equal(b41.ID, "b4-1")
 	is.Equal(b41.Expr, "true")
-	b41.Expr = "updated"
-	is.Equal(b41.Expr, "updated")
+	// b41.Expr = "updated"
+	// is.Equal(b41.Expr, "updated")
 
-	b41x, ok := e.RuleWithPath("rule1/B/b4/b4-1")
-	is.True(ok)
-	is.Equal(b41x.ID, "b4-1")
-	is.Equal(b41x.Expr, "updated")
+	// b41x, ok := e.RuleWithPath("rule1/B/b4/b4-1")
+	// is.True(ok)
+	// is.Equal(b41x.ID, "b4-1")
+	// is.Equal(b41x.Expr, "updated")
 
 }
 
@@ -358,9 +363,7 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 
 	e.AddRule(makeRuleNoOptions())
 
-	ruleIDs := []string{"rule1", "rule1/B", "rule1/D", "rule1/D/d1", "rule1/D/d2", "rule1/D/d3", "rule1/E", "rule1/E/e1", "rule1/E/e2", "rule1/E/e3"}
-
-	expected := map[string]bool{
+	expectedResults := map[string]bool{
 		"rule1": true,
 		"D":     true,
 		"d1":    true,
@@ -373,16 +376,142 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 		"e3":    true,
 	}
 
+	// If everything works, the rules were evaluated in this order
+	// (alphabetically)
+	expectedOrder := []string{
+		"rule1",
+		"B",
+		"D",
+		"d1",
+		"d2",
+		"d3",
+		"E",
+		"e1",
+		"e2",
+		"e3",
+	}
+
 	result, err := e.Evaluate(nil, "rule1")
 	is.NoErr(err)
 
-	// sort.Strings(ruleIDs)
-	// sort.Strings(m.rulesTested)
-	// fmt.Printf("A:%v\nB:%v\n", ruleIDs, m.rulesTested)
-	// fmt.Printf("C:%v\n", e.Rules()["rule1"].Rules)
 	is.Equal(result.RulesEvaluated, len(m.rulesTested))
-	is.True(reflect.DeepEqual(ruleIDs, m.rulesTested)) // not all rules were evaluated
-	is.True(match(result, expected))
+	is.True(reflect.DeepEqual(expectedOrder, m.rulesTested)) // not all rules were evaluated
+	is.True(match(result, expectedResults))
+}
+
+func makeRulesAndExpectedResult() (*indigo.Rule, map[string]bool) {
+	rule1 := &indigo.Rule{
+		ID:   "rule1",
+		Expr: `true`,
+		Rules: map[string]*indigo.Rule{
+			"D": &indigo.Rule{
+				ID:   "D",
+				Expr: `true`,
+				Rules: map[string]*indigo.Rule{
+					"d1": {
+						ID:   "d1",
+						Expr: `true`,
+					},
+					"d2": {
+						ID:   "d2",
+						Expr: `false`,
+					},
+					"d3": {
+						ID:   "d3",
+						Expr: `true`,
+					},
+				},
+			},
+			"B": {
+				ID:   "B",
+				Expr: `false`,
+			},
+			"E": {
+				ID:   "E",
+				Expr: `false`,
+				Rules: map[string]*indigo.Rule{
+					"e1": {
+						ID:   "e1",
+						Expr: `true`,
+					},
+					"e2": {
+						ID:   "e2",
+						Expr: `false`,
+					},
+					"e3": {
+						ID:   "e3",
+						Expr: `true`,
+					},
+				},
+			},
+		},
+	}
+
+	expectedResults := map[string]bool{
+		"rule1": true,
+		"D":     true,
+		"d1":    true,
+		"d2":    false,
+		"d3":    true,
+		"B":     false,
+		"E":     false,
+		"e1":    true,
+		"e2":    false,
+		"e3":    true,
+	}
+
+	return rule1, expectedResults
+}
+
+func TestReplaceRule(t *testing.T) {
+	is := is.New(t)
+
+	m := NewMockEvaluator()
+	e := indigo.NewEngine(m)
+
+	rule, expectedResults := makeRulesAndExpectedResult()
+
+	e.AddRule(rule)
+
+	result, err := e.Evaluate(nil, "rule1")
+	is.NoErr(err)
+	is.True(match(result, expectedResults))
+
+	// Now replace the e1 rule
+	err = e.ReplaceRule("rule1/E/e1", &indigo.Rule{
+		ID:   "e1",
+		Expr: `false`,
+	})
+	is.NoErr(err)
+
+	// Change expected outcome
+	expectedResults["e1"] = false
+
+	// Re-evaluate and check that we got the new e1 result
+	r2, err := e.Evaluate(nil, "rule1")
+	is.NoErr(err)
+	is.True(match(r2, expectedResults))
+
+	err = e.ReplaceRule("rule1/D", &indigo.Rule{
+		ID:   "D",
+		Expr: `false`})
+	is.NoErr(err)
+	expectedResults["D"] = false
+	delete(expectedResults, "d1")
+	delete(expectedResults, "d2")
+	delete(expectedResults, "d3")
+
+	r2, err = e.Evaluate(nil, "rule1")
+	is.NoErr(err)
+	// fmt.Println(indigo.SummarizeResults(r2))
+	is.True(match(r2, expectedResults))
+
+	// Test with wrong address
+	err = e.ReplaceRule("D", &indigo.Rule{
+		ID:   "D",
+		Expr: `false`})
+	is.True(err != nil)
+
 }
 
 // Test that the "stop negative parent" option is respected, and that the rules are evaluated in correct order
@@ -395,28 +524,54 @@ func TestEvaluationTraversalStopNegativeParent(t *testing.T) {
 	err := e.AddRule(makeRuleWithOptions())
 	is.NoErr(err)
 
-	ruleIDs := []string{"rule1", "rule1/B", "rule1/B/b1", "rule1/B/b2", "rule1/B/b3", "rule1/B/b4", "rule1/B/b4/b4-1", "rule1/B/b4/b4-2", "rule1/D", "rule1/D/d1", "rule1/D/d2", "rule1/D/d3", "rule1/E"}
-
-	expected := map[string]bool{
+	expectedResults := map[string]bool{
 		"rule1": true,
 		"D":     true,
 		"d1":    true,
 		"d2":    false,
 		"d3":    true,
 		"B":     false,
-		"E":     false,
+		// These rules are subjct to these options:
+		//   ReturnPass FALSE (set on B)
+		//   ReturnFail FALSE default
+		// "b1": true,
+		// "b2": false,
+		// "b3": true,
+		// "b4": false,
+		// Since B4 isn't returned, neither are its children
+		// "b4-1": true,
+		// "b4-2": false
+		"E": false,
+	}
+
+	expectedOrder := []string{
+		"rule1",
+		"B",
+		"b1",
+		"b2",
+		"b3",
+		"b4",
+		"b4-1",
+		"b4-2",
+		"D",
+		"d1",
+		"d2",
+		"d3",
+		"E",
+		// "e1", excluded because E==false with StopIfParentNegative option
+		// "e2",
+		// "e3",
 	}
 
 	result, err := e.Evaluate(nil, "rule1")
-
-	// sort.Strings(ruleIDs)
-	// sort.Strings(m.rulesTested)
-	//fmt.Printf("%v\n%v\n", ruleIDs, m.rulesTested)
+	// fmt.Printf("expected     :%v\n", expectedOrder)
+	// fmt.Printf("m.rulesTested:%v\n", m.rulesTested)
 
 	is.NoErr(err)
 	is.Equal(result.RulesEvaluated, len(m.rulesTested))
-	is.True(reflect.DeepEqual(ruleIDs, m.rulesTested)) // not all rules were evaluated
-	is.True(match(result, expected))
+	is.True(reflect.DeepEqual(expectedOrder, m.rulesTested)) // not all rules were evaluated
+
+	is.True(match(result, expectedResults))
 }
 
 func match(result *indigo.Result, expected map[string]bool) bool {
@@ -694,11 +849,11 @@ func TestConcurrency(t *testing.T) {
 
 type NoOpEvaluator struct{}
 
-func (n NoOpEvaluator) Compile(ruleID string, expr string, resultType indigo.Type, s indigo.Schema, collectDiagnostics bool, dryRun bool) error {
+func (n NoOpEvaluator) Compile(rule *indigo.Rule, collectDiagnostics bool, dryRun bool) error {
 	return nil
 }
 
-func (n NoOpEvaluator) Eval(data map[string]interface{}, ruleID string, expr string, resultType indigo.Type, opt indigo.EvalOptions) (indigo.Value, string, error) {
+func (n NoOpEvaluator) Eval(data map[string]interface{}, rule *indigo.Rule, opt indigo.EvalOptions) (indigo.Value, string, error) {
 	return indigo.Value{
 		Val: false,
 		Typ: indigo.Bool{},

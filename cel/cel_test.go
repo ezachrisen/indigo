@@ -3,6 +3,7 @@ package cel_test
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -200,18 +201,18 @@ func makeEducationProtoRules(id string) *indigo.Rule {
 		ID:     id,
 		Schema: makeEducationProtoSchema(),
 		Rules: map[string]*indigo.Rule{
-			"a": {
+			"honor_student": {
 				ID:   "honor_student",
 				Expr: `student.GPA >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
 				Self: &school.HonorsConfiguration{Minimum_GPA: 3.7},
 				Meta: true,
 			},
-			"b": {
+			"at_risk": {
 				ID:   "at_risk",
 				Expr: `student.GPA < 2.5 || student.Status == school.Student.status_type.PROBATION`,
 				Meta: false,
 			},
-			"c": {
+			"tenure_gt_6months": {
 				ID:   "tenure_gt_6months",
 				Expr: `now - student.EnrollmentDate > duration("4320h")`, // 6 months = 4320 hours
 				Meta: true,
@@ -288,6 +289,84 @@ func TestProtoMessage(t *testing.T) {
 	for _, v := range results.Results {
 		is.Equal(v.Meta, v.Pass)
 	}
+}
+
+func TestReplaceRule(t *testing.T) {
+
+	is := is.New(t)
+	eval := cel.NewEvaluator()
+	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
+
+	err := engine.AddRule(makeEducationProtoRules("student_actions"))
+	is.NoErr(err)
+
+	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions")
+	is.NoErr(err)
+	is.Equal(len(results.Results), 3)
+	for _, v := range results.Results {
+		is.Equal(v.Meta, v.Pass)
+	}
+
+	err = engine.ReplaceRule("student_actions/at_risk", &indigo.Rule{
+		ID:   "at_risk",
+		Expr: `student.GPA < 1000.0 || student.Status == school.Student.status_type.PROBATION`,
+		Meta: true,
+	})
+	is.NoErr(err)
+
+	results, err = engine.Evaluate(makeStudentProtoData(), "student_actions")
+	is.NoErr(err)
+	is.Equal(len(results.Results), 3)
+	is.NoErr(err)
+	for _, v := range results.Results {
+		is.Equal(v.Meta, v.Pass)
+	}
+
+	err = engine.ReplaceRule("student_actions", &indigo.Rule{
+		ID:   "student_actions",
+		Expr: `student.GPA < 1000.0 || student.Status == school.Student.status_type.PROBATION`,
+		Meta: true,
+	})
+	is.NoErr(err)
+
+}
+
+func TestDeleteRule(t *testing.T) {
+
+	is := is.New(t)
+	eval := cel.NewEvaluator()
+	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
+
+	err := engine.AddRule(makeEducationProtoRules("student_actions"))
+	is.NoErr(err)
+
+	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions")
+	is.NoErr(err)
+	is.Equal(len(results.Results), 3)
+	for _, v := range results.Results {
+		is.Equal(v.Meta, v.Pass)
+	}
+
+	//fmt.Println(indigo.SummarizeResults(results))
+
+	err = engine.DeleteRule("student_actions/at_risk")
+	is.NoErr(err)
+
+	results, err = engine.Evaluate(makeStudentProtoData(), "student_actions")
+	is.NoErr(err)
+	//fmt.Println(indigo.SummarizeResults(results))
+
+	is.Equal(len(results.Results), 2)
+	is.NoErr(err)
+	for _, v := range results.Results {
+		is.Equal(v.Meta, v.Pass)
+	}
+
+	err = engine.DeleteRule("student_actions")
+	is.NoErr(err)
+
+	results, err = engine.Evaluate(makeStudentProtoData(), "student_actions")
+	is.True(err != nil)
 }
 
 func TestDiagnosticOptions(t *testing.T) {
@@ -460,6 +539,173 @@ func TestConcurrencyCollectDiagnostics(t *testing.T) {
 		}
 
 	}
+}
+
+func TestConcurrencyMixed(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	dryRun := true
+	n := 900_000
+	randomDelay := true
+	maxDelayMicroseconds := 1000
+	printDebug := false
+	printDebugInterval := 10_000
+	rand.Seed(time.Now().Unix())
+
+	is := is.New(t)
+	e := indigo.NewEngine(cel.NewEvaluator(), indigo.DryRun(dryRun))
+
+	// Set up a rule that we're going to evaluate over and over again
+	err := e.AddRule(makeEducationProtoRulesSimple("rule-1"))
+	is.NoErr(err)
+
+	// Set up a rule that we're going to replace over and over again
+	err = e.AddRule(makeEducationProtoRulesSimple("rule-2"))
+	is.NoErr(err)
+
+	// How large to make the channels depends on the capacity of the system
+	// Because AddRule is slow, a large capacity channel will exhaust the number of
+	// allowable goroutines.
+	add := make(chan int, 2000)
+	eval := make(chan int, 2000)
+	replace := make(chan int, 2000)
+	del := make(chan int, 2000)
+
+	var adds int
+	var evals int
+	var replaces int
+	var dels int
+
+	// start := time.Now()
+
+	// AddRule requests
+	go func() {
+		for i := 1; i < n; i++ {
+			if i%printDebugInterval == 0 && printDebug {
+				fmt.Println("---- Add ", i)
+			}
+			add <- i
+			if randomDelay {
+				time.Sleep(time.Duration(rand.Intn(maxDelayMicroseconds)) * time.Microsecond)
+			}
+		}
+		close(add)
+	}()
+
+	// Evaluation requests
+	go func() {
+		for i := 1; i < n; i++ {
+			if i%printDebugInterval == 0 && printDebug {
+				fmt.Println("---- Eval ", i)
+			}
+			eval <- i
+			if randomDelay {
+				time.Sleep(time.Duration(rand.Intn(maxDelayMicroseconds)) * time.Microsecond)
+			}
+
+		}
+		close(eval)
+	}()
+
+	// Replace rule requests
+	go func() {
+		for i := 1; i < n; i++ {
+			if i%printDebugInterval == 0 && printDebug {
+				fmt.Println("---- Replace ", i)
+			}
+			replace <- i
+			if randomDelay {
+				time.Sleep(time.Duration(rand.Intn(maxDelayMicroseconds)) * time.Microsecond)
+			}
+
+		}
+		close(replace)
+	}()
+
+	// Delete rule requests
+	go func() {
+		for i := 1; i < n; i++ {
+			if i%printDebugInterval == 0 && printDebug {
+				fmt.Println("---- Delete ", i)
+			}
+			del <- i
+			if randomDelay {
+				time.Sleep(time.Duration(rand.Intn(maxDelayMicroseconds)) * time.Microsecond)
+			}
+
+		}
+		close(del)
+	}()
+
+	for eval != nil || add != nil || replace != nil || del != nil {
+
+		select {
+
+		case i, ok := <-add:
+			if !ok {
+				add = nil
+			} else {
+				err := e.AddRule(makeEducationProtoRulesSimple(fmt.Sprintf("rule%d", i)))
+				is.NoErr(err)
+				adds++
+			}
+			if i%printDebugInterval == 0 && printDebug {
+				fmt.Println("---- Processed Add ", i)
+			}
+
+		case i, ok := <-eval:
+			if !ok {
+				eval = nil
+			} else {
+				results, err := e.Evaluate(makeStudentProtoData(), fmt.Sprintf("rule%d", -1))
+				is.NoErr(err)
+				if !dryRun {
+					is.Equal(len(results.Results), 1)
+					for _, v := range results.Results {
+						is.Equal(v.Meta, v.Pass)
+					}
+				}
+				evals++
+				if i%printDebugInterval == 0 && printDebug {
+					fmt.Println("---- Processed Eval ", i)
+				}
+			}
+		case i, ok := <-replace:
+			if !ok {
+				replace = nil
+			} else {
+				err = e.ReplaceRule("rule-2", &indigo.Rule{
+					ID:   "at_risk",
+					Expr: `student.GPA < 1000.0 || student.Status == school.Student.status_type.PROBATION`,
+					Meta: true,
+				})
+				is.NoErr(err)
+				replaces++
+				if i%printDebugInterval == 0 && printDebug {
+					fmt.Println("---- Processed Replace ", i)
+				}
+
+			}
+		case i, ok := <-del:
+			if !ok {
+				del = nil
+			} else {
+				dels++
+				if i%printDebugInterval == 0 && printDebug {
+					fmt.Println("---- Processed Delete ", i)
+				}
+				ruleID := fmt.Sprintf("rule%d", i)
+				err := e.AddRule(makeEducationProtoRulesSimple(ruleID))
+				is.NoErr(err)
+				err = e.DeleteRule(ruleID)
+				is.NoErr(err)
+			}
+		}
+	}
+	is.True(adds == replaces && dels == replaces && replaces == evals && adds == (n-1))
+
 }
 
 // ------------------------------------------------------------------------------------------
@@ -704,7 +950,7 @@ func BenchmarkProtoCreation(b *testing.B) {
 
 }
 
-func BenchmarkProto20KX(b *testing.B) {
+func BenchmarkEval2000Rules(b *testing.B) {
 	b.StopTimer()
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
@@ -764,6 +1010,26 @@ func BenchmarkAddRule(b *testing.B) {
 
 	for i := 1; i < b.N; i++ {
 		err := e.AddRule(makeEducationProtoRules(fmt.Sprintf("rule%d", i)))
+		is.NoErr(err)
+	}
+}
+
+func BenchmarkReplaceRule(b *testing.B) {
+
+	is := is.New(b)
+	eval := cel.NewEvaluator()
+	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
+
+	err := engine.AddRule(makeEducationProtoRules("student_actions"))
+	is.NoErr(err)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := engine.ReplaceRule("student_actions/b", &indigo.Rule{
+			ID:   "at_risk",
+			Expr: `student.GPA < 1000.0 || student.Status == school.Student.status_type.PROBATION`,
+			Meta: true,
+		})
 		is.NoErr(err)
 	}
 }
