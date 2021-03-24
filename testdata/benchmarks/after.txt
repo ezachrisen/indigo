@@ -1,17 +1,22 @@
 PASS
-ok  	github.com/ezachrisen/indigo	0.164s
+ok  	github.com/ezachrisen/indigo	0.161s
 goos: darwin
 goarch: amd64
 pkg: github.com/ezachrisen/indigo/cel
 cpu: VirtualApple @ 2.50GHz
-BenchmarkSimpleRule-8                  	 1767003	       670.1 ns/op
-BenchmarkSimpleRuleWithDiagnostics-8   	   80454	     13988 ns/op
-BenchmarkRuleWithArray-8               	 1739384	       689.7 ns/op
-BenchmarkProtoWithSelfX-8              	  968382	      1184 ns/op
-BenchmarkProtoWithoutSelf-8            	 1224576	       964.8 ns/op
-BenchmarkProtoCreation-8               	  727776	      1643 ns/op
-BenchmarkEval2000Rules-8               	     504	   2308816 ns/op
-BenchmarkAddRule-8                     	     136	   9028016 ns/op
-BenchmarkReplaceRule-8                 	     397	   2969564 ns/op
-PASS
-ok  	github.com/ezachrisen/indigo/cel	32.162s
+BenchmarkSimpleRule-8                  	 1859372	       629.1 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8   	   82603	     14016 ns/op
+BenchmarkRuleWithArray-8               	 1863195	       639.2 ns/op
+2021/03/21 00:19:48 Error adding ruleset: checking rule at_risk:
+ERROR: <input>:1:1: undeclared reference to 'student' (in container '')
+ | student.GPA < self.Minimum_GPA && student.Status == school.Student.status_type.PROBATION
+ | ^
+ERROR: <input>:1:15: undeclared reference to 'self' (in container '')
+ | student.GPA < self.Minimum_GPA && student.Status == school.Student.status_type.PROBATION
+ | ..............^
+ERROR: <input>:1:35: undeclared reference to 'student' (in container '')
+ | student.GPA < self.Minimum_GPA && student.Status == school.Student.status_type.PROBATION
+ | ..................................^
+exit status 1
+FAIL	github.com/ezachrisen/indigo/cel	5.229s
+FAIL

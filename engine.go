@@ -1,18 +1,20 @@
 package indigo
 
 import (
-	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 )
 
+// Engine is the Indigo rules engine.
+// It maintains a list of rules and evaluates them against
+// data, producing results.
 type Engine struct {
-	// The rules map holds the rules passed by the user of the engine
-	rules map[string]*Rule
+	// The root rule holds all rules passed by the user of the engine
+	// It is initiated with the default evaluation options
+	root *Rule
 
-	// Mutex for the rules map
+	// Mutex for the root rule
 	mu sync.RWMutex
 
 	// The Evaluator that will be used to evaluate rules in this engine
@@ -22,13 +24,16 @@ type Engine struct {
 	opts EngineOptions
 }
 
-var ErrRuleNotFound = errors.New("rule not found")
-
 // Initialize a new engine
 func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
+	root := NewRule("/")
+	root.EvalOpts = []EvalOption{MaxDepth(defaultDepth),
+		ReturnFail(true),
+		ReturnPass(true)}
+
 	engine := Engine{
 		evaluator: evaluator,
-		rules:     make(map[string]*Rule),
+		root:      root,
 	}
 	applyEngineOptions(&engine.opts, opts...)
 	return &engine
@@ -36,286 +41,145 @@ func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
 
 // AddRule compiles the rule and adds it to the engine, ready to be evaluated.
 // If a rule does not have a schema, it inherits its parent's schema.
-func (e *Engine) AddRule(rules ...*Rule) error {
+// If a rules exists, an error is returned to make certain the user's intent.
+// Use ReplaceRule to replace an existing rule.
+func (e *Engine) AddRule(path string, r *Rule) error {
 
-	o := EvalOptions{
-		MaxDepth:   defaultDepth,
-		ReturnFail: true,
-		ReturnPass: true,
+	if r == nil {
+		return fmt.Errorf("rule required")
 	}
 
-	for i := range rules {
-		r := rules[i]
-		err := e.compileRule(r, nil, o)
-
-		if err != nil {
-			return err
-		}
-
-		e.mu.Lock()
-		e.rules[r.ID] = r
-		e.mu.Unlock()
+	err := e.compileRule(r)
+	if err != nil {
+		return err
 	}
-	return nil
-}
-
-func (e *Engine) compileRule(r *Rule, s *Schema, o EvalOptions) error {
-
-	if len(strings.Trim(r.ID, " ")) == 0 {
-		return fmt.Errorf("Required rule ID for rule with expression %s", r.Expr)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, c, ok := e.root.FindRule(path)
+	if !ok || c == nil {
+		return fmt.Errorf("rule not found: '%s'", path)
 	}
-
-	if strings.ContainsAny(r.ID, bannedIDCharacters) {
-		return fmt.Errorf("Rule ID is invalid (%s),  cannot contain any of '%s'", r.ID, bannedIDCharacters)
-	}
-
-	applyEvalOptions(&o, r.EvalOpts...)
-
-	if len(r.Schema.Elements) == 0 && s != nil {
-		r.Schema = *s
-	}
-
-	err := e.evaluator.Compile(r, e.opts.CollectDiagnostics, e.opts.DryRun)
+	err = c.AddChild(r)
 	if err != nil {
 		return err
 	}
 
-	sortChildKeys(r, o)
-
-	for _, k := range r.sortedKeys {
-		child := r.Rules[k]
-		err := e.compileRule(child, &r.Schema, o)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
+	//	return e.addRule(c, r, "", add)
 }
 
-func sortChildKeys(r *Rule, o EvalOptions) {
-	r.sortedKeys = childKeys(r.Rules)
-	if o.SortFunc != nil {
-		sort.Slice(r.sortedKeys, o.SortFunc)
-	} else {
-		sort.Strings(r.sortedKeys)
-	}
-}
-
-func (e *Engine) DeleteRule(path string) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	p, c, ok := e.ruleWithPath(path)
-
-	if !ok || c == nil {
-		return fmt.Errorf("Rule with path '%s' not found", path)
-	}
-
-	if p == nil {
-		// The child rule has no parent
-		// This means that the child rule is a top-level
-		// rule in the engine's list of rules
-		if _, ok := e.rules[c.ID]; !ok {
-			return fmt.Errorf("rule '%s' not found in engine rule list", c.ID)
-		}
-		delete(e.rules, c.ID)
-	} else {
-		if _, ok := p.Rules[c.ID]; !ok {
-			return fmt.Errorf("rule '%s' not found in rule list of '%s'", c.ID, p.ID)
-		}
-
-		delete(p.Rules, c.ID)
-		// Re-sort the child keys
-		// We've removed the rule from the map, but the sorted child keys list
-		// still has the key.
-		var o EvalOptions
-		applyEvalOptions(&o, p.EvalOpts...)
-		sortChildKeys(p, o)
-	}
-
-	return nil
-}
-
+// ReplaceRule replaces the rule identified by path
+// If the rule is not found, an error is returned to make certain the user's intent.
 func (e *Engine) ReplaceRule(path string, n *Rule) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-
-	p, c, ok := e.ruleWithPath(path)
-
-	if !ok || c == nil {
-		return fmt.Errorf("Rule with path '%s' not found", path)
+	p, c, ok := e.root.FindRule(path)
+	if !ok {
+		return fmt.Errorf("rule not found: '%s'", path)
 	}
 
-	o := EvalOptions{
-		MaxDepth:   defaultDepth,
-		ReturnFail: true,
-		ReturnPass: true,
-	}
-
-	var s *Schema
-	if p != nil {
-		s = &p.Schema
-	}
-
-	if c != nil {
-		s = &c.Schema
-	}
-
-	err := e.compileRule(n, s, o)
+	err := p.ReplaceChild(c.ID, n)
 	if err != nil {
 		return err
 	}
-
-	if p == nil {
-		// The child rule has no parent
-		// This means that the child rule is a top-level
-		// rule in the engine's list of rules
-		e.rules[c.ID] = n
-	} else {
-		p.Rules[c.ID] = n
-	}
-
-	return nil
-
-}
-
-// childKeys extracts the keys from a map of rules
-// The resulting slice of keys is used to sort rules
-// when rules are added to the engine
-func childKeys(r map[string]*Rule) []string {
-	keys := make([]string, 0, len(r))
-	for k := range r {
-		keys = append(keys, k)
-	}
-
-	return keys
-}
-
-// Find a rule with the given ID
-// Returns a copy of the rule
-func (e *Engine) Rule(id string) (*Rule, bool) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	r, ok := e.rules[id]
-	if !ok {
-		return nil, false
-	}
-
-	return copyRule(r), true
-}
-
-// Find a rule with the given path
-// Returns
-//  - The parent rule (parent)
-//  - The rule itself (child)
-//  - True/false if successful
-//
-// A nil parent rule means that the rule we've found is a top-level
-// rule in the engine.
-//
-// The rule path is the concatenation of the
-// rule IDs in a hierarchy, separated by /
-// For example, given this hierarchy of rule IDs:
-//  rule1
-//    b
-//    c
-//      c1
-//      c2
-//
-// c1 can be identified with the path
-// rule1/c/c1
-// In this case,
-//   - Parent = c
-//   - Child = c1
-// CAUTION: Returns pointers to the rules
-func (e *Engine) RuleWithPath(path string) (*Rule, *Rule, bool) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return e.ruleWithPath(path)
-}
-
-// ruleParent identifies the parent of the rule given in the path string.
-// Sample path: rule1/b/b-1
-// Will return rule b
-func (e *Engine) ruleParent(parent *Rule, path string) *Rule {
-	// if len(strings.Trim(path, " ")) == 0 {
-	// 	return nil
-	// }
-
-	elems := strings.Split(path, "/")
-	fmt.Println(elems)
-
-	if len(elems) == 1 && parent != nil {
-		if p, ok := parent.Rules[elems[0]]; ok {
-			return p
-		}
-		return nil
-	}
-
-	// p, _, ok := p.FindChild(strings.Join(elems[1:len(elems)], "/"))
-	// if !ok {
-	// 	return p
-	// }
 	return nil
 }
 
-// ruleWithPath is an unexported version of ruleWithPath
-// Unlike the exported version, this does NOT lock the map.
-// It is intended to be called by other exported engine functions
-// and they are responsible for locking the map.
-func (e *Engine) ruleWithPath(path string) (*Rule, *Rule, bool) {
-	if len(strings.Trim(path, " ")) == 0 {
-		return nil, nil, false
-	}
-
-	elems := strings.Split(path, "/")
-	p, ok := e.rules[elems[0]]
-	if !ok {
-		return nil, nil, false
-	}
-
-	if len(elems) == 1 {
-		return nil, p, true
-	}
-
-	p, c, ok := p.FindChild(strings.Join(elems[1:len(elems)], "/"))
-	if !ok {
-		return p, nil, false
-	}
-	return p, c, true
+func (e *Engine) DeleteRule(path string) error {
+	return e.deleteRule(e.root, path)
 }
 
-// Rules provides a copy of the engine's rules.
-// If the engine contains a lot of rules, this is an expensive
-// operation.
-func (e *Engine) Rules() map[string]*Rule {
+// Find a rule with the given path.
+// Returns a copy of the rule, or an empty rule if none is found.
+func (e *Engine) Rule(path string) (*Rule, bool) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return copyRules(e.rules)
+	_, c, ok := e.root.FindRule(path)
+	if !ok {
+		fmt.Println("returning balnk 1")
+		return NewRule(""), false
+	}
+
+	if c == nil {
+		fmt.Println("returing balnk 2")
+		return NewRule(""), false
+	}
+
+	return c.Copy(), true
 }
 
-func copySortedKeys(a []string) []string {
-	b := make([]string, len(a))
-	for _, s := range a {
-		b = append(b, s)
-	}
-	return b
-}
-
-func copyEvalOpts(a []EvalOption) []EvalOption {
-	b := make([]EvalOption, len(a))
-	for _, o := range a {
-		b = append(b, o)
-	}
-	return b
+func (e *Engine) AllParents(id string) []*Rule {
+	return e.root.FindRuleParents(id)
 }
 
 // RuleCount is the number of rules in the engine.
 func (e *Engine) RuleCount() int {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return len(e.rules)
+	return e.root.CountRules()
+}
+
+// --------------------------------------------------
+// Unexported functions
+
+func (e *Engine) deleteRule(root *Rule, path string) error {
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	p, c, _ := root.FindRule(path)
+	if p == nil {
+		return fmt.Errorf("Rule with path '%s' not found", path)
+	}
+
+	err := p.DeleteChild(c)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *Engine) compileRule(r *Rule) error {
+
+	if len(strings.Trim(r.ID, " ")) == 0 {
+		return fmt.Errorf("missing rule ID (expr '%s')", r.Expr)
+	}
+
+	if strings.ContainsAny(r.ID, bannedIDCharacters) {
+		return fmt.Errorf("invalid rule ID (%s), cannot contain any of '%s'", r.ID, bannedIDCharacters)
+	}
+
+	var o EvalOptions
+
+	// TODO: Should we inherit the parent rule's options?
+	// Previous implementation did
+	// applyEvalOptions(&o, p.EvalOpts...)
+	applyEvalOptions(&o, r.EvalOpts...)
+
+	// TODO: consider inherting schemas again
+	// if len(r.Schema.Elements) == 0 {
+	// 	r.Schema = p.Schema
+	// }
+
+	// We make sure that the child keys are sorted per the rule's options
+	// The evaluator's compiler may rely on the rule's sort order.
+	r.SortChildKeys()
+
+	err := e.evaluator.Compile(r, e.opts.CollectDiagnostics, e.opts.DryRun)
+	if err != nil {
+		return err
+	}
+
+	for _, k := range r.sortedKeys {
+		child := r.Rules[k]
+		err := e.compileRule(child)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Evaluate the rule against the input data.
@@ -346,9 +210,9 @@ func (e *Engine) Evaluate(data map[string]interface{}, id string, opts ...EvalOp
 		return nil, fmt.Errorf("option set to return diagnostic, but engine does not have CollectDiagnostics option set")
 	}
 
-	rule, ok := e.rules[id]
+	rule, ok := e.root.Rules[id]
 	if !ok || rule == nil {
-		return nil, fmt.Errorf("%w: %s", ErrRuleNotFound, id)
+		return nil, fmt.Errorf("rule not found: '%s'", id)
 	}
 
 	return e.eval(data, rule, "", 0, o)
@@ -403,7 +267,7 @@ func DryRun(b bool) EngineOption {
 // Recursively evaluate the rule and its children
 func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, n int, opt EvalOptions) (*Result, error) {
 	if rule == nil {
-		return nil, fmt.Errorf("rule not found in parent '%s'", parentID)
+		return nil, fmt.Errorf("eval: rule is null, not found in parent '%s'", parentID)
 	}
 
 	if n > opt.MaxDepth {
@@ -429,7 +293,7 @@ func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, 
 		delete(data, selfKey)
 	}
 
-	id := makeChildRuleID(parentID, rule.ID)
+	//	id := makeChildRuleID(parentID, rule.ID)
 
 	value, diagnostics, err := e.evaluator.Eval(data, rule, opt)
 	pr.RulesEvaluated++
@@ -457,8 +321,11 @@ func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, 
 
 	// Evaluate child rules
 	for _, k := range rule.sortedKeys {
-		c := rule.Rules[k]
-		res, err := e.eval(data, c, id, n+1, opt)
+		c, ok := rule.Rules[k]
+		if !ok {
+			return nil, fmt.Errorf("Evaluate: rule with id '%s' not found in parent '%s'", k, rule.ID)
+		}
+		res, err := e.eval(data, c, rule.ID, n+1, opt)
 		if err != nil {
 			return nil, err
 		}
@@ -481,19 +348,19 @@ func (e *Engine) eval(data map[string]interface{}, rule *Rule, parentID string, 
 	return &pr, nil
 }
 
-func makeChildRuleID(parentID string, childID string) string {
-	if parentID == "" {
-		return childID
-	}
+// func makeChildRuleID(parentID string, childID string) string {
+// 	if parentID == "" {
+// 		return childID
+// 	}
 
-	return parentID + idPathSeparator + childID
-}
+// 	return parentID + idPathSeparator + childID
+// }
 
-func originalRuleID(id string) string {
-	if id == "" {
-		return ""
-	}
+// func originalRuleID(id string) string {
+// 	if id == "" {
+// 		return ""
+// 	}
 
-	parts := strings.Split(id, idPathSeparator)
-	return parts[len(parts)-1]
-}
+// 	parts := strings.Split(id, idPathSeparator)
+// 	return parts[len(parts)-1]
+// }

@@ -32,7 +32,7 @@ func ExampleHelloWorld() {
 
 	// Step 4: Add the rule to the engine. The rule
 	// is compiled and checked at this time.
-	err := engine.AddRule(&rule)
+	err := engine.AddRule("/", &rule)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -69,7 +69,7 @@ func ExampleTimestampComparison() {
 
 	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
-	err := engine.AddRule(&rule)
+	err := engine.AddRule("/", &rule)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
@@ -106,7 +106,7 @@ func ExampleExists() {
 
 	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
-	err := engine.AddRule(&rule)
+	err := engine.AddRule("/", &rule)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
@@ -150,7 +150,7 @@ func ExampleExistsNested() {
 
 	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
-	err := engine.AddRule(&rule)
+	err := engine.AddRule("/", &rule)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
@@ -200,7 +200,7 @@ func ExampleProtoConstruction() {
 
 	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
-	err := engine.AddRule(&rule)
+	err := engine.AddRule("/", &rule)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
@@ -264,7 +264,7 @@ func ExampleConditionalProtoConstruction() {
 
 	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
-	err := engine.AddRule(&rule)
+	err := engine.AddRule("/", &rule)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return

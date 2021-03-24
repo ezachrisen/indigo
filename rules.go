@@ -9,139 +9,9 @@ package indigo
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
-
-const (
-	// Default recursive depth for evaluate.
-	// Override with options.
-	defaultDepth = 100
-
-	// If the rule includes a Self object, it will be made available in the input
-	// data with this key name.
-	selfKey = "self"
-
-	// Path separator character when creating child rule IDs for use by Evaluator
-	idPathSeparator = "/"
-
-	// These characters are not allowed in rule IDs
-	bannedIDCharacters = "/"
-)
-
-// Evaluator is the interface implemented by types that can evaluate expressions defined in
-// the rules. The interface includes a Compile step that the Engine calls before evaluation.
-// This gives the Evaluator the option of pre-processing the rule for efficiency. At a minimum
-// the Compile step should give the user feedback on whether the provided rule conforms to its
-// specificiations.
-type Evaluator interface {
-	// Compile a rule, checking for correctness and preparing the rule to be
-	// evaluated later.
-	Compile(rule *Rule, collectDiagnostics bool, dryRun bool) error
-
-	// Eval tests the rule expression  against the data.
-	// The result is one of Indigo's types.
-	// resultType: the type of result value the rule expects
-	Eval(data map[string]interface{}, rule *Rule, opt EvalOptions) (Value, string, error)
-}
-
-// EvalOptions specify how the Engine and the Evaluator process rules.
-// Pass these to Evaluate to change the behavior of the engine, or
-// set options on a rule.
-// If specified at the rule level, the option applies to the rule and its child rules.
-type EvalOption func(f *EvalOptions)
-
-// Determines how far to recurse through child rules.
-// The default is rules.defaultDepth.
-func MaxDepth(d int) EvalOption {
-	return func(f *EvalOptions) {
-		f.MaxDepth = d
-	}
-}
-
-// Does not evaluate child rules if the parent's expression is false.
-// Use case: apply a "global" rule to all the child rules.
-func StopIfParentNegative(b bool) EvalOption {
-	return func(f *EvalOptions) {
-		f.StopIfParentNegative = b
-	}
-}
-
-// Stops the evaluation of child rules when the first positive child is encountered.
-// Results will be partial. Only the child rules that were evaluated will be in the results.
-// By default rules are evaluated in alphabetical order.
-// Use case: role-based access; allow action if any child rule (permission rule) allows it.
-func StopFirstPositiveChild(b bool) EvalOption {
-	return func(f *EvalOptions) {
-		f.StopFirstPositiveChild = b
-	}
-}
-
-// Stops the evaluation of child rules when the first negative child is encountered.
-// Results will be partial. Only the child rules that were evaluated will be in the results.
-// By default rules are evaluated in alphabetical order.
-// Use case: you require ALL child rules to be satisifed.
-func StopFirstNegativeChild(b bool) EvalOption {
-	return func(f *EvalOptions) {
-		f.StopFirstNegativeChild = b
-	}
-}
-
-// Return rules that passed.
-// By default this is on.
-func ReturnPass(b bool) EvalOption {
-	return func(f *EvalOptions) {
-		f.ReturnPass = b
-	}
-}
-
-// Return rules that did not pass.
-// By default this is on.
-func ReturnFail(b bool) EvalOption {
-	return func(f *EvalOptions) {
-		f.ReturnFail = b
-	}
-}
-
-// Include diagnostic information with the results.
-// To enable this option, you must first turn on diagnostic
-// collection at the engine level with the CollectDiagnostics EngineOption.
-// Default: off
-func ReturnDiagnostics(b bool) EvalOption {
-	return func(f *EvalOptions) {
-		f.ReturnDiagnostics = b
-	}
-}
-
-// Specify the function used to sort the child rules before evaluation.
-// Useful in scenarios where you are asking the engine to stop evaluating
-// after either the first negative or first positive child.
-// Default: sort by the key name
-func SortFunc(s func(i, j int) bool) EvalOption {
-	return func(f *EvalOptions) {
-		f.SortFunc = s
-	}
-}
-
-func applyEvalOptions(o *EvalOptions, opts ...EvalOption) {
-	for _, opt := range opts {
-		opt(o)
-	}
-}
-
-// EvalOptions holds the result of applying the functional options
-// to a rule. This struct is passed to the Evaluator's Eval function.
-// See the corresponding functions for documentation.
-type EvalOptions struct {
-	MaxDepth               int
-	StopIfParentNegative   bool // TODO: add StopIfParentPositive
-	StopFirstPositiveChild bool
-	StopFirstNegativeChild bool
-	ReturnPass             bool
-	ReturnFail             bool
-	ReturnDiagnostics      bool
-	DryRun                 bool
-	SortFunc               func(i, j int) bool
-}
 
 // A Rule defines an expression that can be evaluated by the
 // Engine. The language used in the expression is dependent
@@ -226,8 +96,184 @@ type Rule struct {
 	EvalOpts []EvalOption
 }
 
-func (r *Rule) AddChild(c *Rule) {
+const (
+	// Default recursive depth for evaluate.
+	// Override with options.
+	defaultDepth = 100
+
+	// If the rule includes a Self object, it will be made available in the input
+	// data with this key name.
+	selfKey = "self"
+
+	// Path separator character when creating child rule IDs for use by Evaluator
+	idPathSeparator = "/"
+
+	// These characters are not allowed in rule IDs
+	bannedIDCharacters = "/ "
+)
+
+func NewRule(id string) *Rule {
+	return &Rule{
+		ID:    id,
+		Rules: map[string]*Rule{},
+	}
+}
+
+func (r *Rule) AddChild(c *Rule) error {
+	if c == nil {
+		return fmt.Errorf("attempt to add nil rule")
+	}
+
+	if _, ok := r.Rules[c.ID]; ok {
+		return fmt.Errorf("attempt to overwrite rule '%s' in parent rule '%s'", c.ID, r.ID)
+	}
 	r.Rules[c.ID] = c
+	r.SortChildKeys()
+	return nil
+}
+
+func (r *Rule) DeleteChild(c *Rule) error {
+
+	if c == nil {
+		return fmt.Errorf("attempt to delete nil rule")
+	}
+
+	if _, ok := r.Rules[c.ID]; !ok {
+		return fmt.Errorf("attempt to delete rule '%s': does not exist", c.ID)
+	}
+	delete(r.Rules, c.ID)
+	r.SortChildKeys()
+	return nil
+}
+
+func (r *Rule) ReplaceChild(id string, c *Rule) error {
+	if c == nil {
+		return fmt.Errorf("attempt to replace rule with nil rule")
+	}
+
+	if _, ok := r.Rules[id]; !ok {
+		return fmt.Errorf("attempt to replace rule '%s': does not exist", id)
+	}
+
+	delete(r.Rules, id)
+	r.Rules[c.ID] = c
+	r.SortChildKeys()
+	return nil
+}
+
+func (r *Rule) Child(id string) (*Rule, bool) {
+
+	c, ok := r.Rules[id]
+	return c, ok
+}
+
+func (r *Rule) FindRuleParents(id string) []*Rule {
+	rs := []*Rule{}
+
+	_, ok := r.Rules[id]
+	if ok {
+		rs = append(rs, r)
+	}
+
+	for k := range r.Rules {
+		crs := r.Rules[k].FindRuleParents(id)
+		rs = append(rs, crs...)
+	}
+	return rs
+}
+
+func (parent *Rule) FindRule(path string) (*Rule, *Rule, bool) {
+
+	if path == "" {
+		return nil, nil, false
+	}
+
+	// Special case: / denotes the root rule in the engine
+	if path == "/" {
+		return parent, parent, true
+	}
+
+	// Strip the first /
+	if path[0] == '/' {
+		path = path[1:]
+	}
+
+	//	fmt.Println("PATH=", path)
+	elems := strings.Split(path, "/")
+	//fmt.Println("ELEMS=", elems)
+	switch len(elems) {
+	case 1:
+		//fmt.Println("1")
+		// We're at the leaf element, "b-1" in the
+		// sample path rule1/b/b-1
+		if c, ok := parent.Rules[elems[0]]; ok {
+			return parent, c, true
+		}
+		return nil, nil, false
+	default:
+		//fmt.Println("def:", parent.ID, ">", elems[0])
+		// There are more than 1 elements left
+		// we are either at rule1 or b in the sample path
+		// rule1/b/b1
+		// Assuming we're at rule1, c will be = b
+		// We recurse further, with b the new parent
+		if c, ok := parent.Rules[elems[0]]; ok {
+			//fmt.Println("found c in ", parent.ID)
+			return c.FindRule(strings.Join(elems[1:], "/"))
+		} else {
+			return nil, nil, false
+		}
+	}
+}
+
+func (r *Rule) CountRules() int {
+	i := 1
+
+	for k := range r.Rules {
+		i += r.Rules[k].CountRules()
+	}
+	return i
+}
+
+func (r *Rule) SortChildKeys() {
+
+	var o EvalOptions
+	applyEvalOptions(&o, r.EvalOpts...)
+
+	r.sortedKeys = r.childKeys()
+	if o.SortFunc != nil {
+		sort.Slice(r.sortedKeys, o.SortFunc)
+	} else {
+		sort.Strings(r.sortedKeys)
+	}
+}
+
+func (r *Rule) Copy() *Rule {
+
+	nr := Rule{
+		ID:         r.ID,
+		Expr:       r.ID,
+		ResultType: r.ResultType,
+		Schema:     r.Schema,
+		Self:       r.Self,
+		Rules:      r.copyRules(),
+		sortedKeys: r.copySortedKeys(),
+		Meta:       r.Meta,
+		EvalOpts:   r.copyEvalOpts(),
+	}
+
+	return &nr
+}
+
+// childKeys extracts the keys from a map of rules
+// The resulting slice of keys is used to sort rules
+// when rules are added to the engine
+func (r *Rule) childKeys() []string {
+	keys := make([]string, 0, len(r.Rules))
+	for k := range r.Rules {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // Find a rule with the given path
@@ -244,112 +290,67 @@ func (r *Rule) AddChild(c *Rule) {
 // rule1/c/c1
 // Returns a copy of the rule
 
-func (r *Rule) FindChild(path string) (*Rule, *Rule, bool) {
+// func (r *Rule) FindChild(path string) (*Rule, *Rule, bool) {
 
-	elems := strings.Split(path, "/")
-	c, ok := r.Rules[elems[0]]
-	if !ok {
-		return nil, nil, false
-	}
+// 	elems := strings.Split(path, "/")
+// 	c, ok := r.Rules[elems[0]]
+// 	if !ok {
+// 		return nil, nil, false
+// 	}
 
-	// If we're down to the last path element
-	if len(elems) == 1 {
-		return r, c, true
-	}
+// 	// If we're down to the last path element
+// 	if len(elems) == 1 {
+// 		return r, c, true
+// 	}
 
-	return c.FindChild(strings.Join(elems[1:len(elems)], "/"))
-}
+// 	return c.FindChild(strings.Join(elems[1:len(elems)], "/"))
+// }
 
-func copyRules(m map[string]*Rule) map[string]*Rule {
-
-	mn := make(map[string]*Rule, len(m))
-
-	for k := range m {
-		cc := copyRule(m[k])
+func (r *Rule) copyRules() map[string]*Rule {
+	mn := make(map[string]*Rule, len(r.Rules))
+	for k := range r.Rules {
+		cc := r.Rules[k].Copy()
 		mn[cc.ID] = cc
 	}
 	return mn
 }
 
-func copyRule(r *Rule) *Rule {
-
-	nr := Rule{
-		ID:         r.ID,
-		Expr:       r.ID,
-		ResultType: r.ResultType,
-		Schema:     r.Schema,
-		Self:       r.Self,
-		Rules:      copyRules(r.Rules),
-		sortedKeys: copySortedKeys(r.sortedKeys),
-		Meta:       r.Meta,
-		EvalOpts:   copyEvalOpts(r.EvalOpts),
+func (r *Rule) copySortedKeys() []string {
+	b := make([]string, 0, len(r.sortedKeys))
+	for _, s := range r.sortedKeys {
+		b = append(b, s)
 	}
-
-	return &nr
+	return b
 }
 
-// Doer performs an action as a result of a rule qualifying.
-// Unused at this time
-type Doer interface {
-	Do(map[string]interface{}) error
+func (r *Rule) copyEvalOpts() []EvalOption {
+	b := make([]EvalOption, len(r.EvalOpts))
+	for _, o := range r.EvalOpts {
+		b = append(b, o)
+	}
+	return b
 }
 
-// Result of evaluating a rule.
-type Result struct {
-	// The Rule that was evaluated
-	RuleID string
+func (r *Rule) DescribeStructure(n ...int) string {
 
-	// Reference to a value set when the rule was added to the engine.
-	Meta interface{}
-
-	// Whether the rule yielded a TRUE logical value.
-	// The default is FALSE
-	// This is the result of evaluating THIS rule only.
-	// The result will not be affected by the results of the child rules.
-	// If no rule expression is supplied for a rule, the result will be TRUE.
-	Pass bool
-
-	// The result of the evaluation. Boolean for logical expressions.
-	// Calculations or string manipulations will return the appropriate type.
-	Value interface{}
-
-	// Results of evaluating the child rules.
-	Results map[string]*Result
-
-	// Unused at this time
-	Action      Doer
-	AsyncAction Doer
-
-	// Diagnostic data
-	Diagnostics    string
-	RulesEvaluated int
-}
-
-type Value struct {
-	Val interface{}
-	Typ Type
-}
-
-// SummarizeResults produces a list of rules (including child rules) executed and the result of the evaluation.
-// n[0] is the indent level, passed as a variadic solely to allow callers to omit it
-func SummarizeResults(r *Result, n ...int) string {
 	s := strings.Builder{}
-
 	if len(n) == 0 {
-		s.WriteString("\n---------- Result Diagnostic --------------------------\n")
-		s.WriteString("                                         Pass Chil-\n")
-		s.WriteString("Rule                                     Fail dren Value\n")
-		s.WriteString("--------------------------------------------------------\n")
 		n = append(n, 0)
 	}
-	indent := strings.Repeat(" ", (n[0]))
-	boolString := "PASS"
-	if !r.Pass {
-		boolString = "FAIL"
+
+	s.WriteString(strings.Repeat(" ", n[0])) // indent
+	s.WriteString(r.ID)
+	s.WriteString("\n")
+	if len(r.sortedKeys) != len(r.Rules) {
+		s.WriteString(fmt.Sprintf("ERROR: in rule '%s', length of sortedKeys (%d) != length of rules (%d)\n", r.ID, len(r.sortedKeys), len(r.Rules)))
+		s.WriteString(fmt.Sprintf("sortedKeys = %s\n", r.sortedKeys))
 	}
-	s.WriteString(fmt.Sprintf("%-40s %-4s %4d %v\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString, len(r.Results), r.Value))
-	for _, c := range r.Results {
-		s.WriteString(SummarizeResults(c, n[0]+1))
+	for _, k := range r.sortedKeys {
+		if c, ok := r.Rules[k]; ok {
+			s.WriteString(c.DescribeStructure(n[0] + 1))
+		} else {
+			s.WriteString("ERROR: missing rule '" + k + "'\n")
+		}
 	}
 	return s.String()
 }
