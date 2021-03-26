@@ -1,7 +1,10 @@
-// package cel provides an implementation of the rules/Engine interface backed by Google's cel-go rules engine
+// Package cel provides an implementation of the indigo.Engine interface backed by Google's cel-go rules engine.
+//
 // See https://github.com/google/cel-go and https://opensource.google/projects/cel for more information
-// about CEL. The rules you write must conform to the CEL spec: https://github.com/google/cel-spec.
-
+// about CEL.
+//
+// The rule expressions you write must conform to the CEL spec: https://github.com/google/cel-spec.
+//
 package cel
 
 import (
@@ -20,8 +23,7 @@ import (
 
 // CELEvaluator implements the indigo.Evaluator interface.
 // It uses the CEL-Go package to compile and evaluate rules.
-type CELEvaluator struct {
-}
+type CELEvaluator struct{}
 
 // CELProgram holds a compiled CEL Program and
 // (potentially) an AST. The AST is used if we're collecting diagnostics
@@ -38,13 +40,13 @@ func NewEvaluator() *CELEvaluator {
 	return &e
 }
 
-func (e *CELEvaluator) PrintInternalStructure() {
-
-	// for k, _ := range e.programs {
-	// 	fmt.Println("Rule id", k)
-	// }
-}
-
+// Compile checks a rule, prepares a compiled CELProgram, and stores the program
+// in rule.Program. CELProgram contains the compiled program used to evaluate the rules,
+// and if we're collecting diagnostics, CELProgram also contains the CEL AST to provide
+// type and symbol information in diagnostics.
+//
+// Any errors in compilation are returned, and the rule.Program is set to nil.
+// If dryRun is true, this does nothing.
 func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun bool) error {
 
 	if dryRun {
@@ -52,6 +54,7 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 	}
 
 	prog := CELProgram{}
+	r.Program = nil // ensure the previous program is cleared
 
 	// There's nothing for us to do
 	if r.Expr == "" {
@@ -114,6 +117,8 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 	return nil
 }
 
+// Evaluate a rule against the input data.
+// Called by indigo.Engine.Evaluate for the rule and its children.
 func (e *CELEvaluator) Eval(data map[string]interface{}, r *indigo.Rule, opt indigo.EvalOptions) (indigo.Value, string, error) {
 
 	program, ok := r.Program.(CELProgram)

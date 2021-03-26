@@ -3,7 +3,6 @@
 #  - normal tests
 #  - benchmarks
 #  - normal tests with the -race detector turned on
-echo "----- Test run takes 3-6 minutes -----"
 echo "----- Invalidating test cache"
 go clean -testcache ./...
 
@@ -23,4 +22,4 @@ else
 fi
 
 echo "----- Running race condition tests"
-go test -run=Concurr -v -race ./...
+go test -v -race ./...

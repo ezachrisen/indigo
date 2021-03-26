@@ -4,19 +4,13 @@ goos: darwin
 goarch: amd64
 pkg: github.com/ezachrisen/indigo/cel
 cpu: VirtualApple @ 2.50GHz
-BenchmarkSimpleRule-8                  	 1859372	       629.1 ns/op
-BenchmarkSimpleRuleWithDiagnostics-8   	   82603	     14016 ns/op
-BenchmarkRuleWithArray-8               	 1863195	       639.2 ns/op
-2021/03/21 00:19:48 Error adding ruleset: checking rule at_risk:
-ERROR: <input>:1:1: undeclared reference to 'student' (in container '')
- | student.GPA < self.Minimum_GPA && student.Status == school.Student.status_type.PROBATION
- | ^
-ERROR: <input>:1:15: undeclared reference to 'self' (in container '')
- | student.GPA < self.Minimum_GPA && student.Status == school.Student.status_type.PROBATION
- | ..............^
-ERROR: <input>:1:35: undeclared reference to 'student' (in container '')
- | student.GPA < self.Minimum_GPA && student.Status == school.Student.status_type.PROBATION
- | ..................................^
-exit status 1
-FAIL	github.com/ezachrisen/indigo/cel	5.229s
-FAIL
+BenchmarkSimpleRule-8                  	 1926333	       624.8 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8   	   81658	     13798 ns/op
+BenchmarkRuleWithArray-8               	 1902738	       627.0 ns/op
+BenchmarkProtoWithSelfX-8              	 1000000	      1085 ns/op
+BenchmarkProtoWithoutSelf-8            	 1306828	       917.8 ns/op
+BenchmarkProtoCreation-8               	  783994	      1519 ns/op
+BenchmarkEval2000Rules-8               	     568	   2169091 ns/op
+BenchmarkAddRule-8                     	     134	   9106406 ns/op
+PASS
+ok  	github.com/ezachrisen/indigo/cel	30.332s

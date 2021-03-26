@@ -10,7 +10,7 @@ type Result struct {
 	// The Rule that was evaluated
 	RuleID string
 
-	// Reference to a value set when the rule was added to the engine.
+	// Reference to the Rule.Meta value set when the rule was evaluated.
 	Meta interface{}
 
 	// Whether the rule yielded a TRUE logical value.
@@ -28,10 +28,15 @@ type Result struct {
 	Results map[string]*Result
 
 	// Diagnostic data
-	Diagnostics    string
+	Diagnostics string
+
+	// A count of the number of rules evaluated, including the parent rule
+	// and any children
 	RulesEvaluated int
 }
 
+// The value returned in the Result.
+// Inspect the Typ to determine what it is.
 type Value struct {
 	Val interface{}
 	Typ Type

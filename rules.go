@@ -1,10 +1,3 @@
-// Package Indigo provides a rules engine process that uses an instance of the
-// Evaluator interface to perform evaluation of rules.
-//
-// Indigo itself does not specify a language for rules, relying instead on the Evaluator's
-// rule language.
-//
-//
 package indigo
 
 import (
@@ -24,13 +17,15 @@ import (
 //
 // Example Rule Structures
 //
-//   Rule with expression, no child rules
-//   - Parent rule expression is evaluated and result returned
+// A hierchy of parent/child rules, combined with evaluation options
+// give many different ways of using the rules engine.
+//  Rule with expression, no child rules:
+//   Parent rule expression is evaluated and result returned.
 //
-//  Rule with expression and child rules
-//  No options specified
-//  - Parent rule xpression is evaluated, and so are all the child rules.
-//  - All children and their evaluation results are returned
+//  Rule with expression and child rules:
+//   No options specified
+//   - Parent rule xpression is evaluated, and so are all the child rules.
+//   - All children and their evaluation results are returned
 //
 //  Rule with expression and child rules
 //  Option set: StopIfParentNegative
@@ -39,9 +34,10 @@ import (
 //    the children are NOT evaluated
 //  - If the parent rule returns TRUE, or if it's not a
 //    boolean, all the children and their resulsts are returned
+//
 type Rule struct {
 	// A rule identifer. (required)
-	// No two root rules can have the same identifier.
+	// The identifier is used identify results of evaluation
 	ID string
 
 	// The expression to evaluate (optional)
@@ -54,8 +50,11 @@ type Rule struct {
 	Expr string
 
 	// Program is a compiled representation of the expression.
-	// Evaluators may attach a compiled representation of the
-	// rule.
+	// Evaluators may attach a compiled representation of the rule
+	// during compilation. Depending on the Evaluator, you may serialize
+	// and store the Program between evaluations. This is useful if the time
+	// it takes to compile the rule set is so large that restoring a previously
+	// compiled version is significantly faster.
 	Program interface{}
 
 	// The output type of the expression. Compilers with the ability to check
@@ -74,7 +73,7 @@ type Rule struct {
 	// For example, in a rule determining if the temperature is in the specified range,
 	// set Self = Thermostat, where Thermostat holds the user's temperature preference.
 	// When evaluating the rules, the Thermostat object will be included in the data
-	// with the key rules.selfKey. Rules can then reference the user's temperaturE preference
+	// with the key selfKey (see constants). Rules can then reference the user's temperature preference
 	// in the rule expression. This allows rule inputs to be changed without recompiling
 	// the rule.
 	Self interface{}
@@ -88,6 +87,7 @@ type Rule struct {
 
 	// A reference to any object.
 	// Useful for external processes to attach an object to the rule.
+	// Not used by the rules engine, but returned to you via the Result.
 	Meta interface{}
 
 	// Set options for how the engine should evaluate this rule and the child
@@ -97,21 +97,12 @@ type Rule struct {
 }
 
 const (
-	// Default recursive depth for evaluate.
-	// Override with options.
-	defaultDepth = 100
-
 	// If the rule includes a Self object, it will be made available in the input
 	// data with this key name.
 	selfKey = "self"
-
-	// Path separator character when creating child rule IDs for use by Evaluator
-	idPathSeparator = "/"
-
-	// These characters are not allowed in rule IDs
-	bannedIDCharacters = "/ "
 )
 
+// NewRule initializes a rule with the given ID
 func NewRule(id string) *Rule {
 	return &Rule{
 		ID:    id,
@@ -119,128 +110,16 @@ func NewRule(id string) *Rule {
 	}
 }
 
-func (r *Rule) AddChild(c *Rule) error {
-	if c == nil {
-		return fmt.Errorf("attempt to add nil rule")
-	}
+// sortChildKeys sorts the IDs of the child rules according to the
+// SortFunc set in evaluation options. If none is set, the rules are
+// evaluated alphabetically.
+func (r *Rule) sortChildKeys(o EvalOptions) {
 
-	if _, ok := r.Rules[c.ID]; ok {
-		return fmt.Errorf("attempt to overwrite rule '%s' in parent rule '%s'", c.ID, r.ID)
-	}
-	r.Rules[c.ID] = c
-	r.SortChildKeys()
-	return nil
-}
-
-func (r *Rule) DeleteChild(c *Rule) error {
-
-	if c == nil {
-		return fmt.Errorf("attempt to delete nil rule")
-	}
-
-	if _, ok := r.Rules[c.ID]; !ok {
-		return fmt.Errorf("attempt to delete rule '%s': does not exist", c.ID)
-	}
-	delete(r.Rules, c.ID)
-	r.SortChildKeys()
-	return nil
-}
-
-func (r *Rule) ReplaceChild(id string, c *Rule) error {
-	if c == nil {
-		return fmt.Errorf("attempt to replace rule with nil rule")
-	}
-
-	if _, ok := r.Rules[id]; !ok {
-		return fmt.Errorf("attempt to replace rule '%s': does not exist", id)
-	}
-
-	delete(r.Rules, id)
-	r.Rules[c.ID] = c
-	r.SortChildKeys()
-	return nil
-}
-
-func (r *Rule) Child(id string) (*Rule, bool) {
-
-	c, ok := r.Rules[id]
-	return c, ok
-}
-
-func (r *Rule) FindRuleParents(id string) []*Rule {
-	rs := []*Rule{}
-
-	_, ok := r.Rules[id]
-	if ok {
-		rs = append(rs, r)
-	}
-
+	r.sortedKeys = make([]string, 0, len(r.Rules))
 	for k := range r.Rules {
-		crs := r.Rules[k].FindRuleParents(id)
-		rs = append(rs, crs...)
-	}
-	return rs
-}
-
-func (parent *Rule) FindRule(path string) (*Rule, *Rule, bool) {
-
-	if path == "" {
-		return nil, nil, false
+		r.sortedKeys = append(r.sortedKeys, k)
 	}
 
-	// Special case: / denotes the root rule in the engine
-	if path == "/" {
-		return parent, parent, true
-	}
-
-	// Strip the first /
-	if path[0] == '/' {
-		path = path[1:]
-	}
-
-	//	fmt.Println("PATH=", path)
-	elems := strings.Split(path, "/")
-	//fmt.Println("ELEMS=", elems)
-	switch len(elems) {
-	case 1:
-		//fmt.Println("1")
-		// We're at the leaf element, "b-1" in the
-		// sample path rule1/b/b-1
-		if c, ok := parent.Rules[elems[0]]; ok {
-			return parent, c, true
-		}
-		return nil, nil, false
-	default:
-		//fmt.Println("def:", parent.ID, ">", elems[0])
-		// There are more than 1 elements left
-		// we are either at rule1 or b in the sample path
-		// rule1/b/b1
-		// Assuming we're at rule1, c will be = b
-		// We recurse further, with b the new parent
-		if c, ok := parent.Rules[elems[0]]; ok {
-			//fmt.Println("found c in ", parent.ID)
-			return c.FindRule(strings.Join(elems[1:], "/"))
-		} else {
-			return nil, nil, false
-		}
-	}
-}
-
-func (r *Rule) CountRules() int {
-	i := 1
-
-	for k := range r.Rules {
-		i += r.Rules[k].CountRules()
-	}
-	return i
-}
-
-func (r *Rule) SortChildKeys() {
-
-	var o EvalOptions
-	applyEvalOptions(&o, r.EvalOpts...)
-
-	r.sortedKeys = r.childKeys()
 	if o.SortFunc != nil {
 		sort.Slice(r.sortedKeys, o.SortFunc)
 	} else {
@@ -248,33 +127,22 @@ func (r *Rule) SortChildKeys() {
 	}
 }
 
-func (r *Rule) Copy() *Rule {
+// func (r *Rule) Copy() *Rule {
 
-	nr := Rule{
-		ID:         r.ID,
-		Expr:       r.ID,
-		ResultType: r.ResultType,
-		Schema:     r.Schema,
-		Self:       r.Self,
-		Rules:      r.copyRules(),
-		sortedKeys: r.copySortedKeys(),
-		Meta:       r.Meta,
-		EvalOpts:   r.copyEvalOpts(),
-	}
+// 	nr := Rule{
+// 		ID:         r.ID,
+// 		Expr:       r.ID,
+// 		ResultType: r.ResultType,
+// 		Schema:     r.Schema,
+// 		Self:       r.Self,
+// 		Rules:      r.copyRules(),
+// 		sortedKeys: r.copySortedKeys(),
+// 		Meta:       r.Meta,
+// 		EvalOpts:   []EvalOption{},
+// 	}
 
-	return &nr
-}
-
-// childKeys extracts the keys from a map of rules
-// The resulting slice of keys is used to sort rules
-// when rules are added to the engine
-func (r *Rule) childKeys() []string {
-	keys := make([]string, 0, len(r.Rules))
-	for k := range r.Rules {
-		keys = append(keys, k)
-	}
-	return keys
-}
+// 	return &nr
+// }
 
 // Find a rule with the given path
 // The rule path is the concatenation of the
@@ -306,39 +174,34 @@ func (r *Rule) childKeys() []string {
 // 	return c.FindChild(strings.Join(elems[1:len(elems)], "/"))
 // }
 
-func (r *Rule) copyRules() map[string]*Rule {
-	mn := make(map[string]*Rule, len(r.Rules))
-	for k := range r.Rules {
-		cc := r.Rules[k].Copy()
-		mn[cc.ID] = cc
-	}
-	return mn
-}
+// func (r *Rule) copyRules() map[string]*Rule {
+// 	mn := make(map[string]*Rule, len(r.Rules))
+// 	for k := range r.Rules {
+// 		cc := r.Rules[k].Copy()
+// 		mn[cc.ID] = cc
+// 	}
+// 	return mn
+// }
 
-func (r *Rule) copySortedKeys() []string {
-	b := make([]string, 0, len(r.sortedKeys))
-	for _, s := range r.sortedKeys {
-		b = append(b, s)
-	}
-	return b
-}
+// func (r *Rule) copySortedKeys() []string {
+// 	b := make([]string, 0, len(r.sortedKeys))
+// 	for _, s := range r.sortedKeys {
+// 		b = append(b, s)
+// 	}
+// 	return b
+// }
 
-func (r *Rule) copyEvalOpts() []EvalOption {
-	b := make([]EvalOption, len(r.EvalOpts))
-	for _, o := range r.EvalOpts {
-		b = append(b, o)
-	}
-	return b
-}
-
+// DescribeStructure returns a list of all the rules in hierarchy, with
+// child rules sorted in evaluation order.
+// This is useful for visualizing a rule hierarchy.
 func (r *Rule) DescribeStructure(n ...int) string {
+	return r.describeStructure(0)
+}
 
+func (r *Rule) describeStructure(n int) string {
 	s := strings.Builder{}
-	if len(n) == 0 {
-		n = append(n, 0)
-	}
 
-	s.WriteString(strings.Repeat(" ", n[0])) // indent
+	s.WriteString(strings.Repeat(" ", n)) // indent
 	s.WriteString(r.ID)
 	s.WriteString("\n")
 	if len(r.sortedKeys) != len(r.Rules) {
@@ -347,7 +210,7 @@ func (r *Rule) DescribeStructure(n ...int) string {
 	}
 	for _, k := range r.sortedKeys {
 		if c, ok := r.Rules[k]; ok {
-			s.WriteString(c.DescribeStructure(n[0] + 1))
+			s.WriteString(c.DescribeStructure(n + 1))
 		} else {
 			s.WriteString("ERROR: missing rule '" + k + "'\n")
 		}
