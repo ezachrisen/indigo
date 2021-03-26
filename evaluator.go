@@ -22,14 +22,6 @@ type Evaluator interface {
 // If specified at the rule level, the option applies to the rule and its child rules.
 type EvalOption func(f *EvalOptions)
 
-// Determines how far to recurse through child rules.
-// The default is rules.defaultDepth.
-func MaxDepth(d int) EvalOption {
-	return func(f *EvalOptions) {
-		f.MaxDepth = d
-	}
-}
-
 // Does not evaluate child rules if the parent's expression is false.
 // Use case: apply a "global" rule to all the child rules.
 func StopIfParentNegative(b bool) EvalOption {
@@ -58,19 +50,19 @@ func StopFirstNegativeChild(b bool) EvalOption {
 	}
 }
 
-// Return rules that passed.
-// By default this is on.
-func ReturnPass(b bool) EvalOption {
+// Do not return rules that passed
+// Default: all rules are returned
+func DiscardPass(b bool) EvalOption {
 	return func(f *EvalOptions) {
-		f.ReturnPass = b
+		f.DiscardPass = b
 	}
 }
 
-// Return rules that did not pass.
-// By default this is on.
-func ReturnFail(b bool) EvalOption {
+// Do not return rules that fails
+// Default: all rules are returned
+func DiscardFail(b bool) EvalOption {
 	return func(f *EvalOptions) {
-		f.ReturnFail = b
+		f.DiscardFail = b
 	}
 }
 
@@ -103,13 +95,13 @@ func applyEvalOptions(o *EvalOptions, opts ...EvalOption) {
 // EvalOptions holds the result of applying the functional options
 // to a rule. This struct is passed to the Evaluator's Eval function.
 // See the corresponding functions for documentation.
+// By default all options are turned off.
 type EvalOptions struct {
-	MaxDepth               int
-	StopIfParentNegative   bool // TODO: add StopIfParentPositive
+	StopIfParentNegative   bool
 	StopFirstPositiveChild bool
 	StopFirstNegativeChild bool
-	ReturnPass             bool
-	ReturnFail             bool
+	DiscardPass            bool
+	DiscardFail            bool
 	ReturnDiagnostics      bool
 	DryRun                 bool
 	SortFunc               func(i, j int) bool
