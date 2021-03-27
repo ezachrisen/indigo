@@ -316,7 +316,7 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 	// fmt.Println(indigo.SummarizeResults(result))
 	is.Equal(result.RulesEvaluated, len(m.rulesTested))
 	is.True(reflect.DeepEqual(expectedOrder, m.rulesTested)) // not all rules were evaluated
-	is.True(match(result, expectedResults))
+	is.True(match(flattenResults(result), expectedResults))
 }
 
 // Test that a self reference is passed through compilation, evaluation
@@ -395,12 +395,12 @@ func TestEvaluationTraversalStopNegativeParent(t *testing.T) {
 	// fmt.Printf("expected     :%v\n", expectedOrder)
 	// fmt.Printf("m.rulesTested:%v\n", m.rulesTested)
 
-	// fmt.Printf(indigo.SummarizeResults(result))
+	fmt.Printf(indigo.SummarizeResults(result))
 	is.NoErr(err)
 	is.Equal(result.RulesEvaluated, len(m.rulesTested))
 	is.True(reflect.DeepEqual(expectedOrder, m.rulesTested)) // not all rules were evaluated
-	is.True(match(result, expectedResults))
-	fmt.Println(flattenResults(result))
+	is.True(match(flattenResults(result), expectedResults))
+
 }
 
 func flattenResults(result *indigo.Result) map[string]bool {
@@ -410,22 +410,30 @@ func flattenResults(result *indigo.Result) map[string]bool {
 	for _, r := range result.Results {
 		mc := flattenResults(r)
 		for k, mcc := range mc {
-			mc[k] = mcc
+			m[k] = mcc
 		}
 	}
 	return m
 }
 
-func match(result *indigo.Result, expected map[string]bool) bool {
+func match(result map[string]bool, expected map[string]bool) bool {
 
-	if expected[result.RuleID] != result.Pass {
-		fmt.Printf("RESULT MISMATCH: rule %s, expected %v, got %v\n", result.RuleID, expected[result.RuleID], result.Pass)
+	for k, v := range result {
+		ok, ev := expected[k]
+		if !ok {
+			fmt.Println("received result for rule ", k, "; no result was expected")
+			return false
+		}
 
-		return false
+		if v != ev {
+			fmt.Println("result mismatch: rule ", k, ", got ", v, ", expected ", ev)
+			return false
+		}
 	}
 
-	for _, r := range result.Results {
-		if match(r, expected) != true {
+	for k := range expected {
+		if ok, _ := result[k]; !ok {
+			fmt.Println("expected result for rule ", k, "; no result found")
 			return false
 		}
 	}
