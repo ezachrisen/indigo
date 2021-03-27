@@ -58,7 +58,7 @@ While there is a lot of power in expression evaluation, Indigo organizes rules i
 
 Check out the [use cases](UseCases.md) for examples of ways you can struture rules in Indigo.
 
-See the package documenntation:
+See the package documentation:
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/ezachrisen/indigo.svg)](https://pkg.go.dev/github.com/ezachrisen/indigo)
 
