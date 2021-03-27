@@ -30,8 +30,7 @@ func ExampleHelloWorld() {
 	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 
-	// Step 4: Add the rule to the engine. The rule
-	// is compiled and checked at this time.
+	// Step 4: Compile the rule
 	err := engine.Compile(&rule)
 	if err != nil {
 		fmt.Println(err)

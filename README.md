@@ -12,6 +12,7 @@ Indigo supports the CEL language as an evaluation back-end. See https://github.c
 The example ExampleHelloWorld shows basic usage of the engine. 
 
 ``` go
+
 func ExampleHelloWorld() {
 
 	// Step 1: Create a schema
@@ -33,9 +34,8 @@ func ExampleHelloWorld() {
 	evaluator := cel.NewEvaluator()
 	engine := indigo.NewEngine(evaluator)
 
-	// Step 4: Add the rule to the engine. The rule
-	// is compiled and checked at this time.
-	err := engine.AddRule(&rule)
+	// Step 4: Compile the rule
+	err := engine.Compile(&rule)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -46,16 +46,20 @@ func ExampleHelloWorld() {
 	}
 
 	// Step 5: Evaluate and check the results
-	results, err := engine.Evaluate(data, "hello_check")
+	results, err := engine.Evaluate(data, &rule)
 	fmt.Println(results.Pass)
 	// Output: true
 }
+
 ```
 
 ### For More Information
 While there is a lot of power in expression evaluation, Indigo organizes rules in a tree-based hierarchy, allowing precise control over what rules are evaluated and how. 
 
-- Check out the [use cases](UseCases.md) for examples of ways you can struture rules in Indigo.
-- Check out the examples and the test files in the Indigo and cel packages.
+Check out the [use cases](UseCases.md) for examples of ways you can struture rules in Indigo.
+
+See the package documenntation:
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/ezachrisen/indigo.svg)](https://pkg.go.dev/github.com/ezachrisen/indigo)
 
 
