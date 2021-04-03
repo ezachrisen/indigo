@@ -1,0 +1,46 @@
+goos: linux
+goarch: amd64
+pkg: github.com/ezachrisen/indigo/cel
+cpu: Intel(R) Xeon(R) CPU
+BenchmarkSimpleRule-2                  	 1227560	       963.4 ns/op
+BenchmarkSimpleRule-2                  	 1236936	       964.1 ns/op
+BenchmarkSimpleRule-2                  	 1246093	       951.7 ns/op
+BenchmarkSimpleRule-2                  	 1242127	       964.9 ns/op
+BenchmarkSimpleRule-2                  	 1239243	       964.8 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   57535	     19741 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   59178	     19192 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   61848	     19245 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   60342	     19062 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   58198	     19571 ns/op
+BenchmarkRuleWithArray-2               	 1218492	       975.0 ns/op
+BenchmarkRuleWithArray-2               	 1220764	       984.0 ns/op
+BenchmarkRuleWithArray-2               	 1211856	       995.4 ns/op
+BenchmarkRuleWithArray-2               	 1218966	       979.7 ns/op
+BenchmarkRuleWithArray-2               	 1211280	       976.0 ns/op
+BenchmarkProtoWithSelfX-2              	  758712	      1512 ns/op
+BenchmarkProtoWithSelfX-2              	  780866	      1507 ns/op
+BenchmarkProtoWithSelfX-2              	  770241	      1502 ns/op
+BenchmarkProtoWithSelfX-2              	  779748	      1508 ns/op
+BenchmarkProtoWithSelfX-2              	  769459	      1510 ns/op
+BenchmarkProtoWithoutSelf-2            	  899394	      1345 ns/op
+BenchmarkProtoWithoutSelf-2            	  898383	      1339 ns/op
+BenchmarkProtoWithoutSelf-2            	  891656	      1335 ns/op
+BenchmarkProtoWithoutSelf-2            	  895929	      1341 ns/op
+BenchmarkProtoWithoutSelf-2            	  900294	      1330 ns/op
+BenchmarkProtoCreation-2               	  622063	      1922 ns/op
+BenchmarkProtoCreation-2               	  622455	      1927 ns/op
+BenchmarkProtoCreation-2               	  622369	      1930 ns/op
+BenchmarkProtoCreation-2               	  619884	      1933 ns/op
+BenchmarkProtoCreation-2               	  517009	      1945 ns/op
+BenchmarkEval2000Rules-2               	     165	   6120097 ns/op
+BenchmarkEval2000Rules-2               	     252	   6220684 ns/op
+BenchmarkEval2000Rules-2               	     249	   5223628 ns/op
+BenchmarkEval2000Rules-2               	     268	   5129606 ns/op
+BenchmarkEval2000Rules-2               	     187	   5626357 ns/op
+BenchmarkAddRule-2                     	     100	  11146373 ns/op
+BenchmarkAddRule-2                     	     100	  11228089 ns/op
+BenchmarkAddRule-2                     	     100	  11029001 ns/op
+BenchmarkAddRule-2                     	     100	  11273162 ns/op
+BenchmarkAddRule-2                     	     100	  11436897 ns/op
+PASS
+ok  	github.com/ezachrisen/indigo/cel	188.706s

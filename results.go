@@ -3,6 +3,8 @@ package indigo
 import (
 	"fmt"
 	"strings"
+
+	"github.com/ezachrisen/indigo/schema"
 )
 
 // Result of evaluating a rule.
@@ -39,29 +41,31 @@ type Result struct {
 // Inspect the Typ to determine what it is.
 type Value struct {
 	Val interface{}
-	Typ Type
+	Typ schema.Type
 }
 
 // SummarizeResults produces a list of rules (including child rules) executed and the result of the evaluation.
-// n[0] is the indent level, passed as a variadic solely to allow callers to omit it
-func SummarizeResults(r *Result, n ...int) string {
+func (u *Result) Summarize() string {
+	return u.summarizeResults(0)
+}
+
+func (u *Result) summarizeResults(n int) string {
 	s := strings.Builder{}
 
-	if len(n) == 0 {
+	if n == 0 {
 		s.WriteString("\n---------- Result Diagnostic --------------------------\n")
 		s.WriteString("                                         Pass Chil-\n")
 		s.WriteString("Rule                                     Fail dren Value\n")
 		s.WriteString("--------------------------------------------------------\n")
-		n = append(n, 0)
 	}
-	indent := strings.Repeat(" ", (n[0]))
+	indent := strings.Repeat(" ", n)
 	boolString := "PASS"
-	if !r.Pass {
+	if !u.Pass {
 		boolString = "FAIL"
 	}
-	s.WriteString(fmt.Sprintf("%-40s %-4s %4d %v\n", fmt.Sprintf("%s%s", indent, r.RuleID), boolString, len(r.Results), r.Value))
-	for _, c := range r.Results {
-		s.WriteString(SummarizeResults(c, n[0]+1))
+	s.WriteString(fmt.Sprintf("%-40s %-4s %4d %v\n", fmt.Sprintf("%s%s", indent, u.RuleID), boolString, len(u.Results), u.Value))
+	for _, c := range u.Results {
+		s.WriteString(c.summarizeResults(n + 1))
 	}
 	return s.String()
 }

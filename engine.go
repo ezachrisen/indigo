@@ -2,7 +2,6 @@ package indigo
 
 import (
 	"fmt"
-	"strings"
 )
 
 // Engine is the Indigo rules engine.
@@ -13,15 +12,15 @@ type Engine struct {
 	evaluator Evaluator
 
 	// Options used by the engine during compilation and evaluation
-	opts EngineOptions
+	opts engineOptions
 }
 
 // NewEngine initialize a rules engine with evaluator and the options provided
-func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
+func NewEngine(evaluator Evaluator, opts ...engineOption) *Engine {
 	engine := Engine{
 		evaluator: evaluator,
 	}
-	applyEngineOptions(&engine.opts, opts...)
+	applyengineOptions(&engine.opts, opts...)
 	return &engine
 }
 
@@ -33,7 +32,7 @@ func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
 // expression error checking. The result of error checking will be returned
 // as an error.
 //
-// Compile modifies the rule.Program field.
+// Compile modifies the rule.Program field, unless the DryRun option is passed.
 //
 // Once submitted to Compile, you must not make any changes to the rule.
 // If you make any changes, you must re-compile before evaluating.
@@ -41,73 +40,45 @@ func NewEngine(evaluator Evaluator, opts ...EngineOption) *Engine {
 // If an error occurs during compilation, rules that had already been
 // compiled successfully will have had their rule.Program fields updated.
 // Compile does not restore the state of the rules to its pre-Compile
-// state in case of errors.
+// state in case of errors. To avoid this problem, do a dry run first.
 //
-func (e *Engine) Compile(r *Rule) error {
+func (e *Engine) Compile(r *Rule, opts ...compileOption) error {
 
-	if len(strings.Trim(r.ID, " ")) == 0 {
-		return fmt.Errorf("missing rule ID (expr '%s')", r.Expr)
-	}
+	o := compileOptions{}
+	applyCompileOptions(&o, opts...)
 
-	// // We make sure that the child keys are sorted per the rule's options
-	// // The evaluator's compiler may rely on the rule's sort order.
-	var o EvalOptions
-	applyEvalOptions(&o, r.EvalOpts...)
-	r.sortChildKeys(o)
-
-	err := e.evaluator.Compile(r, e.opts.CollectDiagnostics, e.opts.DryRun)
+	err := e.evaluator.Compile(r, e.opts.CollectDiagnostics, o.DryRun)
 	if err != nil {
 		return err
 	}
 
-	for _, k := range r.sortedKeys {
-		child := r.Rules[k]
-		err := e.Compile(child)
+	for _, c := range r.Rules {
+		err := e.Compile(c)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
 }
 
-// Evaluate the rule against the input data.
-// All rules and child rules  will be evaluated.
-// Set EvalOptions to control which rules are evaluated, and what results are returned.
-// A nil data map is allowed, unless a rule uses the Self data map feature.
-//
-// Evaluation options passed in will be used during evaluation, but an individual rule may
-// override the settings passed.
-func (e *Engine) Evaluate(data map[string]interface{}, r *Rule, opts ...EvalOption) (*Result, error) {
+// Evaluate the rule and its children against the input data.
+func (e *Engine) Evaluate(data map[string]interface{}, r *Rule, opts ...evalOption) (*Result, error) {
 
-	// Capture the options passed to Evaluate
-	// The options will be used for evaluation, unless
-	// overriden by individual rules
-	var o EvalOptions
-	applyEvalOptions(&o, opts...)
-
-	// You can specify at the rule engine that you want to force collect diagnostics
-	// even if a rule does not have it turned on
-	if e.opts.ForceDiagnosticsAllRules {
-		o.ReturnDiagnostics = true
+	if r == nil {
+		return nil, fmt.Errorf("Evaluate: rule is nil")
 	}
+
+	if data == nil {
+		return nil, fmt.Errorf("Evaluate: data is nil")
+	}
+
+	//	Apply options for this rule evaluation
+	o := evalOptions{}
+	applyEvalOptions(&o, opts...)
 
 	if o.ReturnDiagnostics && !e.opts.CollectDiagnostics {
 		return nil, fmt.Errorf("option set to return diagnostic, but engine does not have CollectDiagnostics option set")
 	}
-
-	return e.eval(data, r, o)
-}
-
-// Recursively evaluate the rule and its children
-func (e *Engine) eval(data map[string]interface{}, r *Rule, o EvalOptions) (*Result, error) {
-
-	if r == nil {
-		return nil, fmt.Errorf("eval: rule is nil")
-	}
-
-	//	Apply options for this rule evaluation
-	applyEvalOptions(&o, r.EvalOpts...)
 
 	// If this rule has a reference to a 'self' object, insert it into the data.
 	// If it doesn't, we must remove any existing reference to self, so that
@@ -121,7 +92,7 @@ func (e *Engine) eval(data map[string]interface{}, r *Rule, o EvalOptions) (*Res
 		delete(data, selfKey)
 	}
 
-	value, diagnostics, err := e.evaluator.Eval(data, r, o)
+	value, diagnostics, err := e.evaluator.Eval(data, r, o.ReturnDiagnostics)
 	if err != nil {
 		return nil, err
 	}
@@ -141,83 +112,81 @@ func (e *Engine) eval(data map[string]interface{}, r *Rule, o EvalOptions) (*Res
 		pr.Pass = pass
 	}
 
-	if o.StopIfParentNegative && pr.Pass == false {
+	if r.Options.StopIfParentNegative && pr.Pass == false {
 		return &pr, nil
 	}
 
-	for _, k := range r.sortedKeys {
-		c, ok := r.Rules[k]
-		if !ok {
-			return nil, fmt.Errorf("eval: rule with id '%s' not found in parent '%s'", k, r.ID)
-		}
-
-		result, err := e.eval(data, c, o)
+	r.sortChildKeys()
+	for _, c := range r.sortedRules {
+		result, err := e.Evaluate(data, c, opts...)
 		if err != nil {
 			return nil, err
 		}
 		if result != nil {
-			if (!result.Pass && !o.DiscardFail) ||
-				(result.Pass && !o.DiscardPass) {
-				pr.Results[k] = result
+			if (!result.Pass && !r.Options.DiscardFail) ||
+				(result.Pass && !r.Options.DiscardPass) {
+				pr.Results[c.ID] = result
 			}
 			pr.RulesEvaluated += result.RulesEvaluated
 		}
 
-		if o.StopFirstPositiveChild && result.Pass == true {
+		if r.Options.StopFirstPositiveChild && result.Pass == true {
 			return &pr, nil
 		}
 
-		if o.StopFirstNegativeChild && result.Pass == false {
+		if r.Options.StopFirstNegativeChild && result.Pass == false {
 			return &pr, nil
 		}
 	}
 	return &pr, nil
 }
 
-// EngineOptions holds the settings used by the engine during compilation and evaluation.
 // See the functional definitions below for the meaning.
-type EngineOptions struct {
-	CollectDiagnostics       bool
-	ForceDiagnosticsAllRules bool
-	DryRun                   bool
+type engineOptions struct {
+	CollectDiagnostics bool
 }
 
 // EngineOption is a functional option type
-type EngineOption func(f *EngineOptions)
+type engineOption func(f *engineOptions)
 
 // Given an array of EngineOption functions, apply their effect
-// on the EngineOptions struct.
-func applyEngineOptions(o *EngineOptions, opts ...EngineOption) {
+// on the engineOptions struct.
+func applyengineOptions(o *engineOptions, opts ...engineOption) {
 	for _, opt := range opts {
 		opt(o)
 	}
 }
 
 // Collect diagnostic information from the engine.
+// Some engines may need to save intermediate results of compilation in order to
+// provide good diagnostic information. By setting this option on the engine,
+// such intermediate results can be saved.
 // Default: off
-func CollectDiagnostics(b bool) EngineOption {
-	return func(f *EngineOptions) {
+func CollectDiagnostics(b bool) engineOption {
+	return func(f *engineOptions) {
 		f.CollectDiagnostics = b
 	}
 }
 
-// Force the return of diagnostic information for all rules, regardless of
-// the setting on each rule. If you don't set this option, you can enable
-// the return of diagnostic information for individual rules by setting an option
-// on the rule itself.
-// Default: off
-func ForceDiagnosticsAllRules(b bool) EngineOption {
-	return func(f *EngineOptions) {
-		f.ForceDiagnosticsAllRules = b
+type compileOptions struct {
+	DryRun bool
+}
+
+type compileOption func(f *compileOptions)
+
+// Perform all compilation steps, but do not save the results.
+// This is to allow a client to check all rules in a rule tree before
+// committing the actual compilation results to the rule.
+func DryRun(b bool) compileOption {
+	return func(f *compileOptions) {
+		f.DryRun = b
 	}
 }
 
-// Run through all iterations and logic, but do not
-// - compile
-// - evaluate
-// Default: off
-func DryRun(b bool) EngineOption {
-	return func(f *EngineOptions) {
-		f.DryRun = b
+// Given an array of EngineOption functions, apply their effect
+// on the engineOptions struct.
+func applyCompileOptions(o *compileOptions, opts ...compileOption) {
+	for _, opt := range opts {
+		opt(o)
 	}
 }
