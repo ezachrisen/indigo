@@ -1,4 +1,4 @@
-package indigo
+package schema
 
 // Schema defines the keys (variable names) and their data types used in a
 // rule expression. The same keys and types must be supplied in the data map

@@ -66,4 +66,5 @@
 // children BEFORE adding it to its eventual parent. That way you ensure that if compilation of Firewall Rules fails, the
 // "production" firewall rules are still intact.
 //
+// See the CELEvaluator package for examples.
 package indigo

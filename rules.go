@@ -1,9 +1,10 @@
 package indigo
 
 import (
-	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/ezachrisen/indigo/schema"
 )
 
 // A Rule defines an expression that can be evaluated by the
@@ -62,11 +63,11 @@ type Rule struct {
 	// if the expression does not. If you are using an underlying rules engine
 	// that does not support type checking, this value is for your information
 	// only.
-	ResultType Type
+	ResultType schema.Type
 
 	// The schema describing the data provided in the Evaluate input. (optional)
 	// Some implementations of Rules require a schema.
-	Schema Schema
+	Schema schema.Schema
 
 	// A reference to an object whose values can be used in the rule expression.
 	// This is useful to allow dynamic value substitution in the expression.
@@ -81,9 +82,9 @@ type Rule struct {
 	// A set of child rules.
 	Rules map[string]*Rule
 
-	// Sorted list of child rule keys.
+	// Sorted list of child rules.
 	// Child rules will be evaluated in this order.
-	sortedKeys []string
+	sortedRules []*Rule
 
 	// A reference to any object.
 	// Useful for external processes to attach an object to the rule.
@@ -93,7 +94,49 @@ type Rule struct {
 	// Set options for how the engine should evaluate this rule and the child
 	// rules. Options will be inherited by all children, but the children can
 	// override with options of their own.
-	EvalOpts []EvalOption
+	//EvalOpts []EvalOption
+	Options RuleOptions
+}
+
+// RuleOptions determine how a rule is evaluated, and how its results are
+// returned.
+// By default all options are turned off.
+type RuleOptions struct {
+	// StopIfParentNegative  not evaluate child rules if the parent's expression is false.
+	// Use case: apply a "global" rule to all the child rules.
+	StopIfParentNegative bool
+
+	// Stops the evaluation of child rules when the first positive child is encountered.
+	// Results will be partial. Only the child rules that were evaluated will be in the results.
+	// By default rules are evaluated in alphabetical order.
+	// Use case: role-based access; allow action if any child rule (permission rule) allows it.
+	StopFirstPositiveChild bool
+
+	// Stops the evaluation of child rules when the first negative child is encountered.
+	// Results will be partial. Only the child rules that were evaluated will be in the results.
+	// By default rules are evaluated in alphabetical order.
+	// Use case: you require ALL child rules to be satisifed.
+	StopFirstNegativeChild bool
+
+	// Do not return rules that passed
+	// Default: all rules are returned
+	DiscardPass bool
+
+	// Do not return rules that failed
+	// Default: all rules are returned
+	DiscardFail bool
+
+	// Include diagnostic information with the results.
+	// To enable this option, you must first turn on diagnostic
+	// collection at the engine level with the CollectDiagnostics EngineOption.
+	ReturnDiagnostics bool
+
+	// Specify the function used to sort the child rules before evaluation.
+	// Useful in scenarios where you are asking the engine to stop evaluating
+	// after either the first negative or first positive child.
+	// See the provided SortAlpha function as an example.
+	// Default: No sort
+	SortFunc func(rules []*Rule, i, j int) bool
 }
 
 const (
@@ -111,109 +154,36 @@ func NewRule(id string) *Rule {
 }
 
 // sortChildKeys sorts the IDs of the child rules according to the
-// SortFunc set in evaluation options. If none is set, the rules are
-// evaluated alphabetically.
-func (r *Rule) sortChildKeys(o EvalOptions) {
+// SortFunc set in evaluation options. If none is set, the evaluation
+// order is not specified. Sorting child keys slows down evaluation.
+func (r *Rule) sortChildKeys() {
 
-	r.sortedKeys = make([]string, 0, len(r.Rules))
+	r.sortedRules = make([]*Rule, 0, len(r.Rules))
 	for k := range r.Rules {
-		r.sortedKeys = append(r.sortedKeys, k)
+		r.sortedRules = append(r.sortedRules, r.Rules[k])
 	}
 
-	if o.SortFunc != nil {
-		sort.Slice(r.sortedKeys, o.SortFunc)
-	} else {
-		sort.Strings(r.sortedKeys)
+	if r.Options.SortFunc != nil {
+		sort.Slice(r.sortedRules, func(i, j int) bool {
+			return r.Options.SortFunc(r.sortedRules, i, j)
+		})
 	}
 }
-
-// func (r *Rule) Copy() *Rule {
-
-// 	nr := Rule{
-// 		ID:         r.ID,
-// 		Expr:       r.ID,
-// 		ResultType: r.ResultType,
-// 		Schema:     r.Schema,
-// 		Self:       r.Self,
-// 		Rules:      r.copyRules(),
-// 		sortedKeys: r.copySortedKeys(),
-// 		Meta:       r.Meta,
-// 		EvalOpts:   []EvalOption{},
-// 	}
-
-// 	return &nr
-// }
-
-// Find a rule with the given path
-// The rule path is the concatenation of the
-// rule IDs in a hierarchy, separated by /
-// For example, given this hierarchy of rule IDs:
-//  rule1
-//    b
-//    c
-//      c1
-//      c2
-//
-// c1 can be identified with the path
-// rule1/c/c1
-// Returns a copy of the rule
-
-// func (r *Rule) FindChild(path string) (*Rule, *Rule, bool) {
-
-// 	elems := strings.Split(path, "/")
-// 	c, ok := r.Rules[elems[0]]
-// 	if !ok {
-// 		return nil, nil, false
-// 	}
-
-// 	// If we're down to the last path element
-// 	if len(elems) == 1 {
-// 		return r, c, true
-// 	}
-
-// 	return c.FindChild(strings.Join(elems[1:len(elems)], "/"))
-// }
-
-// func (r *Rule) copyRules() map[string]*Rule {
-// 	mn := make(map[string]*Rule, len(r.Rules))
-// 	for k := range r.Rules {
-// 		cc := r.Rules[k].Copy()
-// 		mn[cc.ID] = cc
-// 	}
-// 	return mn
-// }
-
-// func (r *Rule) copySortedKeys() []string {
-// 	b := make([]string, 0, len(r.sortedKeys))
-// 	for _, s := range r.sortedKeys {
-// 		b = append(b, s)
-// 	}
-// 	return b
-// }
 
 // DescribeStructure returns a list of all the rules in hierarchy, with
 // child rules sorted in evaluation order.
 // This is useful for visualizing a rule hierarchy.
-func (r *Rule) DescribeStructure(n ...int) string {
-	return r.describeStructure(0)
+func (r *Rule) Describe() string {
+	return r.describe(0)
 }
 
-func (r *Rule) describeStructure(n int) string {
+func (r *Rule) describe(n int) string {
 	s := strings.Builder{}
-
-	s.WriteString(strings.Repeat(" ", n)) // indent
+	s.WriteString(strings.Repeat("  ", n)) // indent
 	s.WriteString(r.ID)
 	s.WriteString("\n")
-	if len(r.sortedKeys) != len(r.Rules) {
-		s.WriteString(fmt.Sprintf("ERROR: in rule '%s', length of sortedKeys (%d) != length of rules (%d)\n", r.ID, len(r.sortedKeys), len(r.Rules)))
-		s.WriteString(fmt.Sprintf("sortedKeys = %s\n", r.sortedKeys))
-	}
-	for _, k := range r.sortedKeys {
-		if c, ok := r.Rules[k]; ok {
-			s.WriteString(c.DescribeStructure(n + 1))
-		} else {
-			s.WriteString("ERROR: missing rule '" + k + "'\n")
-		}
+	for _, c := range r.Rules {
+		s.WriteString(c.describe(n + 1))
 	}
 	return s.String()
 }

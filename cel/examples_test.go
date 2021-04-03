@@ -5,16 +5,17 @@ import (
 
 	"github.com/ezachrisen/indigo"
 	"github.com/ezachrisen/indigo/cel"
+	"github.com/ezachrisen/indigo/schema"
 	"github.com/ezachrisen/indigo/testdata/school"
 	"github.com/golang/protobuf/ptypes"
 )
 
-func ExampleHelloWorld() {
+func Example() {
 
 	// Step 1: Create a schema
-	schema := indigo.Schema{
-		Elements: []indigo.DataElement{
-			{Name: "message", Type: indigo.String{}},
+	schema := schema.Schema{
+		Elements: []schema.DataElement{
+			{Name: "message", Type: schema.String{}},
 		},
 	}
 
@@ -47,11 +48,11 @@ func ExampleHelloWorld() {
 	// Output: true
 }
 
-func ExampleTimestampComparison() {
-	schema := indigo.Schema{
-		Elements: []indigo.DataElement{
-			{Name: "then", Type: indigo.String{}},
-			{Name: "now", Type: indigo.Timestamp{}},
+func ExampleCELEvaluator_timestamps() {
+	schema := schema.Schema{
+		Elements: []schema.DataElement{
+			{Name: "then", Type: schema.String{}},
+			{Name: "now", Type: schema.Timestamp{}},
 		},
 	}
 
@@ -83,11 +84,11 @@ func ExampleTimestampComparison() {
 	// Output: true
 }
 
-func ExampleExists() {
+func ExampleCELEvaluator_exists() {
 
-	education := indigo.Schema{
-		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+	education := schema.Schema{
+		Elements: []schema.DataElement{
+			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
 		},
 	}
 
@@ -121,12 +122,12 @@ func ExampleExists() {
 }
 
 // Demonstrates using the exists macro to inspect the value of nested messages in the list
-func ExampleExistsNested() {
+func ExampleCELEvaluator_nested() {
 
-	education := indigo.Schema{
-		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+	education := schema.Schema{
+		Elements: []schema.DataElement{
+			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: schema.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
 		},
 	}
 
@@ -165,13 +166,13 @@ func ExampleExistsNested() {
 }
 
 // Demonstrate constructing a proto message in an expression
-func ExampleProtoConstruction() {
+func ExampleCELEvaluator_construction() {
 
-	education := indigo.Schema{
-		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+	education := schema.Schema{
+		Elements: []schema.DataElement{
+			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: schema.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
 		},
 	}
 
@@ -188,7 +189,7 @@ func ExampleProtoConstruction() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
 			school.StudentSummary {
 				GPA: student.GPA,
@@ -223,11 +224,11 @@ func ExampleProtoConstruction() {
 // Demonstrate using the ? : operator to conditionally construct a proto message
 func ExampleConditionalProtoConstruction() {
 
-	education := indigo.Schema{
-		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+	education := schema.Schema{
+		Elements: []schema.DataElement{
+			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: schema.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
 		},
 	}
 
@@ -245,7 +246,7 @@ func ExampleConditionalProtoConstruction() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
 			student.GPA > 3.0 ? 
 				school.StudentSummary {
