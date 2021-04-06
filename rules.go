@@ -187,3 +187,22 @@ func (r *Rule) describe(n int) string {
 	}
 	return s.String()
 }
+
+// RuleFunc is a function type that can be applied to all rules in a hierarchy
+// using the ApplyFunc function
+type RuleFunc func(*Rule) error
+
+// ApplyFunc applies the function f to all rules in the rule tree
+func (r *Rule) ApplyFunc(f RuleFunc) error {
+	err := f(r)
+	if err != nil {
+		return err
+	}
+	for _, c := range r.Rules {
+		err := c.ApplyFunc(f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

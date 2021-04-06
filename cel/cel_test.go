@@ -302,7 +302,7 @@ func TestProtoMessage(t *testing.T) {
 
 	is := is.New(t)
 	eval := cel.NewEvaluator()
-	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true))
+	engine := indigo.NewEngine(eval)
 	//, indigo.ForceDiagnosticsAllRules(true))
 
 	r := makeEducationProtoRules("student_actions")
@@ -317,106 +317,13 @@ func TestProtoMessage(t *testing.T) {
 	}
 }
 
-// func TestReplaceRule(t *testing.T) {
-
-// 	is := is.New(t)
-// 	eval := cel.NewEvaluator()
-// 	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
-
-// 	r := makeEducationProtoRules("student_actions")
-// 	err := engine.Compile(r)
-// 	is.NoErr(err)
-
-// 	results, err := engine.Evaluate(makeStudentProtoData(), r)
-// 	is.NoErr(err)
-// 	is.Equal(len(results.Results), 3)
-// 	for _, v := range results.Results {
-// 		is.Equal(v.Meta, v.Pass)
-// 	}
-
-// 	err = engine.ReplaceRule("student_actions/at_risk", &indigo.Rule{
-// 		ID:     "at_risk",
-// 		Expr:   `student.GPA < 1000.0 || student.Status == school.Student.status_type.PROBATION`,
-// 		Meta:   true,
-// 		Schema: makeEducationProtoSchema(),
-// 	})
-// 	is.NoErr(err)
-
-// 	results, err = engine.Evaluate(makeStudentProtoData(), "student_actions")
-// 	is.NoErr(err)
-// 	is.Equal(len(results.Results), 3)
-// 	is.NoErr(err)
-// 	for _, v := range results.Results {
-// 		is.Equal(v.Meta, v.Pass)
-// 	}
-
-// 	err = engine.ReplaceRule("student_actions", &indigo.Rule{
-// 		ID:     "student_actions",
-// 		Expr:   `student.GPA < 1000.0 || student.Status == school.Student.status_type.PROBATION`,
-// 		Meta:   true,
-// 		Schema: makeEducationProtoSchema(),
-// 	})
-// 	is.NoErr(err)
-
-// }
-
-// func TestDeleteRule(t *testing.T) {
-
-// 	is := is.New(t)
-// 	eval := cel.NewEvaluator()
-// 	engine := indigo.NewEngine(eval, indigo.CollectDiagnostics(true), indigo.ForceDiagnosticsAllRules(true))
-
-// 	err := engine.AddRule("/", makeEducationProtoRules("student_actions"))
-// 	is.NoErr(err)
-
-// 	results, err := engine.Evaluate(makeStudentProtoData(), "student_actions")
-// 	is.NoErr(err)
-// 	is.Equal(len(results.Results), 3)
-// 	for _, v := range results.Results {
-// 		is.Equal(v.Meta, v.Pass)
-// 	}
-
-// 	//fmt.Println(indigo.SummarizeResults(results))
-
-// 	err = engine.DeleteRule("/student_actions/at_risk")
-// 	is.NoErr(err)
-
-// 	results, err = engine.Evaluate(makeStudentProtoData(), "student_actions")
-// 	is.NoErr(err)
-// 	fmt.Println(indigo.SummarizeResults(results))
-
-// 	is.Equal(len(results.Results), 2)
-// 	is.NoErr(err)
-// 	for _, v := range results.Results {
-// 		is.Equal(v.Meta, v.Pass)
-// 	}
-
-// 	err = engine.DeleteRule("student_actions")
-// 	is.NoErr(err)
-
-// 	results, err = engine.Evaluate(makeStudentProtoData(), "student_actions")
-// 	is.True(err != nil)
-// }
-
 func TestDiagnosticOptions(t *testing.T) {
 
 	is := is.New(t)
 
-	// Turn off diagnostic collection
-	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(false))
-	r := makeEducationProtoRules("student_actions")
-	err := engine.Compile(r)
-	is.NoErr(err)
-
-	_, err = engine.Evaluate(makeStudentProtoData(), r, indigo.ReturnDiagnostics(true))
-	if err == nil {
-		t.Errorf("Wanted error; should require indigo.CollectDiagnostics to be turned on to enable indigo.ReturnDiagnostics")
-	}
-
-	// Turn on diagnostic collection
-	engine = indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true))
+	engine := indigo.NewEngine(cel.NewEvaluator())
 	r2 := makeEducationProtoRules("student_actions")
-	err = engine.Compile(r2)
+	err := engine.Compile(r2, indigo.CollectDiagnostics(true))
 	is.NoErr(err)
 
 	results, err := engine.Evaluate(makeStudentProtoData(), r2, indigo.ReturnDiagnostics(true))
@@ -779,7 +686,7 @@ func BenchmarkSimpleRule(b *testing.B) {
 
 func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 
-	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(true))
+	engine := indigo.NewEngine(cel.NewEvaluator())
 	education := makeEducationSchema()
 	data := makeStudentData()
 
@@ -795,7 +702,7 @@ func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 		},
 	}
 
-	err := engine.Compile(&rule)
+	err := engine.Compile(&rule, indigo.CollectDiagnostics(true))
 	if err != nil {
 		b.Errorf("Error adding ruleset: %v", err)
 	}
@@ -996,7 +903,7 @@ func BenchmarkEval2000Rules(b *testing.B) {
 		},
 	}
 
-	engine := indigo.NewEngine(cel.NewEvaluator(), indigo.CollectDiagnostics(false))
+	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	rule := &indigo.Rule{
 		ID:     "student_actions",
