@@ -1,4 +1,4 @@
-// Package cel provides an implementation of the indigo.Engine interface backed by Google's cel-go rules engine.
+// Package cel provides an implementation of the indigo.Evaluator interface backed by Google's cel-go rules engine.
 //
 // See https://github.com/google/cel-go and https://opensource.google/projects/cel for more information
 // about CEL.
@@ -52,7 +52,6 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 	prog := CELProgram{}
 	r.Program = nil // ensure the previous program is cleared
 
-	// There's nothing for us to do
 	if r.Expr == "" {
 		return nil
 	}
@@ -81,6 +80,7 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 		// Remove some wonky formatting from CEL's error message.
 		return fmt.Errorf("parsing rule %s:\n%s", r.ID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
 	}
+
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(ast)
 	if iss != nil && iss.Err() != nil {
@@ -392,7 +392,9 @@ func getSelectIdent(i *expr.Expr_SelectExpr) string {
 func collectDiagnostics(ast *cel.Ast, details *cel.EvalDetails, data map[string]interface{}) string {
 
 	if ast == nil || details == nil {
+		fmt.Println(ast, details)
 		return ""
+
 	}
 
 	s := strings.Builder{}

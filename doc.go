@@ -1,8 +1,8 @@
-// Package Indigo provides a rules engine process that uses an instance of the
-// Evaluator interface to perform evaluation of rules.
+// Package Indigo provides a rules engine that evaluates
+// rules and returns the results.
 //
-// Indigo itself does not specify a language for rules, relying instead on the Evaluator's
-// rule language.
+// Indigo does not specify a language for rules, relying instead on several
+// rule evaluators to perform the work. The default rule evaluator (in the cel package) is the Common Expression Language from Google (https://github.com/google/cel-go).
 //
 // Typical use is as follows:
 //
@@ -13,27 +13,47 @@
 //  5. Use the engine to evaluate the rule against a set of input data
 //  6. Inspect the results
 //
-// Depending on your need, many options are available to control how rules are evaluated, and
+// Depending on your need,  options are available to control how rules are evaluated, and
 // how results are returned.
 //
-// Rule Ownership and Modification
+// Basic Structure
+//
+// Indigo organizes rules in hierarchies. A parent rule can have 0 or many child
+// rules. You do not have to organize rules in a complex tree; a single parent with 1,000s of child rules is OK. There are 3 main reasons for using a tree to organize rules:
+//  1. Allow atomic rule updates (see separate section)
+//  2. Use options on the parent rule to control if child rules are evaluated (in effect, child rules "inherit" the parent rule's condition)
+//  3. Use options on the parent rule to control which child rules are returned as results (such as returning true or false results, or both)
+//  4. Logically separate disparate groups of rules
+//
+// You can inspect a rule structure using the rule.Describe() method, or with the reflection functions. You can also view a results in a tree structure with the results.Summarize() method.
+//
+// Rule Ownership
 //
 // The calling application is responsible for managing the lifecycle of rules, including ensuring
 // concurrency safety. Specifically, this means:
 //  1. You must not allow changes to a rule during compilation.
 //  2. You may not modify the rule after compilation and before evaluation.
 //  3. You must not allow changes to a rule during evaluation.
-//  4. A rule must not be a child rule of more than one parent.
+//  4. You should not modify a rule after it's been evaluated and before the results have been consumed.
+//  5. A rule must not be a child rule of more than one parent.
 //
 // Breaking these rules could lead to race conditions or unexpected outcomes.
 //
-// The simplest and safest way to use the rules engine, is of course to load the rules at startup and
+// The simplest and safest way to use the rules engine, is to load the rules at startup and
 // never change them. That may be appropriate for some use cases, but in many cases the rules are continually
 // being changed by humans or other processes.
 //
-// If you want to modify a rule, for example to remove a child rule, you can make the modification
-// then compile it again, before evaluating it. During these steps you must again make sure no other
-// process is using the rule for evaluation or is updating it.
+// Updating Rules
+//
+// To add or remove rules, you do so by modifying the parent rule's map of Rules:
+//   delete(parent.Rules, "child-id-to-delete")
+// and
+//   engine.Compile(myNewRule)
+//   parent.Rules["my-new-rule"] = myNewRule
+//
+// It is not recommended to update a rule IN PLACE with the same ID, unless you
+// manage the rule lifecycle beyond evaluation and use of the rule in interpreting
+// the results. Users of your result should expect that the definition of the rule stays constant. Instead, we recommend creating a new rule with a new version number in the ID to separate updates.
 //
 // Structuring Rule Hierarchies for Updates
 //
@@ -66,5 +86,4 @@
 // children BEFORE adding it to its eventual parent. That way you ensure that if compilation of Firewall Rules fails, the
 // "production" firewall rules are still intact.
 //
-// See the CELEvaluator package for examples.
 package indigo
