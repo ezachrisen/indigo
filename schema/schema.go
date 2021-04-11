@@ -1,3 +1,4 @@
+// Pacakge schema defines the data types used by Indigo.
 package schema
 
 // Schema defines the keys (variable names) and their data types used in a
@@ -70,3 +71,10 @@ func (t Duration) String() string  { return "duration" }
 func (t Timestamp) String() string { return "timestamp" }
 func (t Float) String() string     { return "float" }
 func (t Proto) String() string     { return "proto " + t.Protoname }
+
+// The value returned in the Result.
+// Inspect the Typ to determine what it is.
+type Value struct {
+	Val interface{}
+	Typ Type
+}

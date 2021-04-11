@@ -10,8 +10,8 @@ import (
 // -------------------------------------------------- NO-OP EVALUATOR
 type noOpEvaluator struct{}
 
-func (n *noOpEvaluator) Evaluate(map[string]interface{}, *indigo.Rule, bool) (indigo.Value, string, error) {
-	return indigo.Value{
+func (n *noOpEvaluator) Evaluate(map[string]interface{}, *indigo.Rule, bool) (schema.Value, string, error) {
+	return schema.Value{
 		Val: false,
 		Typ: schema.Bool{},
 	}, "", nil
@@ -37,7 +37,7 @@ func newMockEvaluator() *mockEvaluator {
 	return &mockEvaluator{}
 }
 
-func (m *mockEvaluator) Compile(r *indigo.Rule, collectDiagnostics, dryRun bool) (interface{}, error) {
+func (m *mockEvaluator) Compile(expr string, s schema.Schema, resultType schema.Type, collectDiagnostics, dryRun bool) (interface{}, error) {
 
 	p := program{}
 	if collectDiagnostics {
@@ -59,14 +59,14 @@ func (m *mockEvaluator) ResetRulesTested() {
 }
 
 // The mockEvaluator only knows how to evaluate 1 string: `true`. If the expression is this, the evaluation is true, otherwise false.
-func (m *mockEvaluator) Evaluate(data map[string]interface{}, r *indigo.Rule, prog interface{}, returnDiagnostics bool) (indigo.Value, string, error) {
-	m.rulesTested = append(m.rulesTested, r.ID)
+func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s schema.Schema, self interface{}, prog interface{}, returnDiagnostics bool) (schema.Value, string, error) {
+	//	m.rulesTested = append(m.rulesTested, r.ID)
 	prg := program{}
 
 	p, ok := prog.(program)
 	if m.diagnosticCompileRequired {
 		if !ok {
-			return indigo.Value{
+			return schema.Value{
 				Val: false,
 				Typ: schema.Bool{},
 			}, "", fmt.Errorf("compiled data type assertion failed")
@@ -81,21 +81,21 @@ func (m *mockEvaluator) Evaluate(data map[string]interface{}, r *indigo.Rule, pr
 		diagnostics = "diagnostics here"
 	}
 
-	if r.Expr == `true` {
-		return indigo.Value{
+	if expr == `true` {
+		return schema.Value{
 			Val: true,
 			Typ: schema.Bool{},
 		}, diagnostics, nil
 	}
 
-	if r.Expr == `self` && r.Self != nil {
-		return indigo.Value{
-			Val: r.Self,
+	if expr == `self` && self != nil {
+		return schema.Value{
+			Val: self,
 			Typ: schema.Int{},
 		}, diagnostics, nil
 	}
 
-	return indigo.Value{
+	return schema.Value{
 		Val: false,
 		Typ: schema.Bool{},
 	}, diagnostics, nil

@@ -3,8 +3,6 @@ package indigo
 import (
 	"fmt"
 	"strings"
-
-	"github.com/ezachrisen/indigo/schema"
 )
 
 // Result of evaluating a rule.
@@ -28,13 +26,6 @@ type Result struct {
 
 	// Diagnostic data
 	Diagnostics string
-}
-
-// The value returned in the Result.
-// Inspect the Typ to determine what it is.
-type Value struct {
-	Val interface{}
-	Typ schema.Type
 }
 
 // String produces a list of rules (including child rules) executed and the result of the evaluation.
