@@ -1,20 +1,18 @@
 package indigo
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/ezachrisen/indigo/schema"
 )
 
-// A Rule defines an expression that can be evaluated by the
-// Engine. The language used in the expression is dependent
-// on the implementation of Engine.
-//
-// A Rule can also have child rules, so that a Rule can serve the
-// purpose of being a container for other rules. Options can be
-// set via EvalOptions on each rule to determine how to process
-// the child rules.
+// A Rule defines logic that can be evaluated by an Evaluator.
+// The logic for evaluation is specified by an expression.
+// A rule can have child rules. Rule options specify to the Evaluator
+// how child rules should be handled. Child rules can in turn have children,
+// enabling you to create a hierarchy of rules.
 //
 // Example Rule Structures
 //
@@ -38,7 +36,6 @@ import (
 //
 type Rule struct {
 	// A rule identifer. (required)
-	// The identifier is used identify results of evaluation
 	ID string
 
 	// The expression to evaluate (optional)
@@ -47,61 +44,34 @@ type Rule struct {
 	// All values are returned in the Results.Value field.
 	// Boolean values are also returned in the results as Pass = true  / false
 	// If the expression is blank, the result will be true.
-	// (This is common if the rule is used as a container for other rules)
 	Expr string
 
-	// Program is a compiled representation of the expression.
-	// Evaluators may attach a compiled representation of the rule
-	// during compilation. Depending on the Evaluator, you may serialize
-	// and store the Program between evaluations. This is useful if the time
-	// it takes to compile the rule set is so large that restoring a previously
-	// compiled version is significantly faster.
-	Program interface{}
-
-	// The output type of the expression. Compilers with the ability to check
+	// The output type of the expression. Evaluators with the ability to check
 	// whether an expression produces the desired output should return an error
-	// if the expression does not. If you are using an underlying rules engine
-	// that does not support type checking, this value is for your information
-	// only.
+	// if the expression does not.
 	ResultType schema.Type
 
 	// The schema describing the data provided in the Evaluate input. (optional)
-	// Some implementations of Rules require a schema.
+	// Some implementations of Evaluator require a schema.
 	Schema schema.Schema
 
 	// A reference to an object whose values can be used in the rule expression.
-	// This is useful to allow dynamic value substitution in the expression.
-	// For example, in a rule determining if the temperature is in the specified range,
-	// set Self = Thermostat, where Thermostat holds the user's temperature preference.
-	// When evaluating the rules, the Thermostat object will be included in the data
-	// with the key selfKey (see constants). Rules can then reference the user's temperature preference
-	// in the rule expression. This allows rule inputs to be changed without recompiling
-	// the rule.
+	// Add the corresponding object in the data with the reserved key name selfKey
+	// (see constants).
+	// See example for usage. TODO: example
 	Self interface{}
 
 	// A set of child rules.
 	Rules map[string]*Rule
 
-	// Sorted list of child rules.
-	// Child rules will be evaluated in this order.
-	sortedRules []*Rule
+	// Reference to intermediate compilation / evaluation data.
+	// Set
+	program interface{}
 
 	// A reference to any object.
-	// Useful for external processes to attach an object to the rule.
-	// Not used by the rules engine, but returned to you via the Result.
+	// Not used by the rules engine.
 	Meta interface{}
 
-	// Set options for how the engine should evaluate this rule and the child
-	// rules. Options will be inherited by all children, but the children can
-	// override with options of their own.
-	//EvalOpts []EvalOption
-	Options RuleOptions
-}
-
-// RuleOptions determine how a rule is evaluated, and how its results are
-// returned.
-// By default all options are turned off.
-type RuleOptions struct {
 	// StopIfParentNegative  not evaluate child rules if the parent's expression is false.
 	// Use case: apply a "global" rule to all the child rules.
 	StopIfParentNegative bool
@@ -153,27 +123,178 @@ func NewRule(id string) *Rule {
 	}
 }
 
-// sortChildKeys sorts the IDs of the child rules according to the
-// SortFunc set in evaluation options. If none is set, the evaluation
-// order is not specified. Sorting child keys slows down evaluation.
-func (r *Rule) sortChildKeys() {
+// Compile prepares the rule, and all its children, to be evaluated.
+// Engine delegates most of the work to the Evaluator, whose
+// Compile method will be called for each rule.
+//
+// Depending on the Evaluator used, this step will provide rule
+// expression error checking.
+//
+// Compile modifies the rule.Program field, unless the DryRun option is passed.
+//
+// Once submitted to Compile, you must not make any changes to the rule.
+// If you make any changes, you must re-compile before evaluating.
+//
+// If an error occurs during compilation, rules that had already been
+// compiled successfully will have had their rule.Program fields updated.
+// Compile does not restore the state of the rules to its pre-Compile
+// state in case of errors. To avoid this problem, do a dry run first.
+func (r *Rule) Compile(c Compiler, opts ...CompilerOption) error {
 
-	r.sortedRules = make([]*Rule, 0, len(r.Rules))
-	for k := range r.Rules {
-		r.sortedRules = append(r.sortedRules, r.Rules[k])
+	if c == nil {
+		return fmt.Errorf("Compile: Compiler is nil")
 	}
 
-	if r.Options.SortFunc != nil {
-		sort.Slice(r.sortedRules, func(i, j int) bool {
-			return r.Options.SortFunc(r.sortedRules, i, j)
-		})
+	o := compileOptions{}
+	applyCompilerOptions(&o, opts...)
+
+	prg, err := c.Compile(r, o.collectDiagnostics, o.dryRun)
+	if err != nil {
+		return err
+	}
+
+	if !o.dryRun {
+		r.program = prg
+	}
+
+	for _, cr := range r.Rules {
+		err := cr.Compile(c, opts...)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Rule) Evaluate(e Evaluator, d map[string]interface{}, opts ...EvaluatorOption) (*Result, error) {
+
+	if r == nil {
+		return nil, fmt.Errorf("Evaluate: rule is nil")
+	}
+
+	if e == nil {
+		return nil, fmt.Errorf("Evaluate: evaluator is nil")
+	}
+
+	if d == nil {
+		return nil, fmt.Errorf("Evaluate: data is nil")
+	}
+
+	o := evalOptions{}
+	applyEvaluatorOptions(&o, opts...)
+
+	// If this rule has a reference to a 'self' object, insert it into the d.
+	// If it doesn't, we must remove any existing reference to self, so that
+	// child rules do not accidentally "inherit" the self object.
+	if r.Self != nil {
+		d[selfKey] = r.Self
+	} else {
+		delete(d, selfKey)
+	}
+
+	val, diagnostics, err := e.Evaluate(d, r, r.program, o.returnDiagnostics)
+	if err != nil {
+		return nil, err
+	}
+
+	pr := &Result{
+		Rule:        r,
+		Pass:        true,
+		Value:       val.Val,
+		Diagnostics: diagnostics,
+		Results:     make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
+	}
+
+	// TODO: check that we got the expected value type
+	if pass, ok := val.Val.(bool); ok {
+		pr.Pass = pass
+	}
+
+	if r.StopIfParentNegative && pr.Pass == false {
+		return pr, nil
+	}
+
+	for _, cr := range r.sortChildKeys() {
+		result, err := cr.Evaluate(e, d, opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		if (!result.Pass && !r.DiscardFail) ||
+			(result.Pass && !r.DiscardPass) {
+			pr.Results[cr.ID] = result
+		}
+
+		if r.StopFirstPositiveChild && result.Pass == true {
+			return pr, nil
+		}
+
+		if r.StopFirstNegativeChild && result.Pass == false {
+			return pr, nil
+		}
+	}
+	return pr, nil
+
+}
+
+type compileOptions struct {
+	dryRun             bool
+	collectDiagnostics bool
+}
+
+type CompilerOption func(f *compileOptions)
+
+// Perform all compilation steps, but do not save the results.
+// This is to allow a client to check all rules in a rule tree before
+// committing the actual compilation results to the rule.
+func DryRun(b bool) CompilerOption {
+	return func(f *compileOptions) {
+		f.dryRun = b
 	}
 }
 
-// DescribeStructure returns a list of all the rules in hierarchy, with
+// CollectDiagnostics instructs the engine and its evaluator to save any
+// intermediate results of compilation in order to provide good diagnostic
+// information after evaluation. Not all evaluators need to have this option set.
+// Default: off
+func CollectDiagnostics(b bool) CompilerOption {
+	return func(f *compileOptions) {
+		f.collectDiagnostics = b
+	}
+}
+
+// Given an array of EngineOption functions, apply their effect
+// on the engineOptions struct.
+func applyCompilerOptions(o *compileOptions, opts ...CompilerOption) {
+	for _, opt := range opts {
+		opt(o)
+	}
+}
+
+type evalOptions struct {
+	returnDiagnostics bool
+}
+
+// EvaluatorOptions determine how the engine behaves during the evaluation .
+type EvaluatorOption func(f *evalOptions)
+
+// Include diagnostic information with the results.
+// Default: off
+func ReturnDiagnostics(b bool) EvaluatorOption {
+	return func(f *evalOptions) {
+		f.returnDiagnostics = b
+	}
+}
+
+func applyEvaluatorOptions(o *evalOptions, opts ...EvaluatorOption) {
+	for _, opt := range opts {
+		opt(o)
+	}
+}
+
+// String returns a list of all the rules in hierarchy, with
 // child rules sorted in evaluation order.
-// This is useful for visualizing a rule hierarchy.
-func (r *Rule) Describe() string {
+func (r *Rule) String() string {
 	return r.describe(0)
 }
 
@@ -188,21 +309,19 @@ func (r *Rule) describe(n int) string {
 	return s.String()
 }
 
-// RuleFunc is a function type that can be applied to all rules in a hierarchy
-// using the ApplyFunc function
-type RuleFunc func(*Rule) error
+// sortChildKeys sorts the IDs of the child rules according to the
+// SortFunc set in evaluation options. If no SortFunc is set, the evaluation
+// order is not specified.
+func (r *Rule) sortChildKeys() []*Rule {
+	keys := make([]*Rule, 0, len(r.Rules))
+	for k := range r.Rules {
+		keys = append(keys, r.Rules[k])
+	}
 
-// ApplyFunc applies the function f to all rules in the rule tree
-func (r *Rule) ApplyFunc(f RuleFunc) error {
-	err := f(r)
-	if err != nil {
-		return err
+	if r.SortFunc != nil {
+		sort.Slice(keys, func(i, j int) bool {
+			return r.SortFunc(keys, i, j)
+		})
 	}
-	for _, c := range r.Rules {
-		err := c.ApplyFunc(f)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return keys
 }
