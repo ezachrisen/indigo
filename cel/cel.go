@@ -1,4 +1,4 @@
-// Package cel provides an implementation of the indigo.Evaluator interface backed by Google's cel-go rules engine.
+// Package cel provides an implementation of the evaluator and compiler interfaces backed by Google's cel-go rules engine.
 //
 // See https://github.com/google/cel-go and https://opensource.google/projects/cel for more information
 // about CEL.
@@ -52,10 +52,10 @@ func NewEvaluator() *CELEvaluator {
 //
 // Any errors in compilation are returned, and the rule.Program is set to nil.
 // If dryRun is true, this does nothing.
-func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun bool) (interface{}, error) {
+func (e *CELEvaluator) Compile(expr string, s schema.Schema, resultType schema.Type, collectDiagnostics bool, dryRun bool) (interface{}, error) {
 	prog := CELProgram{}
 
-	if r.Expr == "" {
+	if expr == "" {
 		return nil, nil
 	}
 
@@ -63,13 +63,13 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 	var err error
 
 	// Convert from an Indigo schema to a set of CEL options
-	opts, err = schemaToDeclarations(r.Schema)
+	opts, err = schemaToDeclarations(s)
 	if err != nil {
 		return nil, err
 	}
 
 	if opts == nil || len(opts) == 0 {
-		return nil, fmt.Errorf("No valid schema for rule %s", r.ID)
+		return nil, fmt.Errorf("no valid schema")
 	}
 
 	env, err := cel.NewEnv(opts...)
@@ -78,22 +78,22 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 	}
 
 	// Parse the rule expression to an AST
-	ast, iss := env.Parse(r.Expr)
+	ast, iss := env.Parse(expr)
 	if iss != nil && iss.Err() != nil {
 		// Remove some wonky formatting from CEL's error message.
-		return nil, fmt.Errorf("parsing rule %s:\n%s", r.ID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
+		return nil, fmt.Errorf("parsing rule:\n%s", strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
 	}
 
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(ast)
 	if iss != nil && iss.Err() != nil {
-		return nil, fmt.Errorf("checking rule %s:\n%w", r.ID, iss.Err())
+		return nil, fmt.Errorf("checking rule:\n%w", iss.Err())
 	}
 
-	if r.ResultType != nil {
-		err := doTypesMatch(c.ResultType(), r.ResultType)
+	if resultType != nil {
+		err := doTypesMatch(c.ResultType(), resultType)
 		if err != nil {
-			return nil, fmt.Errorf("Error compiling rule: %w", err)
+			return nil, fmt.Errorf("compiling rule: %w", err)
 		}
 	}
 
@@ -104,7 +104,7 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 
 	prog.program, err = env.Program(c, options)
 	if err != nil {
-		return nil, fmt.Errorf("generating program %s, %w", r.ID, err)
+		return nil, fmt.Errorf("generating program: %w", err)
 	}
 
 	if !dryRun {
@@ -118,13 +118,13 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
-func (e *CELEvaluator) Evaluate(data map[string]interface{}, r *indigo.Rule, evalData interface{}, returnDiagnostics bool) (indigo.Value, string, error) {
+func (e *CELEvaluator) Evaluate(data map[string]interface{}, expr string, s schema.Schema, self interface{}, evalData interface{}, returnDiagnostics bool) (schema.Value, string, error) {
 
 	program, ok := evalData.(CELProgram)
 
 	// If the rule doesn't have a program, return a default result
 	if !ok {
-		return indigo.Value{
+		return schema.Value{
 			Val: true,
 			Typ: schema.Bool{},
 		}, "", nil
@@ -146,17 +146,17 @@ func (e *CELEvaluator) Evaluate(data map[string]interface{}, r *indigo.Rule, eva
 	}
 
 	if err != nil {
-		return indigo.Value{}, diagnostics, fmt.Errorf("Error evaluating rule %s:%w", r.ID, err)
+		return schema.Value{}, diagnostics, fmt.Errorf("evaluating rule: %w", err)
 	}
 
 	switch v := rawValue.Value().(type) {
 	case bool:
-		return indigo.Value{
+		return schema.Value{
 			Val: v,
 			Typ: schema.Bool{},
 		}, diagnostics, nil
 	default:
-		return indigo.Value{
+		return schema.Value{
 			Val: v,
 			Typ: schema.Any{},
 		}, diagnostics, nil

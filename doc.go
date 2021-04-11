@@ -1,20 +1,34 @@
 // Package Indigo provides a rules engine that evaluates
 // rules and returns the results.
 //
-// Indigo does not specify a language for rules, relying instead on several
-// rule evaluators to perform the work. The default rule evaluator (in the cel package) is the Common Expression Language from Google (https://github.com/google/cel-go).
+// Indigo does not specify a language for rules, relying instead on a rule evaluator to perform the work.
+// The default rule evaluator (in the cel package) is the Common Expression Language from Google (https://github.com/google/cel-go).
 //
 // Typical use is as follows:
 //
 //  1. Declare a schema describing the type of data you will be processing
 //  2. Create a rule, possibly with many child rules
-//  3. Create an engine
-//  4. Use the engine to compile the rule
-//  5. Use the engine to evaluate the rule against a set of input data
+//  3. Create an evaluator and optionally a compiler
+//  4. Compile the rule
+//  5. Evaluate the rule
 //  6. Inspect the results
 //
-// Depending on your need,  options are available to control how rules are evaluated, and
-// how results are returned.
+//  Options are available to control how rules are evaluated and which results are returned.
+//
+//
+// Compilation and Evaluation
+//
+// Indigo provides methods to compile and evaluate rules. The compilation step gives
+// the evaluator a chance to pre-process the rule and store an intermediate form
+// of the rule for evaluation efficiency. The evaluation evaluates the rule against
+// input data and provides the output.
+//
+// Compilation can be done once per rule when it is loaded.
+//
+// Depending on the rule evaluator, compilation may not be required or supported.
+//
+// CEL requires compilation.
+//
 //
 // Basic Structure
 //
@@ -25,7 +39,6 @@
 //  3. Use options on the parent rule to control which child rules are returned as results (such as returning true or false results, or both)
 //  4. Logically separate disparate groups of rules
 //
-// You can inspect a rule structure using the rule.Describe() method, or with the reflection functions. You can also view a results in a tree structure with the results.Summarize() method.
 //
 // Rule Ownership
 //
@@ -39,19 +52,19 @@
 //
 // Breaking these rules could lead to race conditions or unexpected outcomes.
 //
-// The simplest and safest way to use the rules engine, is to load the rules at startup and
+// The simplest and safest way to use the rules engine is to load the rules at startup and
 // never change them. That may be appropriate for some use cases, but in many cases the rules are continually
 // being changed by humans or other processes.
 //
 // Updating Rules
 //
-// To add or remove rules, you do so by modifying the parent rule's map of Rules:
+// To add or remove rules, you do so by modifying the parent rule's map of Rules
 //   delete(parent.Rules, "child-id-to-delete")
 // and
-//   engine.Compile(myNewRule)
+//   myNewRule.Compile(myCompiler)
 //   parent.Rules["my-new-rule"] = myNewRule
 //
-// It is not recommended to update a rule IN PLACE with the same ID, unless you
+// It is not recommended to update a rule IN PLACE, unless you
 // manage the rule lifecycle beyond evaluation and use of the rule in interpreting
 // the results. Users of your result should expect that the definition of the rule stays constant. Instead, we recommend creating a new rule with a new version number in the ID to separate updates.
 //

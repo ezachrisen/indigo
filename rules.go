@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ezachrisen/indigo/evaluator"
 	"github.com/ezachrisen/indigo/schema"
 )
 
@@ -139,7 +140,7 @@ func NewRule(id string) *Rule {
 // compiled successfully will have had their rule.Program fields updated.
 // Compile does not restore the state of the rules to its pre-Compile
 // state in case of errors. To avoid this problem, do a dry run first.
-func (r *Rule) Compile(c Compiler, opts ...CompilerOption) error {
+func (r *Rule) Compile(c evaluator.Compiler, opts ...CompilationOption) error {
 
 	if c == nil {
 		return fmt.Errorf("Compile: Compiler is nil")
@@ -148,7 +149,7 @@ func (r *Rule) Compile(c Compiler, opts ...CompilerOption) error {
 	o := compileOptions{}
 	applyCompilerOptions(&o, opts...)
 
-	prg, err := c.Compile(r, o.collectDiagnostics, o.dryRun)
+	prg, err := c.Compile(r.Expr, r.Schema, r.ResultType, o.collectDiagnostics, o.dryRun)
 	if err != nil {
 		return err
 	}
@@ -166,7 +167,7 @@ func (r *Rule) Compile(c Compiler, opts ...CompilerOption) error {
 	return nil
 }
 
-func (r *Rule) Evaluate(e Evaluator, d map[string]interface{}, opts ...EvaluatorOption) (*Result, error) {
+func (r *Rule) Evaluate(e evaluator.Evaluator, d map[string]interface{}, opts ...EvaluationOption) (*Result, error) {
 
 	if r == nil {
 		return nil, fmt.Errorf("Evaluate: rule is nil")
@@ -192,7 +193,7 @@ func (r *Rule) Evaluate(e Evaluator, d map[string]interface{}, opts ...Evaluator
 		delete(d, selfKey)
 	}
 
-	val, diagnostics, err := e.Evaluate(d, r, r.program, o.returnDiagnostics)
+	val, diagnostics, err := e.Evaluate(d, r.Expr, r.Schema, r.Self, r.program, o.returnDiagnostics)
 	if err != nil {
 		return nil, err
 	}
@@ -242,12 +243,13 @@ type compileOptions struct {
 	collectDiagnostics bool
 }
 
-type CompilerOption func(f *compileOptions)
+// CompilationOptions determines how compilation behaves.
+type CompilationOption func(f *compileOptions)
 
 // Perform all compilation steps, but do not save the results.
 // This is to allow a client to check all rules in a rule tree before
 // committing the actual compilation results to the rule.
-func DryRun(b bool) CompilerOption {
+func DryRun(b bool) CompilationOption {
 	return func(f *compileOptions) {
 		f.dryRun = b
 	}
@@ -256,8 +258,7 @@ func DryRun(b bool) CompilerOption {
 // CollectDiagnostics instructs the engine and its evaluator to save any
 // intermediate results of compilation in order to provide good diagnostic
 // information after evaluation. Not all evaluators need to have this option set.
-// Default: off
-func CollectDiagnostics(b bool) CompilerOption {
+func CollectDiagnostics(b bool) CompilationOption {
 	return func(f *compileOptions) {
 		f.collectDiagnostics = b
 	}
@@ -265,7 +266,7 @@ func CollectDiagnostics(b bool) CompilerOption {
 
 // Given an array of EngineOption functions, apply their effect
 // on the engineOptions struct.
-func applyCompilerOptions(o *compileOptions, opts ...CompilerOption) {
+func applyCompilerOptions(o *compileOptions, opts ...CompilationOption) {
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -275,18 +276,18 @@ type evalOptions struct {
 	returnDiagnostics bool
 }
 
-// EvaluatorOptions determine how the engine behaves during the evaluation .
-type EvaluatorOption func(f *evalOptions)
+// EvaluationOptions determine how evaluation behaves.
+type EvaluationOption func(f *evalOptions)
 
 // Include diagnostic information with the results.
 // Default: off
-func ReturnDiagnostics(b bool) EvaluatorOption {
+func ReturnDiagnostics(b bool) EvaluationOption {
 	return func(f *evalOptions) {
 		f.returnDiagnostics = b
 	}
 }
 
-func applyEvaluatorOptions(o *evalOptions, opts ...EvaluatorOption) {
+func applyEvaluatorOptions(o *evalOptions, opts ...EvaluationOption) {
 	for _, opt := range opts {
 		opt(o)
 	}
