@@ -24,7 +24,9 @@ import (
 
 // CELEvaluator implements the indigo.Evaluator interface.
 // It uses the CEL-Go package to compile and evaluate rules.
-type CELEvaluator struct{}
+type CELEvaluator struct {
+	programs map[*indigo.Rule]CELProgram
+}
 
 // CELProgram holds a compiled CEL Program and
 // (potentially) an AST. The AST is used if we're collecting diagnostics
@@ -37,7 +39,9 @@ type CELProgram struct {
 // Initialize a new CEL Evaluator
 // The evaluator contains internal data used to facilitate CEL expression evaluation.
 func NewEvaluator() *CELEvaluator {
-	e := CELEvaluator{}
+	e := CELEvaluator{
+		programs: map[*indigo.Rule]CELProgram{},
+	}
 	return &e
 }
 
@@ -48,12 +52,11 @@ func NewEvaluator() *CELEvaluator {
 //
 // Any errors in compilation are returned, and the rule.Program is set to nil.
 // If dryRun is true, this does nothing.
-func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun bool) error {
+func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun bool) (interface{}, error) {
 	prog := CELProgram{}
-	r.Program = nil // ensure the previous program is cleared
 
 	if r.Expr == "" {
-		return nil
+		return nil, nil
 	}
 
 	var opts []cel.EnvOption
@@ -62,35 +65,35 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 	// Convert from an Indigo schema to a set of CEL options
 	opts, err = schemaToDeclarations(r.Schema)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if opts == nil || len(opts) == 0 {
-		return fmt.Errorf("No valid schema for rule %s", r.ID)
+		return nil, fmt.Errorf("No valid schema for rule %s", r.ID)
 	}
 
 	env, err := cel.NewEnv(opts...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Parse the rule expression to an AST
 	ast, iss := env.Parse(r.Expr)
 	if iss != nil && iss.Err() != nil {
 		// Remove some wonky formatting from CEL's error message.
-		return fmt.Errorf("parsing rule %s:\n%s", r.ID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
+		return nil, fmt.Errorf("parsing rule %s:\n%s", r.ID, strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
 	}
 
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(ast)
 	if iss != nil && iss.Err() != nil {
-		return fmt.Errorf("checking rule %s:\n%w", r.ID, iss.Err())
+		return nil, fmt.Errorf("checking rule %s:\n%w", r.ID, iss.Err())
 	}
 
 	if r.ResultType != nil {
 		err := doTypesMatch(c.ResultType(), r.ResultType)
 		if err != nil {
-			return fmt.Errorf("Error compiling rule: %w", err)
+			return nil, fmt.Errorf("Error compiling rule: %w", err)
 		}
 	}
 
@@ -101,24 +104,23 @@ func (e *CELEvaluator) Compile(r *indigo.Rule, collectDiagnostics bool, dryRun b
 
 	prog.program, err = env.Program(c, options)
 	if err != nil {
-		return fmt.Errorf("generating program %s, %w", r.ID, err)
+		return nil, fmt.Errorf("generating program %s, %w", r.ID, err)
 	}
 
 	if !dryRun {
 		if collectDiagnostics {
 			prog.ast = ast
 		}
-		r.Program = prog
 	}
 
-	return nil
+	return prog, nil
 }
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
-func (e *CELEvaluator) Eval(data map[string]interface{}, r *indigo.Rule, returnDiagnostics bool) (indigo.Value, string, error) {
+func (e *CELEvaluator) Evaluate(data map[string]interface{}, r *indigo.Rule, evalData interface{}, returnDiagnostics bool) (indigo.Value, string, error) {
 
-	program, ok := r.Program.(CELProgram)
+	program, ok := evalData.(CELProgram)
 
 	// If the rule doesn't have a program, return a default result
 	if !ok {

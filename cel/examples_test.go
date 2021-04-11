@@ -29,10 +29,9 @@ func Example() {
 	// Step 3: Create Indigo and give it an evaluator
 	// In this case, CEL
 	evaluator := cel.NewEvaluator()
-	engine := indigo.NewEngine(evaluator)
 
 	// Step 4: Compile the rule
-	err := engine.Compile(&rule)
+	err := rule.Compile(evaluator)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -43,7 +42,7 @@ func Example() {
 	}
 
 	// Step 5: Evaluate and check the results
-	results, err := engine.Evaluate(data, &rule)
+	results, err := rule.Evaluate(evaluator, data)
 	fmt.Println(results.Pass)
 	// Output: true
 }
@@ -68,14 +67,13 @@ func ExampleCELEvaluator_timestamps() {
 	}
 
 	evaluator := cel.NewEvaluator()
-	engine := indigo.NewEngine(evaluator)
-	err := engine.Compile(&rule)
+	err := rule.Compile(evaluator)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
 
-	results, err := engine.Evaluate(data, &rule)
+	results, err := rule.Evaluate(evaluator, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -105,14 +103,13 @@ func ExampleCELEvaluator_exists() {
 	}
 
 	evaluator := cel.NewEvaluator()
-	engine := indigo.NewEngine(evaluator)
-	err := engine.Compile(&rule)
+	err := rule.Compile(evaluator)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
 
-	results, err := engine.Evaluate(data, &rule)
+	results, err := rule.Evaluate(evaluator, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -149,14 +146,13 @@ func ExampleCELEvaluator_nested() {
 	}
 
 	evaluator := cel.NewEvaluator()
-	engine := indigo.NewEngine(evaluator)
-	err := engine.Compile(&rule)
+	err := rule.Compile(evaluator)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
 
-	results, err := engine.Evaluate(data, &rule)
+	results, err := rule.Evaluate(evaluator, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -199,14 +195,13 @@ func ExampleCELEvaluator_construction() {
 	}
 
 	evaluator := cel.NewEvaluator()
-	engine := indigo.NewEngine(evaluator)
-	err := engine.Compile(&rule)
+	err := rule.Compile(evaluator)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
 
-	results, err := engine.Evaluate(data, &rule)
+	results, err := rule.Evaluate(evaluator, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -263,14 +258,13 @@ func ExampleConditionalProtoConstruction() {
 	}
 
 	evaluator := cel.NewEvaluator()
-	engine := indigo.NewEngine(evaluator)
-	err := engine.Compile(&rule)
+	err := rule.Compile(evaluator)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
 
-	results, err := engine.Evaluate(data, &rule)
+	results, err := rule.Evaluate(evaluator, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return

@@ -7,6 +7,16 @@ import (
 	"github.com/ezachrisen/indigo/schema"
 )
 
+// -------------------------------------------------- NO-OP EVALUATOR
+type noOpEvaluator struct{}
+
+func (n *noOpEvaluator) Evaluate(map[string]interface{}, *indigo.Rule, bool) (indigo.Value, string, error) {
+	return indigo.Value{
+		Val: false,
+		Typ: schema.Bool{},
+	}, "", nil
+}
+
 // -------------------------------------------------- MOCK EVALUATOR
 // mockEvaluator is used for testing
 // It provides minimal evaluation of rules and captures
@@ -24,50 +34,63 @@ type program struct {
 }
 
 func newMockEvaluator() *mockEvaluator {
-	return &mockEvaluator{
-		//		ruleOptions: make(map[string]indigo.EvalOption, 10),
-	}
+	return &mockEvaluator{}
 }
-func (m *mockEvaluator) Compile(rule *indigo.Rule, collectDiagnostics bool, dryRun bool) error {
-	m.rules = append(m.rules, rule.ID)
+
+func (m *mockEvaluator) Compile(r *indigo.Rule, collectDiagnostics, dryRun bool) (interface{}, error) {
+
 	p := program{}
 	if collectDiagnostics {
 		p.compiledDiagnostics = true
 	}
-	rule.Program = p
-	return nil
+
+	return p, nil
 }
+
+// func CompileWithDiagnostics(rule *indigo.Rule) error {
+// 	p := program{}
+// 	p.compiledDiagnostics = true
+// 	m.programs[r]=p
+// 	return nil
+// }
 
 func (m *mockEvaluator) ResetRulesTested() {
 	m.rulesTested = []string{}
 }
 
 // The mockEvaluator only knows how to evaluate 1 string: `true`. If the expression is this, the evaluation is true, otherwise false.
-func (m *mockEvaluator) Eval(data map[string]interface{}, rule *indigo.Rule, returnDiagnostics bool) (indigo.Value, string, error) {
-	m.rulesTested = append(m.rulesTested, rule.ID)
-	prg, ok := rule.Program.(program)
-	if !ok {
-		return indigo.Value{
-			Val: false,
-			Typ: schema.Bool{},
-		}, "", fmt.Errorf("compiled program type assertion failed")
+func (m *mockEvaluator) Evaluate(data map[string]interface{}, r *indigo.Rule, prog interface{}, returnDiagnostics bool) (indigo.Value, string, error) {
+	m.rulesTested = append(m.rulesTested, r.ID)
+	prg := program{}
+
+	p, ok := prog.(program)
+	if m.diagnosticCompileRequired {
+		if !ok {
+			return indigo.Value{
+				Val: false,
+				Typ: schema.Bool{},
+			}, "", fmt.Errorf("compiled data type assertion failed")
+		} else {
+			prg = p
+		}
 	}
 
-	diagnostics := ""
+	var diagnostics string
+
 	if returnDiagnostics && ((m.diagnosticCompileRequired && prg.compiledDiagnostics) || !m.diagnosticCompileRequired) {
 		diagnostics = "diagnostics here"
 	}
 
-	if rule.Expr == `true` {
+	if r.Expr == `true` {
 		return indigo.Value{
 			Val: true,
 			Typ: schema.Bool{},
 		}, diagnostics, nil
 	}
 
-	if rule.Expr == `self` && rule.Self != nil {
+	if r.Expr == `self` && r.Self != nil {
 		return indigo.Value{
-			Val: rule.Self.(int),
+			Val: r.Self,
 			Typ: schema.Int{},
 		}, diagnostics, nil
 	}
@@ -76,6 +99,7 @@ func (m *mockEvaluator) Eval(data map[string]interface{}, rule *indigo.Rule, ret
 		Val: false,
 		Typ: schema.Bool{},
 	}, diagnostics, nil
+
 }
 
 func (m *mockEvaluator) Reset() {
@@ -97,7 +121,7 @@ func (e *mockEvaluator) PrintInternalStructure() {
 // compare the results to expected.
 func flattenResults(result *indigo.Result) map[string]bool {
 	m := map[string]bool{}
-	m[result.RuleID] = result.Pass
+	m[result.Rule.ID] = result.Pass
 	for k := range result.Results {
 		r := result.Results[k]
 		mc := flattenResults(r)
@@ -113,7 +137,7 @@ func flattenResults(result *indigo.Result) map[string]bool {
 // compare the results to expected.
 func flattenResultsDiagnostics(result *indigo.Result) map[string]string {
 	m := map[string]string{}
-	m[result.RuleID] = result.Diagnostics
+	m[result.Rule.ID] = result.Diagnostics
 	for k := range result.Results {
 		r := result.Results[k]
 		mc := flattenResultsDiagnostics(r)
@@ -185,4 +209,18 @@ func deleteKeys(m map[string]bool, keys ...string) map[string]bool {
 		delete(m, k)
 	}
 	return m
+}
+
+func apply(r *indigo.Rule, f func(r *indigo.Rule) error) error {
+	err := f(r)
+	if err != nil {
+		return err
+	}
+	for _, c := range r.Rules {
+		err := apply(c, f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
