@@ -1,19 +1,10 @@
-// Package Indigo provides a rules engine that evaluates
-// rules and returns the results.
+// Package Indigo provides a rules engine.
+//
+// Indigo provides ways to define and organize rules in a hierarchy that gives users flexibility to determine how
+// rules are evaluated, and which results are returned.
 //
 // Indigo does not specify a language for rules, relying instead on a rule evaluator to perform the work.
 // The default rule evaluator (in the cel package) is the Common Expression Language from Google (https://github.com/google/cel-go).
-//
-// Typical use is as follows:
-//
-//  1. Declare a schema describing the type of data you will be processing
-//  2. Create a rule, possibly with many child rules
-//  3. Create an evaluator and optionally a compiler
-//  4. Compile the rule
-//  5. Evaluate the rule
-//  6. Inspect the results
-//
-//  Options are available to control how rules are evaluated and which results are returned.
 //
 //
 // Compilation and Evaluation
@@ -23,11 +14,7 @@
 // of the rule for evaluation efficiency. The evaluation evaluates the rule against
 // input data and provides the output.
 //
-// Compilation can be done once per rule when it is loaded.
-//
-// Depending on the rule evaluator, compilation may not be required or supported.
-//
-// CEL requires compilation.
+// Depending on the rule evaluator, compilation may not be required. (CEL requires compilation.)
 //
 //
 // Basic Structure
@@ -43,18 +30,12 @@
 // Rule Ownership
 //
 // The calling application is responsible for managing the lifecycle of rules, including ensuring
-// concurrency safety. Specifically, this means:
+// concurrency safety. Some things to keep in mind:
 //  1. You must not allow changes to a rule during compilation.
 //  2. You may not modify the rule after compilation and before evaluation.
 //  3. You must not allow changes to a rule during evaluation.
 //  4. You should not modify a rule after it's been evaluated and before the results have been consumed.
 //  5. A rule must not be a child rule of more than one parent.
-//
-// Breaking these rules could lead to race conditions or unexpected outcomes.
-//
-// The simplest and safest way to use the rules engine is to load the rules at startup and
-// never change them. That may be appropriate for some use cases, but in many cases the rules are continually
-// being changed by humans or other processes.
 //
 // Updating Rules
 //

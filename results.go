@@ -24,8 +24,12 @@ type Result struct {
 	// Results of evaluating the child rules.
 	Results map[string]*Result
 
-	// Diagnostic data
+	// Diagnostic data; only available if you turn on diagnostics for the evaluation
 	Diagnostics string
+
+	// A list of the rules evaluated, in the order they were evaluated
+	// Only available if you turn on diagnostics for the evaluation
+	RulesEvaluated []*Rule
 }
 
 // String produces a list of rules (including child rules) executed and the result of the evaluation.
@@ -37,8 +41,9 @@ func (u *Result) summarizeResults(n int) string {
 	s := strings.Builder{}
 
 	if n == 0 {
-		s.WriteString("\n---------- Result Diagnostic --------------------------\n")
-		s.WriteString("                                         Pass Chil-\n")
+		s.WriteString("\n")
+		s.WriteString("---------- Result Diagnostic ---------------------------\n")
+		s.WriteString("                                         Pass Chil-     \n")
 		s.WriteString("Rule                                     Fail dren Value\n")
 		s.WriteString("--------------------------------------------------------\n")
 	}

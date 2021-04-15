@@ -193,18 +193,19 @@ func (r *Rule) Evaluate(e evaluator.Evaluator, d map[string]interface{}, opts ..
 		delete(d, selfKey)
 	}
 
+	pr := &Result{
+		Rule:    r,
+		Pass:    true,
+		Results: make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
+	}
+
 	val, diagnostics, err := e.Evaluate(d, r.Expr, r.Schema, r.Self, r.program, o.returnDiagnostics)
 	if err != nil {
 		return nil, err
 	}
 
-	pr := &Result{
-		Rule:        r,
-		Pass:        true,
-		Value:       val.Val,
-		Diagnostics: diagnostics,
-		Results:     make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
-	}
+	pr.Value = val.Val
+	pr.Diagnostics = diagnostics
 
 	// TODO: check that we got the expected value type
 	if pass, ok := val.Val.(bool); ok {
@@ -216,6 +217,9 @@ func (r *Rule) Evaluate(e evaluator.Evaluator, d map[string]interface{}, opts ..
 	}
 
 	for _, cr := range r.sortChildKeys() {
+		if o.returnDiagnostics {
+			pr.RulesEvaluated = append(pr.RulesEvaluated, cr)
+		}
 		result, err := cr.Evaluate(e, d, opts...)
 		if err != nil {
 			return nil, err

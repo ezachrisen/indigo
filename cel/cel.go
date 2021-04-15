@@ -1,4 +1,4 @@
-// Package cel provides an implementation of the evaluator and compiler interfaces backed by Google's cel-go rules engine.
+// Package cel provides an implementation of the Indigo evaluator and compiler interfaces backed by Google's cel-go rules engine.
 //
 // See https://github.com/google/cel-go and https://opensource.google/projects/cel for more information
 // about CEL.
