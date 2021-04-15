@@ -105,12 +105,14 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 		"e3",
 	}
 
-	result, err := r.Evaluate(e, map[string]interface{}{})
+	result, err := r.Evaluate(e, map[string]interface{}{}, indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 	//	fmt.Println(m.rulesTested)
 	//fmt.Println(result)
 	is.NoErr(match(flattenResults(result), expectedResults))
-	is.True(reflect.DeepEqual(expectedOrder, e.rulesTested)) // not all rules were evaluated
+	// fmt.Printf("Expected: %+v\n", expectedOrder)
+	// fmt.Printf("Got     : %+v\n", flattenResultsEvaluated(result))
+	is.True(reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result))) // not all rules were evaluated
 }
 
 // Test that a self reference is passed through compilation, evaluation
@@ -313,7 +315,6 @@ func TestEvalOptions(t *testing.T) {
 	}
 
 	for k, c := range cases {
-		e.ResetRulesTested()
 		r := makeRule()
 		c.prep(r)
 
@@ -363,7 +364,6 @@ func TestDiagnosticOptions(t *testing.T) {
 	}
 
 	for k, c := range cases {
-		e.ResetRulesTested()
 		r := makeRule()
 
 		// Set the mock engine to require that diagnostics must be turned on at compile time,
@@ -382,6 +382,10 @@ func TestDiagnosticOptions(t *testing.T) {
 			if err != nil {
 				t.Errorf("In case '%s', wanted diagnostics: %v", k, err)
 			}
+			if len(flattenResultsEvaluated(u)) != 16 {
+				t.Errorf("In case '%s', wanted list of rules diagnostics", k)
+			}
+
 		default:
 			err = anyNotEmpty(flattenResultsDiagnostics(u))
 			if err != nil {

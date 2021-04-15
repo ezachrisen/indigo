@@ -22,8 +22,7 @@ func (n *noOpEvaluator) Evaluate(map[string]interface{}, *indigo.Rule, bool) (sc
 // It provides minimal evaluation of rules and captures
 // information about which rules were processed, etc.
 type mockEvaluator struct {
-	rules       []string // a list of rule IDs in the evaluator
-	rulesTested []string // a list of rule IDs that were evaluated
+	rules []string // a list of rule IDs in the evaluator
 	// if set, diagnostic information is only returned if the flag was
 	// set during compilation
 	diagnosticCompileRequired bool
@@ -53,10 +52,6 @@ func (m *mockEvaluator) Compile(expr string, s schema.Schema, resultType schema.
 // 	m.programs[r]=p
 // 	return nil
 // }
-
-func (m *mockEvaluator) ResetRulesTested() {
-	m.rulesTested = []string{}
-}
 
 // The mockEvaluator only knows how to evaluate 1 string: `true`. If the expression is this, the evaluation is true, otherwise false.
 func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s schema.Schema, self interface{}, prog interface{}, returnDiagnostics bool) (schema.Value, string, error) {
@@ -128,6 +123,21 @@ func flattenResults(result *indigo.Result) map[string]bool {
 		for k := range mc {
 			m[k] = mc[k]
 		}
+	}
+	return m
+}
+
+// flattenResults takes a hierarchy of Result objects and flattens it
+// to a map of rule ID to pass/fail. This is so that it's easy to
+// compare the results to expected.
+func flattenResultsEvaluated(result *indigo.Result) []string {
+	m := []string{}
+	m = append(m, result.Rule.ID)
+	for _, c := range result.RulesEvaluated {
+		u := result.Results[c.ID]
+		//		fmt.Println("About to flatten reuslts for u=", c.ID, "in parent ", result.Rule.ID, "u=", u)
+		mc := flattenResultsEvaluated(u)
+		m = append(m, mc...)
 	}
 	return m
 }
