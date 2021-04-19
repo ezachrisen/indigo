@@ -1,11 +1,9 @@
 package indigo
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
-	"github.com/ezachrisen/indigo/evaluator"
 	"github.com/ezachrisen/indigo/schema"
 )
 
@@ -66,8 +64,7 @@ type Rule struct {
 	Rules map[string]*Rule
 
 	// Reference to intermediate compilation / evaluation data.
-	// Set
-	program interface{}
+	Program interface{}
 
 	// A reference to any object.
 	// Not used by the rules engine.
@@ -124,177 +121,127 @@ func NewRule(id string) *Rule {
 	}
 }
 
-// Compile prepares the rule, and all its children, to be evaluated.
-// Engine delegates most of the work to the Evaluator, whose
-// Compile method will be called for each rule.
-//
-// Depending on the Evaluator used, this step will provide rule
-// expression error checking.
-//
-// Compile modifies the rule.Program field, unless the DryRun option is passed.
-//
-// Once submitted to Compile, you must not make any changes to the rule.
-// If you make any changes, you must re-compile before evaluating.
-//
-// If an error occurs during compilation, rules that had already been
-// compiled successfully will have had their rule.Program fields updated.
-// Compile does not restore the state of the rules to its pre-Compile
-// state in case of errors. To avoid this problem, do a dry run first.
-func (r *Rule) Compile(c evaluator.Compiler, opts ...CompilationOption) error {
+// // Compile prepares the rule, and all its children, to be evaluated.
+// // Engine delegates most of the work to the Evaluator, whose
+// // Compile method will be called for each rule.
+// //
+// // Depending on the Evaluator used, this step will provide rule
+// // expression error checking.
+// //
+// // Compile modifies the rule.Program field, unless the DryRun option is passed.
+// //
+// // Once submitted to Compile, you must not make any changes to the rule.
+// // If you make any changes, you must re-compile before evaluating.
+// //
+// // If an error occurs during compilation, rules that had already been
+// // compiled successfully will have had their rule.Program fields updated.
+// // Compile does not restore the state of the rules to its pre-Compile
+// // state in case of errors. To avoid this problem, do a dry run first.
+// func (r *Rule) Compile(c expr.Compiler, opts ...CompilationOption) error {
 
-	if c == nil {
-		return fmt.Errorf("Compile: Compiler is nil")
-	}
+// 	if c == nil {
+// 		return fmt.Errorf("Compile: Compiler is nil")
+// 	}
 
-	o := compileOptions{}
-	applyCompilerOptions(&o, opts...)
+// 	o := compileOptions{}
+// 	applyCompilerOptions(&o, opts...)
 
-	prg, err := c.Compile(r.Expr, r.Schema, r.ResultType, o.collectDiagnostics, o.dryRun)
-	if err != nil {
-		return err
-	}
+// 	prg, err := c.Compile(r.Expr, r.Schema, r.ResultType, o.collectDiagnostics, o.dryRun)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	if !o.dryRun {
-		r.program = prg
-	}
+// 	if !o.dryRun {
+// 		r.Program = prg
+// 	}
 
-	for _, cr := range r.Rules {
-		err := cr.Compile(c, opts...)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// 	for _, cr := range r.Rules {
+// 		err := cr.Compile(c, opts...)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+// 	return nil
+// }
 
-func (r *Rule) Evaluate(e evaluator.Evaluator, d map[string]interface{}, opts ...EvaluationOption) (*Result, error) {
+// func (r *Rule) Evaluate(e Evaluator, d map[string]interface{}, opts ...EvaluationOption) (*Result, error) {
 
-	if r == nil {
-		return nil, fmt.Errorf("Evaluate: rule is nil")
-	}
+// 	if r == nil {
+// 		return nil, fmt.Errorf("Evaluate: rule is nil")
+// 	}
 
-	if e == nil {
-		return nil, fmt.Errorf("Evaluate: evaluator is nil")
-	}
+// 	if e == nil {
+// 		return nil, fmt.Errorf("Evaluate: evaluator is nil")
+// 	}
 
-	if d == nil {
-		return nil, fmt.Errorf("Evaluate: data is nil")
-	}
+// 	if d == nil {
+// 		return nil, fmt.Errorf("Evaluate: data is nil")
+// 	}
 
-	o := evalOptions{}
-	applyEvaluatorOptions(&o, opts...)
+// 	o := evalOptions{}
+// 	applyEvaluatorOptions(&o, opts...)
 
-	// If this rule has a reference to a 'self' object, insert it into the d.
-	// If it doesn't, we must remove any existing reference to self, so that
-	// child rules do not accidentally "inherit" the self object.
-	if r.Self != nil {
-		d[selfKey] = r.Self
-	} else {
-		delete(d, selfKey)
-	}
+// 	// If this rule has a reference to a 'self' object, insert it into the d.
+// 	// If it doesn't, we must remove any existing reference to self, so that
+// 	// child rules do not accidentally "inherit" the self object.
+// 	if r.Self != nil {
+// 		d[selfKey] = r.Self
+// 	} else {
+// 		delete(d, selfKey)
+// 	}
 
-	pr := &Result{
-		Rule:    r,
-		Pass:    true,
-		Results: make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
-	}
+// 	pr := &Result{
+// 		Rule:    r,
+// 		Pass:    true,
+// 		Results: make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
+// 	}
 
-	val, diagnostics, err := e.Evaluate(d, r.Expr, r.Schema, r.Self, r.program, o.returnDiagnostics)
-	if err != nil {
-		return nil, err
-	}
+// 	val, diagnostics, err := e.Evaluate(d, r.Expr, r.Schema, r.Self, r.program, o.returnDiagnostics)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	pr.Value = val.Val
-	pr.Diagnostics = diagnostics
+// 	pr.Value = val.Val
+// 	pr.Diagnostics = diagnostics
 
-	// TODO: check that we got the expected value type
-	if pass, ok := val.Val.(bool); ok {
-		pr.Pass = pass
-	}
+// 	// TODO: check that we got the expected value type
+// 	if pass, ok := val.Val.(bool); ok {
+// 		pr.Pass = pass
+// 	}
 
-	if r.StopIfParentNegative && pr.Pass == false {
-		return pr, nil
-	}
+// 	if r.StopIfParentNegative && pr.Pass == false {
+// 		return pr, nil
+// 	}
 
-	for _, cr := range r.sortChildKeys() {
-		if o.returnDiagnostics {
-			pr.RulesEvaluated = append(pr.RulesEvaluated, cr)
-		}
-		result, err := cr.Evaluate(e, d, opts...)
-		if err != nil {
-			return nil, err
-		}
+// 	for _, cr := range r.sortChildKeys() {
+// 		if o.returnDiagnostics {
+// 			pr.RulesEvaluated = append(pr.RulesEvaluated, cr)
+// 		}
+// 		result, err := cr.Evaluate(e, d, opts...)
+// 		if err != nil {
+// 			return nil, err
+// 		}
 
-		if (!result.Pass && !r.DiscardFail) ||
-			(result.Pass && !r.DiscardPass) {
-			pr.Results[cr.ID] = result
-		}
+// 		if (!result.Pass && !r.DiscardFail) ||
+// 			(result.Pass && !r.DiscardPass) {
+// 			pr.Results[cr.ID] = result
+// 		}
 
-		if r.StopFirstPositiveChild && result.Pass == true {
-			return pr, nil
-		}
+// 		if r.StopFirstPositiveChild && result.Pass == true {
+// 			return pr, nil
+// 		}
 
-		if r.StopFirstNegativeChild && result.Pass == false {
-			return pr, nil
-		}
-	}
-	return pr, nil
+// 		if r.StopFirstNegativeChild && result.Pass == false {
+// 			return pr, nil
+// 		}
+// 	}
+// 	return pr, nil
 
-}
+// }
 
 type compileOptions struct {
 	dryRun             bool
 	collectDiagnostics bool
-}
-
-// CompilationOptions determines how compilation behaves.
-type CompilationOption func(f *compileOptions)
-
-// Perform all compilation steps, but do not save the results.
-// This is to allow a client to check all rules in a rule tree before
-// committing the actual compilation results to the rule.
-func DryRun(b bool) CompilationOption {
-	return func(f *compileOptions) {
-		f.dryRun = b
-	}
-}
-
-// CollectDiagnostics instructs the engine and its evaluator to save any
-// intermediate results of compilation in order to provide good diagnostic
-// information after evaluation. Not all evaluators need to have this option set.
-func CollectDiagnostics(b bool) CompilationOption {
-	return func(f *compileOptions) {
-		f.collectDiagnostics = b
-	}
-}
-
-// Given an array of EngineOption functions, apply their effect
-// on the engineOptions struct.
-func applyCompilerOptions(o *compileOptions, opts ...CompilationOption) {
-	for _, opt := range opts {
-		opt(o)
-	}
-}
-
-type evalOptions struct {
-	returnDiagnostics bool
-}
-
-// EvaluationOptions determine how evaluation behaves.
-type EvaluationOption func(f *evalOptions)
-
-// Include diagnostic information with the results.
-// Default: off
-func ReturnDiagnostics(b bool) EvaluationOption {
-	return func(f *evalOptions) {
-		f.returnDiagnostics = b
-	}
-}
-
-func applyEvaluatorOptions(o *evalOptions, opts ...EvaluationOption) {
-	for _, opt := range opts {
-		opt(o)
-	}
 }
 
 // String returns a list of all the rules in hierarchy, with

@@ -26,11 +26,11 @@ func Example() {
 		Expr:   `message == "hello world"`,
 	}
 
-	// Step 3: Create a CEL evaluator
-	evaluator := cel.NewEvaluator()
+	// Step 3: Create an Engine with a CEL evaluator
+	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	// Step 4: Compile the rule
-	err := rule.Compile(evaluator)
+	err := engine.Compile(&rule)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -42,7 +42,7 @@ func Example() {
 	}
 
 	// Step 5: Evaluate and check the results
-	results, err := rule.Evaluate(evaluator, data)
+	results, _ := engine.Eval(&rule, data)
 	fmt.Println(results.Pass)
 	// Output: true
 }
