@@ -1,6 +1,7 @@
 package indigo_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -14,7 +15,7 @@ import (
 func TestEvaluationTraversalDefault(t *testing.T) {
 	is := is.New(t)
 
-	m := newMockEvaluator()
+	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 
 	//fmt.Println(r)
@@ -37,10 +38,10 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 		"e3":    true,
 	}
 
-	err := r.Compile(m)
+	err := e.Compile(r)
 	is.NoErr(err)
 
-	result, err := r.Evaluate(m, map[string]interface{}{})
+	result, err := e.Eval(r, map[string]interface{}{})
 	is.NoErr(err)
 	//fmt.Println(m.rulesTested)
 	//fmt.Println(result)
@@ -52,16 +53,16 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	is := is.New(t)
 
-	e := newMockEvaluator()
+	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 
 	// Specify the sort order for all rules
 	apply(r, func(r *indigo.Rule) error {
-		r.SortFunc = sortRulesAlpha
+		r.EvalOptions.SortFunc = sortRulesAlpha
 		return nil
 	})
 
-	err := r.Compile(e)
+	err := e.Compile(r)
 	is.NoErr(err)
 
 	//	fmt.Println(r)
@@ -105,7 +106,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 		"e3",
 	}
 
-	result, err := r.Evaluate(e, map[string]interface{}{}, indigo.ReturnDiagnostics(true))
+	result, err := e.Eval(r, map[string]interface{}{}, indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 	//	fmt.Println(m.rulesTested)
 	//fmt.Println(result)
@@ -120,9 +121,9 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 func TestSelf(t *testing.T) {
 	is := is.New(t)
 
-	e := newMockEvaluator()
+	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
-	err := r.Compile(e)
+	err := e.Compile(r)
 
 	// Set the self reference on D
 	D := r.Rules["D"]
@@ -132,10 +133,10 @@ func TestSelf(t *testing.T) {
 	// Give d1 a self expression, but no self value
 	d1.Expr = "self"
 
-	result, err := r.Evaluate(e, nil)
+	result, err := e.Eval(r, nil)
 	is.True(err != nil) // should get an error if the data map is nil and we try to use 'self'
 
-	result, err = r.Evaluate(e, map[string]interface{}{"anything": "anything"})
+	result, err = e.Eval(r, map[string]interface{}{"anything": "anything"})
 	is.NoErr(err)
 	is.Equal(result.Results["D"].Value.(int), 22)           // D should return 'self', which is 22
 	is.Equal(result.Results["D"].Results["d1"].Pass, false) // d1 should not inherit D's self
@@ -144,20 +145,19 @@ func TestSelf(t *testing.T) {
 // Test that the engine checks for nil data and rule
 func TestNilDataOrRule(t *testing.T) {
 	is := is.New(t)
-
-	e := newMockEvaluator()
+	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 
-	_, err := r.Evaluate(e, nil)
+	_, err := e.Eval(r, nil)
 	is.True(err != nil) // should get an error if the data map is nil
 	is.True(strings.Contains(err.Error(), "data is nil"))
 
-	_, err = r.Evaluate(nil, map[string]interface{}{})
+	_, err = e.Eval(nil, map[string]interface{}{})
 	is.True(err != nil) // should get an error if the rule is nil
-	is.True(strings.Contains(err.Error(), "evaluator is nil"))
+	is.True(strings.Contains(err.Error(), "rule is nil"))
 
 	r.Rules["B"].Rules["oops"] = nil
-	_, err = r.Evaluate(e, map[string]interface{}{})
+	_, err = e.Eval(r, map[string]interface{}{})
 	is.True(err != nil) // should get an error if the rule is nil
 	is.True(strings.Contains(err.Error(), "rule is nil"))
 
@@ -167,7 +167,7 @@ func TestNilDataOrRule(t *testing.T) {
 func TestEvalOptions(t *testing.T) {
 	is := is.New(t)
 
-	e := newMockEvaluator()
+	e := indigo.NewEngine(newMockEvaluator())
 	d := map[string]interface{}{"a": "a"} // dummy data, not important
 	w := map[string]bool{                 // the wanted rule evaluation results with no options in effect
 		"rule1": true,
@@ -202,7 +202,7 @@ func TestEvalOptions(t *testing.T) {
 
 		"StopIfParentNegative": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].StopIfParentNegative = true
+				r.Rules["B"].EvalOptions.StopIfParentNegative = true
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b1", "b2", "b3", "b4", "b4-1", "b4-2")
@@ -210,7 +210,7 @@ func TestEvalOptions(t *testing.T) {
 		},
 		"DiscardPass": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].Rules["b4"].DiscardPass = true
+				r.Rules["B"].Rules["b4"].EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b4-1")
@@ -218,7 +218,7 @@ func TestEvalOptions(t *testing.T) {
 		},
 		"DiscardFail": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].DiscardFail = true
+				r.Rules["B"].EvalOptions.DiscardFail = true
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b4", "b4-1", "b4-2")
@@ -226,8 +226,8 @@ func TestEvalOptions(t *testing.T) {
 		},
 		"DiscardPass & DiscardFail": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].DiscardFail = true
-				r.Rules["B"].DiscardPass = true
+				r.Rules["B"].EvalOptions.DiscardFail = true
+				r.Rules["B"].EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b1", "b2", "b3", "b4", "b4-1", "b4-2")
@@ -235,8 +235,8 @@ func TestEvalOptions(t *testing.T) {
 		},
 		"DiscardPass & DiscardFail on Root": {
 			prep: func(r *indigo.Rule) {
-				r.DiscardFail = true
-				r.DiscardPass = true
+				r.EvalOptions.DiscardFail = true
+				r.EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
 				return map[string]bool{"rule1": true}
@@ -244,8 +244,8 @@ func TestEvalOptions(t *testing.T) {
 		},
 		"StopFirstPositiveChild": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].StopFirstPositiveChild = true
-				r.Rules["B"].SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
@@ -253,8 +253,8 @@ func TestEvalOptions(t *testing.T) {
 		},
 		"StopFirstNegativeChild": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].StopFirstNegativeChild = true
-				r.Rules["B"].SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b3", "b4", "b4-1", "b4-2")
@@ -262,9 +262,9 @@ func TestEvalOptions(t *testing.T) {
 		},
 		"StopFirstNegativeChild & StopFirstPositiveChild": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].StopFirstNegativeChild = true
-				r.Rules["B"].StopFirstPositiveChild = true
-				r.Rules["B"].SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
+				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
@@ -272,9 +272,9 @@ func TestEvalOptions(t *testing.T) {
 		},
 		"Multiple Options": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].DiscardPass = true
-				r.Rules["B"].Rules["b4"].DiscardPass = true
-				r.Rules["E"].StopIfParentNegative = true
+				r.Rules["B"].EvalOptions.DiscardPass = true
+				r.Rules["B"].Rules["b4"].EvalOptions.DiscardPass = true
+				r.Rules["E"].EvalOptions.StopIfParentNegative = true
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b1", "b3", "b4-1", "e1", "e2", "e3")
@@ -318,7 +318,7 @@ func TestEvalOptions(t *testing.T) {
 		r := makeRule()
 		c.prep(r)
 
-		u, err := r.Evaluate(e, d)
+		u, err := e.Eval(r, d)
 		is.NoErr(err)
 
 		err = match(flattenResults(u), c.want())
@@ -333,8 +333,8 @@ func TestEvalOptions(t *testing.T) {
 func TestDiagnosticOptions(t *testing.T) {
 
 	is := is.New(t)
-
-	e := newMockEvaluator()
+	m := newMockEvaluator()
+	e := indigo.NewEngine(m)
 	d := map[string]interface{}{"a": "a"} // dummy data, not important
 
 	cases := map[string]struct {
@@ -368,12 +368,12 @@ func TestDiagnosticOptions(t *testing.T) {
 
 		// Set the mock engine to require that diagnostics must be turned on at compile time,
 		// or not. This is a special feature of the mock engine, useful for testing.
-		e.diagnosticCompileRequired = c.engineDiagnosticCompileRequired
+		m.diagnosticCompileRequired = c.engineDiagnosticCompileRequired
 
-		err := r.Compile(e, indigo.CollectDiagnostics(c.compileDiagnostics))
+		err := e.Compile(r, indigo.CollectDiagnostics(c.compileDiagnostics))
 		is.NoErr(err)
 
-		u, err := r.Evaluate(e, d, indigo.ReturnDiagnostics(c.evalDiagnostics))
+		u, err := e.Eval(r, d, indigo.ReturnDiagnostics(c.evalDiagnostics))
 		is.NoErr(err)
 
 		switch c.wantDiagnostics {
@@ -401,22 +401,22 @@ func TestDiagnosticOptions(t *testing.T) {
 func TestPartialDiagnostics(t *testing.T) {
 
 	is := is.New(t)
-
-	e := newMockEvaluator()
+	m := newMockEvaluator()
+	e := indigo.NewEngine(m)
 	// Set the mock engine to require that diagnostics must be turned on at compile time,
 	// or not. This is a special feature of the mock engine, useful for testing.
-	e.diagnosticCompileRequired = true
+	m.diagnosticCompileRequired = true
 	d := map[string]interface{}{"a": "a"} // dummy data, not important
 	r := makeRule()
 
 	// first, compile all the rules WITHOUT diagnostics
-	err := r.Compile(e)
+	err := e.Compile(r)
 	is.NoErr(err)
 
 	// then, re-compile rule B, WITH diagnostics
-	err = r.Rules["B"].Compile(e, indigo.CollectDiagnostics(true))
+	err = e.Compile(r.Rules["B"], indigo.CollectDiagnostics(true))
 
-	u, err := r.Evaluate(e, d, indigo.ReturnDiagnostics(true))
+	u, err := e.Eval(r, d, indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 
 	f := flattenResultsDiagnostics(u)
@@ -432,4 +432,16 @@ func TestPartialDiagnostics(t *testing.T) {
 			is.True(v == "")
 		}
 	}
+}
+
+func TestJSON(t *testing.T) {
+	is := is.New(t)
+
+	//	e := indigo.NewEngine(newMockEvaluator())
+	r := makeRule()
+
+	b, err := json.Marshal(r)
+	is.NoErr(err)
+	fmt.Println(string(b))
+
 }

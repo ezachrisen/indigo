@@ -1,7 +1,7 @@
 // Package Indigo provides a rules engine.
 //
-// Indigo provides ways to define and organize rules in a hierarchy that gives users flexibility to determine how
-// rules are evaluated, and which results are returned.
+// Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules.
+// Rules are expressions (such as "a > b") that are evaluated, and the outcomes used to direct appliation logic.
 //
 // Indigo does not specify a language for rules, relying instead on a rule evaluator to perform the work.
 // The default rule evaluator (in the cel package) is the Common Expression Language from Google (https://github.com/google/cel-go).
@@ -10,17 +10,16 @@
 // Compilation and Evaluation
 //
 // Indigo provides methods to compile and evaluate rules. The compilation step gives
-// the evaluator a chance to pre-process the rule and store an intermediate form
+// the evaluator a chance to pre-process the rule, provide feedback on rule correctness, and store an intermediate form
 // of the rule for evaluation efficiency. The evaluation evaluates the rule against
 // input data and provides the output.
-//
-// Depending on the rule evaluator, compilation may not be required. (CEL requires compilation.)
 //
 //
 // Basic Structure
 //
 // Indigo organizes rules in hierarchies. A parent rule can have 0 or many child
-// rules. You do not have to organize rules in a complex tree; a single parent with 1,000s of child rules is OK. There are 3 main reasons for using a tree to organize rules:
+// rules. You do not have to organize rules in a complex tree; a single parent with 1,000s of child rules is OK.
+// There are 3 main reasons for using a tree to organize rules:
 //  1. Allow atomic rule updates (see separate section)
 //  2. Use options on the parent rule to control if child rules are evaluated (in effect, child rules "inherit" the parent rule's condition)
 //  3. Use options on the parent rule to control which child rules are returned as results (such as returning true or false results, or both)
@@ -47,13 +46,14 @@
 //
 // It is not recommended to update a rule IN PLACE, unless you
 // manage the rule lifecycle beyond evaluation and use of the rule in interpreting
-// the results. Users of your result should expect that the definition of the rule stays constant. Instead, we recommend creating a new rule with a new version number in the ID to separate updates.
+// the results. Users of your result should expect that the definition of the rule stays constant.
+// Instead, we recommend creating a new rule with a new version number in the ID to separate updates.
 //
 // Structuring Rule Hierarchies for Updates
 //
 // The ability to organize rules in a hierarchy is useful to ensure that rule updates are atomic and consistent.
 //
-// You should structure the hierarchy so that a rule and its children can be seend as a
+// You should structure the hierarchy so that a rule and its children can be seen as a
 // "transaction" as far as updates are concerned.
 //
 // In this example, where Indigo is being used to enforce firewall rules, being able

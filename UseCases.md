@@ -20,7 +20,7 @@ The most basic use is to check whether a single rule is satisfied by the input p
 In pseudocode, to evaluate ``data`` against "myRule", you would execute this:
 
 ``` go
-r, err := indigo.Evaluate(data, "myID")
+r, err := indigo.Evaluate(rule, data)
 ```
 
 ### Results
@@ -61,7 +61,7 @@ For this use case it's important to specify that you want all true rules returne
 You specify that you want to evaluate the "alarms" rule, which in fact doesn't have a rule expression, but does have child rules. 
 
 ``` go
-r, err := indigo.Evaluate(data, "alarms")
+r, err := indigo.Evaluate(alarms_rule, data)
 ```
 
 
@@ -97,7 +97,7 @@ By specifying that we want to stop at the first positive child, we will return t
 ### Execution
 
 ``` go
-r, err := indigo.Evaluate(data, "access")
+r, err := indigo.Evaluate(access_rule, data)
 ```
 
 ### Results
@@ -135,7 +135,7 @@ In this example we're going to use an expression and the ``StopIfParentNegative`
 ### Execution
 
 ``` go
-r, err := indigo.Evaluate(data, "winning_high_avg")
+r, err := indigo.Evaluate(winners_high_avg_rule, data)
 ```
 
 
@@ -164,7 +164,7 @@ Note that we will evaluate the child rules if the parent is negative, so that we
         StopFirstPositiveChild: false
         StopFirstNegativeChild: false 
         ReturnPass:             false
-        ReturnFail:             true
+        ReturnFail:             true        <<< Indicates we want to see the rules that were NOT satsified
       Child rules:
         [*] Rule "major"
             - Expression: "student.major == 'Business'"
@@ -180,7 +180,7 @@ Note that we will evaluate the child rules if the parent is negative, so that we
 ### Execution
 
 ``` go
-r, err := indigo.Evaluate(data, "enrollment_qualification")
+r, err := indigo.Evaluate(enrollment_qualification_rule, data)
 ```
 
 
