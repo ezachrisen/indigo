@@ -1,4 +1,4 @@
-// Pacakge schema defines the data types used by Indigo.
+// Package schema defines the data types used by Indigo.
 package schema
 
 // Schema defines the keys (variable names) and their data types used in a
@@ -6,15 +6,15 @@ package schema
 // when rules are evaluated.
 type Schema struct {
 	// Identifier for the schema. Useful for the hosting application; not used by Indigo internally.
-	ID string
+	ID string `json:"id,omitempty"`
 	// User-friendly name for the schema
-	Name string
+	Name string `json:"name,omitempty"`
 	// A user-friendly description of the schema
-	Description string
+	Description string `json:"description,omitempty"`
 	// User-defined value
-	Meta interface{}
+	Meta interface{} `json:"-"`
 	// List of data elements supported by this schema
-	Elements []DataElement
+	Elements []DataElement `json:"elements,omitempty"`
 }
 
 // DataElement defines a named variable in a schema
@@ -24,13 +24,13 @@ type DataElement struct {
 	//
 	// RESERVED NAMES:
 	//   selfKey (see const)
-	Name string
+	Name string `json:"name"`
 
 	// One of the Type interface defined.
-	Type Type
+	Type Type `json:"type"`
 
 	// Optional description of the type.
-	Description string
+	Description string `json:"description"`
 }
 
 // Type defines a type in the Indigo type system.

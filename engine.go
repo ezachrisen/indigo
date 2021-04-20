@@ -17,8 +17,8 @@ type Engine interface {
 	Eval(r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error)
 }
 
-// DefaultEngine provides an implementation of the Engine interface
-// to evaluate rules.
+// DefaultEngine provides an implementation of the Indigo Engine interface
+// to evaluate rules locally.
 type DefaultEngine struct {
 	e Evaluator
 }
@@ -29,6 +29,10 @@ func NewEngine(e Evaluator) *DefaultEngine {
 	}
 }
 
+// Eval evaluates the expression of the rule and its children. It uses the evaluation
+// options of each rule to determine what to do with the results, and whether to proceed
+// evaluating. Options passed to this function will override the options set on the rules.
+// Eval uses the Evaluator provided to the engine to perform the expression evaluation.
 func (e *DefaultEngine) Eval(r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error) {
 	if r == nil {
 		return nil, fmt.Errorf("rule is nil")
@@ -46,7 +50,7 @@ func (e *DefaultEngine) Eval(r *Rule, d map[string]interface{}, opts ...EvalOpti
 		return nil, fmt.Errorf("data is nil")
 	}
 
-	o := evalOptions{}
+	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
 
 	// If this rule has a reference to a 'self' object, insert it into the d.
@@ -64,7 +68,7 @@ func (e *DefaultEngine) Eval(r *Rule, d map[string]interface{}, opts ...EvalOpti
 		Results: make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
 	}
 
-	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, o.returnDiagnostics)
+	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, o.ReturnDiagnostics)
 	if err != nil {
 		return nil, err
 	}
@@ -77,12 +81,12 @@ func (e *DefaultEngine) Eval(r *Rule, d map[string]interface{}, opts ...EvalOpti
 		pr.Pass = pass
 	}
 
-	if r.StopIfParentNegative && pr.Pass == false {
+	if o.StopIfParentNegative && pr.Pass == false {
 		return pr, nil
 	}
 
 	for _, cr := range r.sortChildKeys() {
-		if o.returnDiagnostics {
+		if o.ReturnDiagnostics {
 			pr.RulesEvaluated = append(pr.RulesEvaluated, cr)
 		}
 		result, err := e.Eval(cr, d, opts...)
@@ -90,22 +94,25 @@ func (e *DefaultEngine) Eval(r *Rule, d map[string]interface{}, opts ...EvalOpti
 			return nil, err
 		}
 
-		if (!result.Pass && !r.DiscardFail) ||
-			(result.Pass && !r.DiscardPass) {
+		if (!result.Pass && !o.DiscardFail) ||
+			(result.Pass && !o.DiscardPass) {
 			pr.Results[cr.ID] = result
 		}
 
-		if r.StopFirstPositiveChild && result.Pass == true {
+		if o.StopFirstPositiveChild && result.Pass == true {
 			return pr, nil
 		}
 
-		if r.StopFirstNegativeChild && result.Pass == false {
+		if o.StopFirstNegativeChild && result.Pass == false {
 			return pr, nil
 		}
 	}
 	return pr, nil
 }
 
+// Compile uses the Evaluator's compile method to check the rule and its children,
+// returning any validation errors. Stores a compiled version of the rule in the
+// rule.Program field (if the compiler returns a program).
 func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
 
 	if r == nil {
@@ -141,6 +148,11 @@ func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
 	return nil
 }
 
+type compileOptions struct {
+	dryRun             bool
+	collectDiagnostics bool
+}
+
 // CompilationOptions determines how compilation behaves.
 type CompilationOption func(f *compileOptions)
 
@@ -170,22 +182,100 @@ func applyCompilerOptions(o *compileOptions, opts ...CompilationOption) {
 	}
 }
 
-type evalOptions struct {
-	returnDiagnostics bool
+// EvalOptions determines how the engine should treat the results of evaluating a rule.
+type EvalOptions struct {
+
+	// StopIfParentNegative  not evaluate child rules if the parent's expression is false.
+	// Use case: apply a "global" rule to all the child rules.
+	StopIfParentNegative bool `json:"stop_if_parent_negative"`
+
+	// Stops the evaluation of child rules when the first positive child is encountered.
+	// Results will be partial. Only the child rules that were evaluated will be in the results.
+	// By default rules are evaluated in alphabetical order.
+	// Use case: role-based access; allow action if any child rule (permission rule) allows it.
+	StopFirstPositiveChild bool `json:"stop_first_positive_child"`
+
+	// Stops the evaluation of child rules when the first negative child is encountered.
+	// Results will be partial. Only the child rules that were evaluated will be in the results.
+	// By default rules are evaluated in alphabetical order.
+	// Use case: you require ALL child rules to be satisifed.
+	StopFirstNegativeChild bool `json:"stop_first_negative_child"`
+
+	// Do not return rules that passed
+	// Default: all rules are returned
+	DiscardPass bool `json:"discard_pass"`
+
+	// Do not return rules that failed
+	// Default: all rules are returned
+	DiscardFail bool `json:"discard_fail"`
+
+	// Include diagnostic information with the results.
+	// To enable this option, you must first turn on diagnostic
+	// collection at the engine level with the CollectDiagnostics EngineOption.
+	ReturnDiagnostics bool `json:"return_diagnostics"`
+
+	// Specify the function used to sort the child rules before evaluation.
+	// Useful in scenarios where you are asking the engine to stop evaluating
+	// after either the first negative or first positive child.
+	// See the provided SortAlpha function as an example.
+	// Default: No sort
+	SortFunc func(rules []*Rule, i, j int) bool `json:"-"`
 }
 
 // EvalOptions determine how evaluation behaves.
-type EvalOption func(f *evalOptions)
+type EvalOption func(f *EvalOptions)
 
-// Include diagnostic information with the results.
-// Default: off
+// See the EvalOptions struct for documentation.
 func ReturnDiagnostics(b bool) EvalOption {
-	return func(f *evalOptions) {
-		f.returnDiagnostics = b
+	return func(f *EvalOptions) {
+		f.ReturnDiagnostics = b
 	}
 }
 
-func applyEvaluatorOptions(o *evalOptions, opts ...EvalOption) {
+// See the EvalOptions struct for documentation.
+func SortFunc(x func(rules []*Rule, i, j int) bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.SortFunc = x
+	}
+}
+
+// See the EvalOptions struct for documentation.
+func DiscardFail(b bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.DiscardFail = b
+	}
+}
+
+// See the EvalOptions struct for documentation.
+func DiscardPass(b bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.DiscardPass = b
+	}
+}
+
+// See the EvalOptions struct for documentation.
+func StopIfParentNegative(b bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.StopIfParentNegative = b
+	}
+}
+
+// See the EvalOptions struct for documentation.
+func StopFirstNegativeChild(b bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.StopFirstNegativeChild = b
+	}
+}
+
+// See the EvalOptions struct for documentation.
+func StopFirstPositiveChild(b bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.StopFirstPositiveChild = b
+	}
+}
+
+// See the EvalOptions struct for documentation.
+func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
 	for _, opt := range opts {
 		opt(o)
 	}
