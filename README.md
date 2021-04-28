@@ -60,8 +60,3 @@ Indigo organizes rules in a tree-based hierarchy, allowing precise control over 
 
 Check out the [use cases](UseCases.md) for examples of ways you can struture rules in Indigo.
 
-See the package documentation:
-
-[![Go Reference](https://pkg.go.dev/badge/github.com/ezachrisen/indigo.svg)](https://pkg.go.dev/github.com/ezachrisen/indigo)
-
-
