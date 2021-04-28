@@ -1,11 +1,14 @@
 package indigo_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ezachrisen/indigo"
 	"github.com/matryer/is"
@@ -41,7 +44,7 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 	err := e.Compile(r)
 	is.NoErr(err)
 
-	result, err := e.Eval(r, map[string]interface{}{})
+	result, err := e.Eval(context.Background(), r, map[string]interface{}{})
 	is.NoErr(err)
 	//fmt.Println(m.rulesTested)
 	//fmt.Println(result)
@@ -57,7 +60,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	r := makeRule()
 
 	// Specify the sort order for all rules
-	apply(r, func(r *indigo.Rule) error {
+	indigo.ApplyToRule(r, func(r *indigo.Rule) error {
 		r.EvalOptions.SortFunc = sortRulesAlpha
 		return nil
 	})
@@ -106,7 +109,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 		"e3",
 	}
 
-	result, err := e.Eval(r, map[string]interface{}{}, indigo.ReturnDiagnostics(true))
+	result, err := e.Eval(context.Background(), r, map[string]interface{}{}, indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 	//	fmt.Println(m.rulesTested)
 	//fmt.Println(result)
@@ -133,10 +136,10 @@ func TestSelf(t *testing.T) {
 	// Give d1 a self expression, but no self value
 	d1.Expr = "self"
 
-	result, err := e.Eval(r, nil)
+	result, err := e.Eval(context.Background(), r, nil)
 	is.True(err != nil) // should get an error if the data map is nil and we try to use 'self'
 
-	result, err = e.Eval(r, map[string]interface{}{"anything": "anything"})
+	result, err = e.Eval(context.Background(), r, map[string]interface{}{"anything": "anything"})
 	is.NoErr(err)
 	is.Equal(result.Results["D"].Value.(int), 22)           // D should return 'self', which is 22
 	is.Equal(result.Results["D"].Results["d1"].Pass, false) // d1 should not inherit D's self
@@ -148,16 +151,16 @@ func TestNilDataOrRule(t *testing.T) {
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 
-	_, err := e.Eval(r, nil)
+	_, err := e.Eval(context.Background(), r, nil)
 	is.True(err != nil) // should get an error if the data map is nil
 	is.True(strings.Contains(err.Error(), "data is nil"))
 
-	_, err = e.Eval(nil, map[string]interface{}{})
+	_, err = e.Eval(context.Background(), nil, map[string]interface{}{})
 	is.True(err != nil) // should get an error if the rule is nil
 	is.True(strings.Contains(err.Error(), "rule is nil"))
 
 	r.Rules["B"].Rules["oops"] = nil
-	_, err = e.Eval(r, map[string]interface{}{})
+	_, err = e.Eval(context.Background(), r, map[string]interface{}{})
 	is.True(err != nil) // should get an error if the rule is nil
 	is.True(strings.Contains(err.Error(), "rule is nil"))
 
@@ -318,7 +321,7 @@ func TestEvalOptions(t *testing.T) {
 		r := makeRule()
 		c.prep(r)
 
-		u, err := e.Eval(r, d)
+		u, err := e.Eval(context.Background(), r, d)
 		is.NoErr(err)
 
 		err = match(flattenResults(u), c.want())
@@ -373,7 +376,7 @@ func TestDiagnosticOptions(t *testing.T) {
 		err := e.Compile(r, indigo.CollectDiagnostics(c.compileDiagnostics))
 		is.NoErr(err)
 
-		u, err := e.Eval(r, d, indigo.ReturnDiagnostics(c.evalDiagnostics))
+		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(c.evalDiagnostics))
 		is.NoErr(err)
 
 		switch c.wantDiagnostics {
@@ -416,7 +419,7 @@ func TestPartialDiagnostics(t *testing.T) {
 	// then, re-compile rule B, WITH diagnostics
 	err = e.Compile(r.Rules["B"], indigo.CollectDiagnostics(true))
 
-	u, err := e.Eval(r, d, indigo.ReturnDiagnostics(true))
+	u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 
 	f := flattenResultsDiagnostics(u)
@@ -440,8 +443,252 @@ func TestJSON(t *testing.T) {
 	//	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 
-	b, err := json.Marshal(r)
+	_, err := json.Marshal(r)
 	is.NoErr(err)
-	fmt.Println(string(b))
+	//	fmt.Println(string(b))
 
+}
+
+// // Test options set at the time eval is called
+// // (options apply to the entire tree)
+// func TestGlobalEvalOptions(t *testing.T) {
+// 	is := is.New(t)
+
+// 	cases := []struct {
+// 		opts []indigo.EvalOption  // Options to pass to evaluate
+// 		chk  func(*indigo.Result) // Function to check the results
+// 	}{
+// 		{
+// 			opts: []indigo.EvalOption{indigo.StopIfParentNegative(true)},
+// 			chk: func(r *indigo.Result) {
+// 				is.Equal(len(r.Results), 3)
+// 				is.Equal(len(r.Results["D"].Results), 3)
+// 				is.Equal(len(r.Results["E"].Results), 0)
+// 				is.Equal(len(r.Results["B"].Results), 0)
+// 			},
+// 		},
+// 		{
+// 			opts: []indigo.EvalOption{indigo.StopIfParentNegative(false)},
+// 			chk: func(r *indigo.Result) {
+// 				is.Equal(len(r.Results), 3)
+// 				is.Equal(len(r.Results["D"].Results), 3)
+// 				is.Equal(len(r.Results["E"].Results), 3)
+// 				is.Equal(len(r.Results["B"].Results), 4)
+// 			},
+// 		},
+// 		{
+// 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
+// 			chk: func(r *indigo.Result) {
+// 				is.Equal(len(r.Results), 2) // B is false, D is first positive child
+// 				is.True(r.Results["D"].Pass)
+// 				is.True(!r.Results["B"].Pass)
+// 			},
+// 		},
+// 		{
+// 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.SortFunc(sortRulesAlpha)},
+// 			chk: func(r *indigo.Result) {
+// 				is.Equal(len(r.Results), 1) // B is first, should stop evaluation
+// 				is.True(!r.Results["B"].Pass)
+// 			},
+// 		},
+// 		{
+// 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
+// 			chk: func(r *indigo.Result) {
+// 				is.Equal(len(r.Results), 1) // B should stop it
+// 				is.True(!r.Results["B"].Pass)
+// 			},
+// 		},
+// 		{
+// 			opts: []indigo.EvalOption{indigo.DiscardFail(true), indigo.DiscardPass(true)},
+// 			chk: func(r *indigo.Result) {
+// 				is.Equal(len(r.Results), 0)
+// 			},
+// 		},
+// 		{
+// 			opts: []indigo.EvalOption{indigo.DiscardPass(true)},
+// 			chk: func(r *indigo.Result) {
+// 				is.Equal(len(r.Results), 2) // should get B and E
+// 				is.True(!r.Results["B"].Pass)
+// 				is.True(!r.Results["E"].Pass)
+// 			},
+// 		},
+// 		{
+// 			opts: []indigo.EvalOption{indigo.DiscardFail(true)},
+// 			chk: func(r *indigo.Result) {
+// 				is.Equal(len(r.Results), 1)
+// 				is.True(r.Results["D"].Pass)
+// 			},
+// 		},
+// 	}
+
+// 	e := indigo.NewEngine(newMockEvaluator())
+// 	r := makeRule()
+
+// 	for _, c := range cases {
+// 		result, err := e.Eval(context.Background(), r, map[string]interface{}{}, c.opts...)
+// 		is.NoErr(err)
+// 		c.chk(result)
+// 	}
+// }
+
+// Test options set at the time eval is called
+// (options apply to the entire tree)
+func TestGlobalEvalOptions(t *testing.T) {
+	is := is.New(t)
+
+	cases := []struct {
+		prep func(*indigo.Rule)     // Edits to apply to the rule before evaluating
+		opts []indigo.EvalOption    // Options to pass to evaluate
+		chk  func(r *indigo.Result) // Function to check the results
+	}{
+		{
+			// Check that global (true) overrides default (false)
+			opts: []indigo.EvalOption{indigo.StopIfParentNegative(true)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 3)
+				is.Equal(len(r.Results["D"].Results), 3)
+				is.Equal(len(r.Results["E"].Results), 0)
+				is.Equal(len(r.Results["B"].Results), 0)
+			},
+		},
+		{
+			// Check that global (false) overrides local option (true)
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.StopIfParentNegative = true
+				r.Rules["B"].EvalOptions.StopIfParentNegative = true
+				r.Rules["D"].EvalOptions.StopIfParentNegative = true
+				r.Rules["E"].EvalOptions.StopIfParentNegative = true
+			},
+			opts: []indigo.EvalOption{indigo.StopIfParentNegative(false)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 3)
+				is.Equal(len(r.Results["D"].Results), 3)
+				is.Equal(len(r.Results["E"].Results), 3)
+				is.Equal(len(r.Results["B"].Results), 4)
+			},
+		},
+		{
+			// Check that global (true) overrides local option (false)
+			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 2) // B is false, D is first positive child
+				is.True(r.Results["D"].Pass)
+				is.True(!r.Results["B"].Pass)
+			},
+		},
+		{
+			// Check that global (false) overrides local option (true)
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.StopFirstPositiveChild = true
+				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["D"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["E"].EvalOptions.StopFirstPositiveChild = true
+				r.EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["D"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["E"].EvalOptions.SortFunc = sortRulesAlpha
+			},
+
+			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(false)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 3)
+			},
+		},
+
+		{
+			// Check that global (true) overrides local option (false)
+			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.SortFunc(sortRulesAlpha)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 1) // B is first, should stop evaluation
+				is.True(!r.Results["B"].Pass)
+			},
+		},
+		{
+			// Check that global (true) overrides local option (false)
+			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 1) // B should stop it
+				is.True(!r.Results["B"].Pass)
+			},
+		},
+		{
+			// Check that global (true) overrides local option (false)
+			opts: []indigo.EvalOption{indigo.DiscardFail(true), indigo.DiscardPass(true)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 0)
+			},
+		},
+		{
+			// Check that global (true) overrides local option (false)
+			opts: []indigo.EvalOption{indigo.DiscardPass(true)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 2) // should get B and E
+				is.True(!r.Results["B"].Pass)
+				is.True(!r.Results["E"].Pass)
+			},
+		},
+		{
+			// Check that global (FALSE) overrides local option (true)
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.DiscardPass = true
+				r.Rules["B"].EvalOptions.DiscardPass = true
+				r.Rules["D"].EvalOptions.DiscardPass = true
+				r.Rules["E"].EvalOptions.DiscardPass = true
+			},
+			opts: []indigo.EvalOption{indigo.DiscardPass(false)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 3)
+			},
+		},
+
+		{
+			// Check that global (true) overrides local option (false)
+			opts: []indigo.EvalOption{indigo.DiscardFail(true)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 1)
+				is.True(r.Results["D"].Pass)
+			},
+		},
+
+		{
+			// Check that global (FALSE) overrides local option (true)
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.DiscardFail = true
+				r.Rules["B"].EvalOptions.DiscardFail = true
+				r.Rules["D"].EvalOptions.DiscardFail = true
+				r.Rules["E"].EvalOptions.DiscardFail = true
+			},
+			opts: []indigo.EvalOption{indigo.DiscardFail(false)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results), 3)
+			},
+		},
+	}
+
+	e := indigo.NewEngine(newMockEvaluator())
+
+	for _, c := range cases {
+		r := makeRule()
+		if c.prep != nil {
+			c.prep(r)
+		}
+		result, err := e.Eval(context.Background(), r, map[string]interface{}{}, c.opts...)
+		is.NoErr(err)
+		c.chk(result)
+	}
+}
+
+// Test that Indigo stops evaluating rules after a timeout value has been reached
+func TestTimeout(t *testing.T) {
+	is := is.New(t)
+
+	r := makeRule()
+	m := newMockEvaluator()
+	m.evalDelay = 10 * time.Millisecond
+	e := indigo.NewEngine(m)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	_, err := e.Eval(ctx, r, map[string]interface{}{})
+	is.True(errors.Is(err, context.DeadlineExceeded))
 }

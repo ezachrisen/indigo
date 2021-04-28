@@ -1,4 +1,4 @@
-// Package Indigo provides a rules engine.
+// Package indigo provides a rules engine.
 //
 // Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules.
 // Rules are expressions (such as "a > b") that are evaluated, and the outcomes used to direct appliation logic.

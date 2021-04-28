@@ -1,55 +1,94 @@
-package schema_test
+package indigo_test
 
 import (
 	"reflect"
 	"testing"
 
-	"github.com/ezachrisen/indigo/schema"
+	"github.com/ezachrisen/indigo"
 )
+
+func TestString(t *testing.T) {
+
+	cases := map[string]struct {
+		typ     indigo.Type
+		wantStr string
+	}{
+		"int": {
+			typ:     indigo.Int{},
+			wantStr: "int",
+		},
+		"map": {
+			typ: indigo.Map{
+				KeyType:   indigo.String{},
+				ValueType: indigo.Int{},
+			},
+			wantStr: "map[string]int",
+		},
+		"list": {
+			typ: indigo.List{
+				ValueType: indigo.Duration{},
+			},
+			wantStr: "[]duration",
+		},
+		"proto": {
+			typ: indigo.Proto{
+				Protoname: "dummy",
+			},
+			wantStr: "proto(dummy)",
+		},
+	}
+
+	for key, c := range cases {
+		str := c.typ.String()
+		if str != c.wantStr {
+			t.Errorf("case %s: wanted '%s', got '%s'", key, c.wantStr, str)
+		}
+	}
+}
 
 func TestParser(t *testing.T) {
 
 	cases := map[string]struct {
 		str       string
 		wantError bool
-		wantType  schema.Type
+		wantType  indigo.Type
 	}{
 		"int": {
 			str:       "int",
 			wantError: false,
-			wantType:  schema.Int{},
+			wantType:  indigo.Int{},
 		},
 		"float": {
 			str:       "float",
 			wantError: false,
-			wantType:  schema.Float{},
+			wantType:  indigo.Float{},
 		},
 		"map": {
 			str:       "map[string]float",
 			wantError: false,
-			wantType: schema.Map{
-				KeyType:   schema.String{},
-				ValueType: schema.Float{},
+			wantType: indigo.Map{
+				KeyType:   indigo.String{},
+				ValueType: indigo.Float{},
 			},
 		},
 		"list": {
 			str:       "[]float",
 			wantError: false,
-			wantType: schema.List{
-				ValueType: schema.Float{},
+			wantType: indigo.List{
+				ValueType: indigo.Float{},
 			},
 		},
 		"proto": {
 			str:       "proto(student)",
 			wantError: false,
-			wantType: schema.Proto{
+			wantType: indigo.Proto{
 				Protoname: "student",
 			},
 		},
 		"proto2": {
 			str:       "proto(s)",
 			wantError: false,
-			wantType: schema.Proto{
+			wantType: indigo.Proto{
 				Protoname: "s",
 			},
 		},
@@ -84,7 +123,7 @@ func TestParser(t *testing.T) {
 	}
 
 	for key, c := range cases {
-		typ, err := schema.ParseType(c.str)
+		typ, err := indigo.ParseType(c.str)
 		if c.wantError && err != nil {
 			continue
 		}

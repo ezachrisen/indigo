@@ -3,8 +3,6 @@ package indigo
 import (
 	"sort"
 	"strings"
-
-	"github.com/ezachrisen/indigo/schema"
 )
 
 // A Rule defines logic that can be evaluated by an Evaluator.
@@ -48,11 +46,11 @@ type Rule struct {
 	// The output type of the expression. Evaluators with the ability to check
 	// whether an expression produces the desired output should return an error
 	// if the expression does not.
-	ResultType schema.Type `json:"result_type,omitempty"`
+	ResultType Type `json:"result_type,omitempty"`
 
 	// The schema describing the data provided in the Evaluate input. (optional)
-	// Some implementations of Evaluator require a schema.
-	Schema schema.Schema `json:"schema,omitempty"`
+	// Some implementations of Evaluator require a
+	Schema Schema `json:"schema,omitempty"`
 
 	// A reference to an object whose values can be used in the rule expression.
 	// Add the corresponding object in the data with the reserved key name selfKey
@@ -88,6 +86,21 @@ func NewRule(id string) *Rule {
 	}
 }
 
+// ApplyToRule applies the function f to the rule r and its children recursively.
+func ApplyToRule(r *Rule, f func(r *Rule) error) error {
+	err := f(r)
+	if err != nil {
+		return err
+	}
+	for _, c := range r.Rules {
+		err := ApplyToRule(c, f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // String returns a list of all the rules in hierarchy, with
 // child rules sorted in evaluation order.
 func (r *Rule) String() string {
@@ -99,6 +112,9 @@ func (r *Rule) describe(n int) string {
 	s.WriteString(strings.Repeat("  ", n)) // indent
 	s.WriteString(r.ID)
 	s.WriteString("\n")
+	s.WriteString(" Schema: " + r.ID + "\n")
+	s.WriteString(" Expr:   " + r.Expr + "\n")
+
 	for _, c := range r.Rules {
 		s.WriteString(c.describe(n + 1))
 	}
@@ -108,15 +124,15 @@ func (r *Rule) describe(n int) string {
 // sortChildKeys sorts the IDs of the child rules according to the
 // SortFunc set in evaluation options. If no SortFunc is set, the evaluation
 // order is not specified.
-func (r *Rule) sortChildKeys() []*Rule {
+func (r *Rule) sortChildKeys(o EvalOptions) []*Rule {
 	keys := make([]*Rule, 0, len(r.Rules))
 	for k := range r.Rules {
 		keys = append(keys, r.Rules[k])
 	}
 
-	if r.EvalOptions.SortFunc != nil {
+	if o.SortFunc != nil {
 		sort.Slice(keys, func(i, j int) bool {
-			return r.EvalOptions.SortFunc(keys, i, j)
+			return o.SortFunc(keys, i, j)
 		})
 	}
 	return keys

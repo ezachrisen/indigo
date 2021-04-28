@@ -1,6 +1,7 @@
 package indigo
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -14,7 +15,7 @@ type Engine interface {
 
 	// Evaluate tests the rule and its child rules against the data.
 	// Returns the result of the evaluation.
-	Eval(r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error)
+	Eval(ctx context.Context, r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error)
 }
 
 // DefaultEngine provides an implementation of the Indigo Engine interface
@@ -23,6 +24,7 @@ type DefaultEngine struct {
 	e Evaluator
 }
 
+// NewEngine initializes and returns a DefaultEngine.
 func NewEngine(e Evaluator) *DefaultEngine {
 	return &DefaultEngine{
 		e: e,
@@ -33,7 +35,7 @@ func NewEngine(e Evaluator) *DefaultEngine {
 // options of each rule to determine what to do with the results, and whether to proceed
 // evaluating. Options passed to this function will override the options set on the rules.
 // Eval uses the Evaluator provided to the engine to perform the expression evaluation.
-func (e *DefaultEngine) Eval(r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error) {
+func (e *DefaultEngine) Eval(ctx context.Context, r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error) {
 	if r == nil {
 		return nil, fmt.Errorf("rule is nil")
 	}
@@ -81,30 +83,35 @@ func (e *DefaultEngine) Eval(r *Rule, d map[string]interface{}, opts ...EvalOpti
 		pr.Pass = pass
 	}
 
-	if o.StopIfParentNegative && pr.Pass == false {
+	if o.StopIfParentNegative && !pr.Pass {
 		return pr, nil
 	}
 
-	for _, cr := range r.sortChildKeys() {
-		if o.ReturnDiagnostics {
-			pr.RulesEvaluated = append(pr.RulesEvaluated, cr)
-		}
-		result, err := e.Eval(cr, d, opts...)
-		if err != nil {
-			return nil, err
-		}
+	for _, cr := range r.sortChildKeys(o) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			if o.ReturnDiagnostics {
+				pr.RulesEvaluated = append(pr.RulesEvaluated, cr)
+			}
+			result, err := e.Eval(ctx, cr, d, opts...)
+			if err != nil {
+				return nil, err
+			}
 
-		if (!result.Pass && !o.DiscardFail) ||
-			(result.Pass && !o.DiscardPass) {
-			pr.Results[cr.ID] = result
-		}
+			if (!result.Pass && !o.DiscardFail) ||
+				(result.Pass && !o.DiscardPass) {
+				pr.Results[cr.ID] = result
+			}
 
-		if o.StopFirstPositiveChild && result.Pass == true {
-			return pr, nil
-		}
+			if o.StopFirstPositiveChild && result.Pass {
+				return pr, nil
+			}
 
-		if o.StopFirstNegativeChild && result.Pass == false {
-			return pr, nil
+			if o.StopFirstNegativeChild && !result.Pass {
+				return pr, nil
+			}
 		}
 	}
 	return pr, nil
@@ -153,10 +160,10 @@ type compileOptions struct {
 	collectDiagnostics bool
 }
 
-// CompilationOptions determines how compilation behaves.
+// CompilationOption is a functional option to specify compilation behavior.
 type CompilationOption func(f *compileOptions)
 
-// Perform all compilation steps, but do not save the results.
+// DryRun specifies to perform all compilation steps, but do not save the results.
 // This is to allow a client to check all rules in a rule tree before
 // committing the actual compilation results to the rule.
 func DryRun(b bool) CompilationOption {
@@ -222,7 +229,7 @@ type EvalOptions struct {
 	SortFunc func(rules []*Rule, i, j int) bool `json:"-"`
 }
 
-// EvalOptions determine how evaluation behaves.
+// EvalOption is a functional option for specifying how evaluations behave.
 type EvalOption func(f *EvalOptions)
 
 // See the EvalOptions struct for documentation.

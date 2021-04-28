@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/ezachrisen/indigo"
-	"github.com/ezachrisen/indigo/schema"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
@@ -52,7 +51,7 @@ func NewEvaluator() *CELEvaluator {
 //
 // Any errors in compilation are returned, and the rule.Program is set to nil.
 // If dryRun is true, this does nothing.
-func (e *CELEvaluator) Compile(expr string, s schema.Schema, resultType schema.Type, collectDiagnostics bool, dryRun bool) (interface{}, error) {
+func (e *CELEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, dryRun bool) (interface{}, error) {
 	prog := CELProgram{}
 
 	if expr == "" {
@@ -118,15 +117,15 @@ func (e *CELEvaluator) Compile(expr string, s schema.Schema, resultType schema.T
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
-func (e *CELEvaluator) Evaluate(data map[string]interface{}, expr string, s schema.Schema, self interface{}, evalData interface{}, returnDiagnostics bool) (schema.Value, string, error) {
+func (e *CELEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, evalData interface{}, returnDiagnostics bool) (indigo.Value, string, error) {
 
 	program, ok := evalData.(CELProgram)
 
 	// If the rule doesn't have a program, return a default result
 	if !ok {
-		return schema.Value{
-			Val: true,
-			Typ: schema.Bool{},
+		return indigo.Value{
+			Val:  true,
+			Type: indigo.Bool{},
 		}, "", nil
 	}
 
@@ -146,19 +145,19 @@ func (e *CELEvaluator) Evaluate(data map[string]interface{}, expr string, s sche
 	}
 
 	if err != nil {
-		return schema.Value{}, diagnostics, fmt.Errorf("evaluating rule: %w", err)
+		return indigo.Value{}, diagnostics, fmt.Errorf("evaluating rule: %w", err)
 	}
 
 	switch v := rawValue.Value().(type) {
 	case bool:
-		return schema.Value{
-			Val: v,
-			Typ: schema.Bool{},
+		return indigo.Value{
+			Val:  v,
+			Type: indigo.Bool{},
 		}, diagnostics, nil
 	default:
-		return schema.Value{
-			Val: v,
-			Typ: schema.Any{},
+		return indigo.Value{
+			Val:  v,
+			Type: indigo.Any{},
 		}, diagnostics, nil
 	}
 
@@ -168,7 +167,7 @@ func (e *CELEvaluator) Evaluate(data map[string]interface{}, expr string, s sche
 
 // Parse, check and store the rule
 
-func doTypesMatch(result *expr.Type, expected schema.Type) error {
+func doTypesMatch(result *expr.Type, expected indigo.Type) error {
 
 	// Convert the CEL result type to an Indigo type
 	indigoResultType, err := indigoType(result)
@@ -177,21 +176,21 @@ func doTypesMatch(result *expr.Type, expected schema.Type) error {
 	}
 
 	switch e := expected.(type) {
-	case schema.Proto:
-		resultAsProto, ok := indigoResultType.(schema.Proto)
+	case indigo.Proto:
+		resultAsProto, ok := indigoResultType.(indigo.Proto)
 		if !ok {
 			return fmt.Errorf("Rule.ResultValue is a proto message. Result from rule compilation is %T", result)
 		}
 		if resultAsProto.Protoname != e.Protoname {
 			return fmt.Errorf("Rule.ResultValue is a proto message with type %s, the result from compilation is a proto message with type %s", e.Protoname, resultAsProto.Protoname)
 		}
-	case schema.Bool:
-		_, ok := indigoResultType.(schema.Bool)
+	case indigo.Bool:
+		_, ok := indigoResultType.(indigo.Bool)
 		if !ok {
 			return fmt.Errorf("Rule.ResultValue is a boolean. Result from rule compilation is %T", result)
 		}
-	case schema.Float:
-		_, ok := indigoResultType.(schema.Float)
+	case indigo.Float:
+		_, ok := indigoResultType.(indigo.Float)
 		if !ok {
 			return fmt.Errorf("Rule.ResultValue is a float. Result from rule compilation is %T", result)
 		}
@@ -200,19 +199,19 @@ func doTypesMatch(result *expr.Type, expected schema.Type) error {
 	return nil
 }
 
-// indigoType convertes from a CEL type to an schema.Type
+// indigoType convertes from a CEL type to an indigo.Type
 // TODO: cover more types
-func indigoType(t *expr.Type) (schema.Type, error) {
+func indigoType(t *expr.Type) (indigo.Type, error) {
 
 	switch v := t.TypeKind.(type) {
 	case *expr.Type_MessageType:
-		return schema.Proto{Protoname: t.GetMessageType()}, nil
+		return indigo.Proto{Protoname: t.GetMessageType()}, nil
 	case *expr.Type_Primitive:
 		switch t.GetPrimitive() {
 		case expr.Type_BOOL:
-			return schema.Bool{}, nil
+			return indigo.Bool{}, nil
 		case expr.Type_DOUBLE:
-			return schema.Float{}, nil
+			return indigo.Float{}, nil
 		default:
 			return nil, fmt.Errorf("Unexpected primitive type %v", v)
 		}
@@ -221,23 +220,23 @@ func indigoType(t *expr.Type) (schema.Type, error) {
 	}
 }
 
-// celType converts from a schema.Type to a CEL type
-func celType(t schema.Type) (*expr.Type, error) {
+// celType converts from a indigo.Type to a CEL type
+func celType(t indigo.Type) (*expr.Type, error) {
 
 	switch v := t.(type) {
-	case schema.String:
+	case indigo.String:
 		return decls.String, nil
-	case schema.Int:
+	case indigo.Int:
 		return decls.Int, nil
-	case schema.Float:
+	case indigo.Float:
 		return decls.Double, nil
-	case schema.Bool:
+	case indigo.Bool:
 		return decls.Bool, nil
-	case schema.Duration:
+	case indigo.Duration:
 		return decls.Duration, nil
-	case schema.Timestamp:
+	case indigo.Timestamp:
 		return decls.Timestamp, nil
-	case schema.Map:
+	case indigo.Map:
 		key, err := celType(v.KeyType)
 		if err != nil {
 			return nil, fmt.Errorf("Setting key of %v map: %w", v.KeyType, err)
@@ -247,13 +246,13 @@ func celType(t schema.Type) (*expr.Type, error) {
 			return nil, fmt.Errorf("Setting value of %v map: %w", v.ValueType, err)
 		}
 		return decls.NewMapType(key, val), nil
-	case schema.List:
+	case indigo.List:
 		val, err := celType(v.ValueType)
 		if err != nil {
 			return nil, fmt.Errorf("Setting value of %v list: %w", v.ValueType, err)
 		}
 		return decls.NewListType(val), nil
-	case schema.Proto:
+	case indigo.Proto:
 		return decls.NewObjectType(v.Protoname), nil
 	}
 	return decls.Any, nil
@@ -262,7 +261,7 @@ func celType(t schema.Type) (*expr.Type, error) {
 
 // schemaToDeclarations converts from a rules/Schema to a set of CEL declarations that
 // are passed to the CEL engine
-func schemaToDeclarations(s schema.Schema) ([]cel.EnvOption, error) {
+func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, error) {
 	declarations := []*expr.Decl{}
 	types := []interface{}{}
 
@@ -274,7 +273,7 @@ func schemaToDeclarations(s schema.Schema) ([]cel.EnvOption, error) {
 		declarations = append(declarations, decls.NewVar(d.Name, typ))
 
 		switch v := d.Type.(type) {
-		case schema.Proto:
+		case indigo.Proto:
 			types = append(types, v.Message)
 			//fmt.Printf("Added a new type: %T with name %s\n", v.Message, v.Protoname)
 		}

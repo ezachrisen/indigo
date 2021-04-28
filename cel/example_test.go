@@ -1,11 +1,12 @@
 package cel_test
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/ezachrisen/indigo"
 	"github.com/ezachrisen/indigo/cel"
-	"github.com/ezachrisen/indigo/schema"
+
 	"github.com/ezachrisen/indigo/testdata/school"
 	"github.com/golang/protobuf/ptypes"
 )
@@ -13,9 +14,9 @@ import (
 func Example() {
 
 	// Step 1: Create a schema
-	schema := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "message", Type: schema.String{}},
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "message", Type: indigo.String{}},
 		},
 	}
 
@@ -42,16 +43,16 @@ func Example() {
 	}
 
 	// Step 5: Evaluate and check the results
-	results, err := engine.Eval(&rule, data)
+	results, err := engine.Eval(context.Background(), &rule, data)
 	fmt.Println(results.Pass)
 	// Output: true
 }
 
-func ExampleCELEvaluator_timestamps() {
-	schema := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "then", Type: schema.String{}},
-			{Name: "now", Type: schema.Timestamp{}},
+func Example_timestampComparison() {
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "then", Type: indigo.String{}},
+			{Name: "now", Type: indigo.Timestamp{}},
 		},
 	}
 
@@ -74,7 +75,7 @@ func ExampleCELEvaluator_timestamps() {
 		return
 	}
 
-	results, err := engine.Eval(&rule, data)
+	results, err := engine.Eval(context.Background(), &rule, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -83,11 +84,11 @@ func ExampleCELEvaluator_timestamps() {
 	// Output: true
 }
 
-func ExampleCELEvaluator_exists() {
+func Example_existsOperator() {
 
-	education := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
 		},
 	}
 
@@ -111,7 +112,7 @@ func ExampleCELEvaluator_exists() {
 		return
 	}
 
-	results, err := engine.Eval(&rule, data)
+	results, err := engine.Eval(context.Background(), &rule, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -121,12 +122,12 @@ func ExampleCELEvaluator_exists() {
 }
 
 // Demonstrates using the exists macro to inspect the value of nested messages in the list
-func ExampleCELEvaluator_nested() {
+func Example_nestedMessages() {
 
-	education := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: schema.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
 		},
 	}
 
@@ -155,7 +156,7 @@ func ExampleCELEvaluator_nested() {
 		return
 	}
 
-	results, err := engine.Eval(&rule, data)
+	results, err := engine.Eval(context.Background(), &rule, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -165,13 +166,13 @@ func ExampleCELEvaluator_nested() {
 }
 
 // Demonstrate constructing a proto message in an expression
-func ExampleCELEvaluator_construction() {
+func Example_protoConstruction() {
 
-	education := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: schema.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
 		},
 	}
 
@@ -188,7 +189,7 @@ func ExampleCELEvaluator_construction() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
 			school.StudentSummary {
 				GPA: student.GPA,
@@ -205,7 +206,7 @@ func ExampleCELEvaluator_construction() {
 		return
 	}
 
-	results, err := engine.Eval(&rule, data)
+	results, err := engine.Eval(context.Background(), &rule, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -221,13 +222,13 @@ func ExampleCELEvaluator_construction() {
 }
 
 // Demonstrate using the ? : operator to conditionally construct a proto message
-func ExampleConditionalProtoConstruction() {
+func Example_protoConstructionConditional() {
 
-	education := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: schema.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
 		},
 	}
 
@@ -245,7 +246,7 @@ func ExampleConditionalProtoConstruction() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
 			student.GPA > 3.0 ? 
 				school.StudentSummary {
@@ -269,7 +270,7 @@ func ExampleConditionalProtoConstruction() {
 		return
 	}
 
-	results, err := engine.Eval(&rule, data)
+	results, err := engine.Eval(context.Background(), &rule, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return

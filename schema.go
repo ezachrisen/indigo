@@ -1,5 +1,4 @@
-// Package schema defines the data types used by Indigo.
-package schema
+package indigo
 
 import (
 	"fmt"
@@ -65,49 +64,67 @@ type Type interface {
 	String() string
 }
 
+// String defines an Indigo string type.
 type String struct{}
+
+// Int defines an Indigo int type. The exact "Int" implementation and size
+// depends on the evaluator used.
 type Int struct{}
+
+// Float defines an Indigo float type. The implementation of the float (size, precision)
+// depends on the evaluator used.
 type Float struct{}
+
+// Any defines an Indigo type for an "undefined" or unspecified type.
 type Any struct{}
+
+// Bool defines an Indigo type for true/false.
 type Bool struct{}
+
+// Duration defines an Indigo type for the time.Duration type.
 type Duration struct{}
+
+// Timestamp defines an Indigo type for the time.Time type.
 type Timestamp struct{}
+
+// Proto defines an Indigo type for a protobuf type.
 type Proto struct {
-	Protoname string
-	Message   interface{}
-}
-type List struct {
-	ValueType Type
+	Protoname string      // fully qualified name of the protobuf type
+	Message   interface{} // an empty protobuf instance of the type
 }
 
+// List defines an Indigo type representing a slice of values
+type List struct {
+	ValueType Type // the type of element stored in the list
+}
+
+// Map defines an Indigo type representing a map of keys and values.
 type Map struct {
-	KeyType   Type
-	ValueType Type
+	KeyType   Type // the type of the map key
+	ValueType Type // the type of the value stored in the map
 }
 
 func (t Int) String() string       { return "int" }
 func (t Bool) String() string      { return "bool" }
 func (t String) String() string    { return "string" }
-func (t List) String() string      { return "list" }
-func (t Map) String() string       { return "map" }
+func (t List) String() string      { return "[]" + t.ValueType.String() }
+func (t Map) String() string       { return "map[" + t.KeyType.String() + "]" + t.ValueType.String() }
 func (t Any) String() string       { return "any" }
 func (t Duration) String() string  { return "duration" }
 func (t Timestamp) String() string { return "timestamp" }
 func (t Float) String() string     { return "float" }
-func (t Proto) String() string     { return "proto " + t.Protoname }
+func (t Proto) String() string     { return "proto(" + t.Protoname + ")" }
 
-// The value returned in the Result.
-// Inspect the Typ to determine what it is.
+// Value is the result of evaluation returned in the Result.
+// Inspect the Type to determine what it is.
 type Value struct {
-	Val  interface{}
-	Type Type
+	Val  interface{} // the value stored
+	Type Type        // the Indigo type stored
 }
 
 // ParseType parses a string that represents an Indigo type and returns the type.
 // The primitive types are their lower-case names (string, int, duration, etc.)
-// Maps and lists look like Go maps and slices:
-// Maps:  map[string]float
-// Lists: []string
+// Maps and lists look like Go maps and slices: map[string]float and []string.
 // Proto types look like this: proto(protoname)
 func ParseType(t string) (Type, error) {
 
