@@ -1,6 +1,7 @@
 package cel_test
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/ezachrisen/indigo"
 	"github.com/ezachrisen/indigo/cel"
-	"github.com/ezachrisen/indigo/schema"
 	"github.com/ezachrisen/indigo/testdata/school"
 	"github.com/google/cel-go/common/types/pb"
 
@@ -32,18 +32,18 @@ func makeStudentData() map[string]interface{} {
 
 }
 
-func makeEducationSchema() schema.Schema {
-	return schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student.ID", Type: schema.String{}},
-			{Name: "student.Age", Type: schema.Int{}},
-			{Name: "student.GPA", Type: schema.Float{}},
-			{Name: "student.Adjustment", Type: schema.Float{}},
-			{Name: "student.Status", Type: schema.String{}},
-			{Name: "student.Grades", Type: schema.List{ValueType: schema.String{}}},
-			{Name: "student.EnrollmentDate", Type: schema.String{}},
-			{Name: "now", Type: schema.String{}},
-			{Name: "alsoNow", Type: schema.Timestamp{}},
+func makeEducationSchema() indigo.Schema {
+	return indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student.ID", Type: indigo.String{}},
+			{Name: "student.Age", Type: indigo.Int{}},
+			{Name: "student.GPA", Type: indigo.Float{}},
+			{Name: "student.Adjustment", Type: indigo.Float{}},
+			{Name: "student.Status", Type: indigo.String{}},
+			{Name: "student.Grades", Type: indigo.List{ValueType: indigo.String{}}},
+			{Name: "student.EnrollmentDate", Type: indigo.String{}},
+			{Name: "now", Type: indigo.String{}},
+			{Name: "alsoNow", Type: indigo.Timestamp{}},
 		},
 	}
 }
@@ -58,7 +58,7 @@ func makeEducationRules1() *indigo.Rule {
 			"honors_student": {
 				ID:         "honors_student",
 				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
-				ResultType: schema.Bool{},
+				ResultType: indigo.Bool{},
 				Schema:     makeEducationSchema(),
 			},
 			"at_risk": {
@@ -179,7 +179,7 @@ func makeEducationRules() map[string]*indigo.Rule {
 			"honors_student": {
 				ID:         "honors_student",
 				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
-				ResultType: schema.Bool{},
+				ResultType: indigo.Bool{},
 				Schema:     makeEducationSchema(),
 			},
 			"at_risk": {
@@ -298,7 +298,7 @@ func makeEducationRulesWithIncorrectTypes() *indigo.Rule {
 			"a": {
 				ID:         "honors_student",
 				Expr:       `student.GPA != "3.6" && student.Status > 2.0`,
-				ResultType: schema.Bool{},
+				ResultType: indigo.Bool{},
 				Schema:     makeEducationSchema(),
 			},
 		},
@@ -316,7 +316,7 @@ func TestBasicRules(t *testing.T) {
 
 	sa := r.Rules["student_actions"]
 
-	results, err := e.Eval(sa, makeStudentData())
+	results, err := e.Eval(context.Background(), sa, makeStudentData())
 	is.NoErr(err)
 	is.Equal(results.Rule, sa)
 	is.True(results.Pass)
@@ -325,12 +325,12 @@ func TestBasicRules(t *testing.T) {
 	is.Equal(results.Results["at_risk"].Results["risk_factor"].Value.(float64), 8.0)
 }
 
-func makeEducationProtoSchema() schema.Schema {
-	return schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "now", Type: schema.Timestamp{}},
-			{Name: "self", Type: schema.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+func makeEducationProtoSchema() indigo.Schema {
+	return indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "self", Type: indigo.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 }
@@ -424,7 +424,7 @@ func TestProtoMessage(t *testing.T) {
 	err := e.Compile(r)
 	is.NoErr(err)
 
-	results, err := e.Eval(r, makeStudentProtoData())
+	results, err := e.Eval(context.Background(), r, makeStudentProtoData())
 	is.NoErr(err)
 	is.Equal(len(results.Results), 3)
 	for _, v := range results.Results {
@@ -440,7 +440,7 @@ func TestDiagnosticOptions(t *testing.T) {
 	err := e.Compile(r2, indigo.CollectDiagnostics(true))
 	is.NoErr(err)
 
-	results, err := e.Eval(r2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
+	results, err := e.Eval(context.Background(), r2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 
 	for _, c := range results.Results {
@@ -461,7 +461,7 @@ func TestRuleResultTypes(t *testing.T) {
 			indigo.Rule{
 				ID:         "shouldBeBool",
 				Schema:     makeEducationSchema(),
-				ResultType: schema.Bool{},
+				ResultType: indigo.Bool{},
 				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
 			},
 			nil,
@@ -470,7 +470,7 @@ func TestRuleResultTypes(t *testing.T) {
 			indigo.Rule{
 				ID:         "shouldBeBFloat",
 				Schema:     makeEducationSchema(),
-				ResultType: schema.Float{},
+				ResultType: indigo.Float{},
 				Expr:       `student.GPA + 1.0`,
 			},
 			nil,
@@ -479,7 +479,7 @@ func TestRuleResultTypes(t *testing.T) {
 			indigo.Rule{
 				ID:         "shouldBeStudent",
 				Schema:     makeEducationProtoSchema(),
-				ResultType: schema.Proto{Protoname: "school.Student"},
+				ResultType: indigo.Proto{Protoname: "school.Student"},
 				Expr:       `school.Student { GPA: 1.2 }`,
 			},
 			nil,
@@ -488,7 +488,7 @@ func TestRuleResultTypes(t *testing.T) {
 			indigo.Rule{
 				ID:         "NEGATIVEshouldBeBFloat",
 				Schema:     makeEducationSchema(),
-				ResultType: schema.Bool{},
+				ResultType: indigo.Bool{},
 				Expr:       `student.GPA + 1.0`,
 			},
 			fmt.Errorf("Should be an error"),
@@ -497,7 +497,7 @@ func TestRuleResultTypes(t *testing.T) {
 			indigo.Rule{
 				ID:         "NEGATIVEshouldBeStudent",
 				Schema:     makeEducationProtoSchema(),
-				ResultType: schema.Proto{Protoname: "school.HonorsConfiguration"},
+				ResultType: indigo.Proto{Protoname: "school.HonorsConfiguration"},
 				Expr:       `school.Student { GPA: 1.2 }`,
 			},
 			fmt.Errorf("Should be an error"),
@@ -542,7 +542,7 @@ func TestRuleResultTypes(t *testing.T) {
 // 	for i := range buf {
 // 		err := e.AddRule("/", makeEducationProtoRulesSimple(fmt.Sprintf("rule%d", i)))
 // 		is.NoErr(err)
-// 		r, err := e.Eval(makeStudentProtoData(), fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
+// 		r, err := e.Eval(context.Background(), makeStudentProtoData(), fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
 // 		is.NoErr(err)
 // 		is.Equal(r.RulesEvaluated, 2)
 // 		if i%1000 == 0 && printDebug {
@@ -580,7 +580,7 @@ func TestRuleResultTypes(t *testing.T) {
 // 	for i := range buf {
 // 		err := e.AddRule("/", makeEducationProtoRulesSimple(fmt.Sprintf("rule%d", i)))
 // 		is.NoErr(err)
-// 		r, err := e.Eval(makeStudentProtoData(), fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
+// 		r, err := e.Eval(context.Background(), makeStudentProtoData(), fmt.Sprintf("rule%d", i), indigo.ReturnDiagnostics(false))
 // 		is.NoErr(err)
 // 		is.Equal(r.RulesEvaluated, 2)
 // 		if i%1000 == 0 && printDebug {
@@ -709,7 +709,7 @@ func TestRuleResultTypes(t *testing.T) {
 // 			if !ok {
 // 				eval = nil
 // 			} else {
-// 				results, err := e.Eval(makeStudentProtoData(), fmt.Sprintf("rule%d", -1))
+// 				results, err := e.Eval(context.Background(), makeStudentProtoData(), fmt.Sprintf("rule%d", -1))
 // 				is.NoErr(err)
 // 				if !dryRun {
 // 					is.Equal(len(results.Results), 1)
@@ -789,7 +789,7 @@ func BenchmarkSimpleRule(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(&r, data)
+		e.Eval(context.Background(), &r, data)
 	}
 }
 
@@ -817,7 +817,7 @@ func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(&r, data, indigo.ReturnDiagnostics(true))
+		e.Eval(context.Background(), &r, data, indigo.ReturnDiagnostics(true))
 	}
 }
 
@@ -846,7 +846,7 @@ func BenchmarkRuleWithArray(b *testing.B) {
 
 	data := makeStudentData()
 	for i := 0; i < b.N; i++ {
-		e.Eval(r, data)
+		e.Eval(context.Background(), r, data)
 	}
 }
 
@@ -855,11 +855,11 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
-	schema := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "now", Type: schema.Timestamp{}},
-			{Name: "self", Type: schema.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "self", Type: indigo.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 
@@ -900,7 +900,7 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(r, data)
+		e.Eval(context.Background(), r, data)
 	}
 
 }
@@ -909,10 +909,10 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
-	schema := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "now", Type: schema.Timestamp{}},
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
 		},
 	}
 	e := indigo.NewEngine(cel.NewEvaluator())
@@ -950,24 +950,24 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(r, data)
+		e.Eval(context.Background(), r, data)
 	}
 
 }
 
 func BenchmarkProtoCreation(b *testing.B) {
-	education := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: schema.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
 		},
 	}
 
 	r := &indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: schema.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
 			school.StudentSummary {
 				GPA: student.GPA,
@@ -984,7 +984,7 @@ func BenchmarkProtoCreation(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(r, map[string]interface{}{})
+		e.Eval(context.Background(), r, map[string]interface{}{})
 	}
 
 }
@@ -993,11 +993,11 @@ func BenchmarkEval2000Rules(b *testing.B) {
 	b.StopTimer()
 	pb.DefaultDb.RegisterMessage(&school.Student{})
 
-	schema := schema.Schema{
-		Elements: []schema.DataElement{
-			{Name: "student", Type: schema.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "now", Type: schema.Timestamp{}},
-			{Name: "self", Type: schema.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "self", Type: indigo.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 
@@ -1040,7 +1040,7 @@ func BenchmarkEval2000Rules(b *testing.B) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		e.Eval(r, data)
+		e.Eval(context.Background(), r, data)
 	}
 }
 
