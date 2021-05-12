@@ -114,7 +114,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	//	fmt.Println(m.rulesTested)
 	//fmt.Println(result)
 	is.NoErr(match(flattenResults(result), expectedResults))
-	// fmt.Printf("Expected: %+v\n", expectedOrder)
+	// fmt.Printf("Expected: %+v\n", expectkedOrder)
 	// fmt.Printf("Got     : %+v\n", flattenResultsEvaluated(result))
 	is.True(reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result))) // not all rules were evaluated
 }
@@ -135,7 +135,6 @@ func TestSelf(t *testing.T) {
 	d1 := D.Rules["d1"]
 	// Give d1 a self expression, but no self value
 	d1.Expr = "self"
-
 	result, err := e.Eval(context.Background(), r, nil)
 	is.True(err != nil) // should get an error if the data map is nil and we try to use 'self'
 

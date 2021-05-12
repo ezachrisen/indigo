@@ -3,12 +3,14 @@ package cel_test
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ezachrisen/indigo"
 	"github.com/ezachrisen/indigo/cel"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/ezachrisen/indigo/testdata/school"
-	"github.com/golang/protobuf/ptypes"
 )
 
 func Example() {
@@ -48,7 +50,7 @@ func Example() {
 	// Output: true
 }
 
-func Example_timestampComparison() {
+func Example_nativeTimestampComparison() {
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
 			{Name: "then", Type: indigo.String{}},
@@ -58,7 +60,7 @@ func Example_timestampComparison() {
 
 	data := map[string]interface{}{
 		"then": "1972-01-01T10:00:20.021-05:00", //"2018-08-03T16:00:00-07:00",
-		"now":  ptypes.TimestampNow(),
+		"now":  timestamppb.Now(),
 	}
 
 	rule := indigo.Rule{
@@ -84,11 +86,12 @@ func Example_timestampComparison() {
 	// Output: true
 }
 
-func Example_existsOperator() {
+// Demonstrates using the CEL exists function to check for a value in a slice
+func Example_protoExistsOperator() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
 		},
 	}
 
@@ -101,7 +104,7 @@ func Example_existsOperator() {
 	rule := indigo.Rule{
 		ID:     "grade_check",
 		Schema: education,
-		Expr:   `student.Grades.exists(g, g < 2.0)`,
+		Expr:   `student.grades.exists(g, g < 2.0)`,
 	}
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
@@ -121,13 +124,105 @@ func Example_existsOperator() {
 	// Output: false
 }
 
-// Demonstrates using the exists macro to inspect the value of nested messages in the list
-func Example_nestedMessages() {
+// Demonstrates conversion between protobuf timestamps (google.protobuf.Timestamp) and time.Time
+func Example_protoTimestampComparison() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"student": school.Student{
+			// Make a protobuf timestamp from a time.Time
+			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
+			Grades:         []float64{3.0, 2.9, 4.0, 2.1},
+		},
+		"now": timestamppb.Now(),
+	}
+
+	// The rule will return the earlier of the two dates (enrollment date or now)
+	rule := indigo.Rule{
+		ID:     "grade_check",
+		Schema: education,
+		Expr: `student.enrollment_date < now
+?
+student.enrollment_date
+:
+now
+`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+	if pbtime, ok := results.Value.(*timestamppb.Timestamp); ok {
+		// Convert from a protobuf timestamp to a go time.Time
+		goTime := pbtime.AsTime()
+		fmt.Printf("Gotime is %v\n", goTime)
+	}
+	// Output: Gotime is 2009-11-10 23:00:00 +0000 UTC
+}
+
+// Demonstrates conversion between protobuf durations (google.protobuf.Duration) and time.Duration
+func Example_protoDurationComparison() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "smry", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
+		},
+	}
+
+	godur, _ := time.ParseDuration("10h")
+
+	data := map[string]interface{}{
+		"smry": school.StudentSummary{
+			Tenure: durationpb.New(godur),
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:     "tenure_check",
+		Schema: education,
+		Expr:   `smry.tenure > duration("1h")`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+	fmt.Println(results.Pass)
+	// Output: true
+}
+
+// Demonstrates using the exists macro to inspect the value of nested messages in the list
+func Example_protoNestedMessages() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
 		},
 	}
 
@@ -145,7 +240,7 @@ func Example_nestedMessages() {
 	rule := indigo.Rule{
 		ID:     "fighting_check",
 		Schema: education,
-		Expr:   `student.Suspensions.exists(s, s.Cause == "Fighting")`,
+		Expr:   `student.suspensions.exists(s, s.cause == "Fighting")`,
 	}
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
@@ -170,9 +265,9 @@ func Example_protoConstruction() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
 		},
 	}
 
@@ -189,12 +284,12 @@ func Example_protoConstruction() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
-			school.StudentSummary {
-				GPA: student.GPA,
-				RiskFactor: 2.0 + 3.0,
-				Tenure: duration("12h")
+			testdata.school.StudentSummary {
+				gpa: student.gpa,
+				risk_factor: 2.0 + 3.0,
+				tenure: duration("12h")
 			}`,
 	}
 
@@ -226,15 +321,15 @@ func Example_protoConstructionConditional() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
 		},
 	}
 
 	data := map[string]interface{}{
 		"student": school.Student{
-			GPA:    3.6,
+			Gpa:    3.6,
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
 				&school.Student_Suspension{Cause: "Cheating"},
@@ -246,18 +341,18 @@ func Example_protoConstructionConditional() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
-			student.GPA > 3.0 ? 
-				school.StudentSummary {
-					GPA: student.GPA,
-					RiskFactor: 0.0
+			student.gpa > 3.0 ? 
+				testdata.school.StudentSummary {
+					gpa: student.gpa,
+					risk_factor: 0.0
 				}
 			:
-				school.StudentSummary {
-					GPA: student.GPA,
-					RiskFactor: 2.0 + 3.0,
-					Tenure: duration("12h")
+				testdata.school.StudentSummary {
+					gpa: student.gpa,
+					risk_factor: 2.0 + 3.0,
+					tenure: duration("12h")
 				}
 			`,
 	}

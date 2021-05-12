@@ -1,7 +1,7 @@
 syntax = "proto3";
-package school;
+package testdata.school;
 
-option go_package = ".;school";
+option go_package = "github.com/ezachrisen/indigo/testdata/school;school";
 
 message HonorsConfiguration {
   double Minimum_GPA = 1;

@@ -1,39 +1,39 @@
 syntax = "proto3";
-package school;
+package testdata.school;
 
-option go_package = ".;school";
+
+option go_package = "github.com/ezachrisen/indigo/testdata/school;school";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 
 message Student {
-  double ID = 1;
-  int32 Age = 2;
-  double GPA = 3;
-  status_type Status = 4;
+  double id = 1;
+  int32 age = 2;
+  double gpa = 3;
+  status_type status = 4;
 
-  google.protobuf.Timestamp EnrollmentDate = 7; 
+  google.protobuf.Timestamp enrollment_date = 7; 
   
   enum status_type {
 	ENROLLED = 0;
 	PROBATION = 1;
   }
   
-  map<string, string> Attrs = 6;
+  map<string, string> attrs = 6;
   
-  repeated double Grades = 5;
+  repeated double grades = 5;
 
   message Suspension {
-	string Cause = 1;
-	google.protobuf.Timestamp Date = 2;
+	string cause = 1;
+	google.protobuf.Timestamp date = 2;
   }
 
-  Suspension XYZ = 9;
-  repeated Suspension Suspensions = 8;
+  repeated Suspension suspensions = 8;
 }
 
 message StudentSummary {
-  double GPA = 1;
-  double RiskFactor = 2;
-  google.protobuf.Duration Tenure = 3;
+  double gpa = 1;
+  double risk_factor = 2;
+  google.protobuf.Duration tenure = 3;
 }

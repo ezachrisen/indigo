@@ -328,9 +328,9 @@ func TestBasicRules(t *testing.T) {
 func makeEducationProtoSchema() indigo.Schema {
 	return indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
-			{Name: "self", Type: indigo.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+			{Name: "self", Type: indigo.Proto{Protoname: "testdata.school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 }
@@ -342,20 +342,20 @@ func makeEducationProtoRules(id string) *indigo.Rule {
 		Rules: map[string]*indigo.Rule{
 			"honor_student": {
 				ID:     "honor_student",
-				Expr:   `student.GPA >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
+				Expr:   `student.gpa >= self.Minimum_GPA && student.status != testdata.school.Student.status_type.PROBATION && student.grades.all(g, g>=3.0)`,
 				Self:   &school.HonorsConfiguration{Minimum_GPA: 3.7},
 				Meta:   true,
 				Schema: makeEducationProtoSchema(),
 			},
 			"at_risk": {
 				ID:     "at_risk",
-				Expr:   `student.GPA < 2.5 || student.Status == school.Student.status_type.PROBATION`,
+				Expr:   `student.gpa < 2.5 || student.status == testdata.school.Student.status_type.PROBATION`,
 				Meta:   false,
 				Schema: makeEducationProtoSchema(),
 			},
 			"tenure_gt_6months": {
 				ID:     "tenure_gt_6months",
-				Expr:   `now - student.EnrollmentDate > duration("4320h")`, // 6 months = 4320 hours
+				Expr:   `now - student.enrollment_date > duration("4320h")`, // 6 months = 4320 hours
 				Meta:   true,
 				Schema: makeEducationProtoSchema(),
 			},
@@ -371,7 +371,7 @@ func makeEducationProtoRulesSimple(id string) *indigo.Rule {
 		Rules: map[string]*indigo.Rule{
 			"honor_student": {
 				ID:   "honor_student",
-				Expr: `student.GPA >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
+				Expr: `student.Gpa >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
 				Self: &school.HonorsConfiguration{Minimum_GPA: 3.7},
 				Meta: true,
 			},
@@ -383,7 +383,7 @@ func makeEducationProtoRulesSimple(id string) *indigo.Rule {
 func makeStudentProtoData() map[string]interface{} {
 	s := school.Student{
 		Age:            16,
-		GPA:            3.76,
+		Gpa:            3.76,
 		Status:         school.Student_ENROLLED,
 		Grades:         []float64{4.0, 4.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
@@ -479,8 +479,8 @@ func TestRuleResultTypes(t *testing.T) {
 			indigo.Rule{
 				ID:         "shouldBeStudent",
 				Schema:     makeEducationProtoSchema(),
-				ResultType: indigo.Proto{Protoname: "school.Student"},
-				Expr:       `school.Student { GPA: 1.2 }`,
+				ResultType: indigo.Proto{Protoname: "testdata.school.Student"},
+				Expr:       `testdata.school.Student { gpa: 1.2 }`,
 			},
 			nil,
 		},
@@ -489,7 +489,7 @@ func TestRuleResultTypes(t *testing.T) {
 				ID:         "NEGATIVEshouldBeBFloat",
 				Schema:     makeEducationSchema(),
 				ResultType: indigo.Bool{},
-				Expr:       `student.GPA + 1.0`,
+				Expr:       `student.gpa + 1.0`,
 			},
 			fmt.Errorf("Should be an error"),
 		},
@@ -498,7 +498,7 @@ func TestRuleResultTypes(t *testing.T) {
 				ID:         "NEGATIVEshouldBeStudent",
 				Schema:     makeEducationProtoSchema(),
 				ResultType: indigo.Proto{Protoname: "school.HonorsConfiguration"},
-				Expr:       `school.Student { GPA: 1.2 }`,
+				Expr:       `testdata.school.Student { gpa: 1.2 }`,
 			},
 			fmt.Errorf("Should be an error"),
 		},
@@ -728,7 +728,7 @@ func TestRuleResultTypes(t *testing.T) {
 // 			} else {
 // 				err = e.ReplaceRule("/rule-2", &indigo.Rule{
 // 					ID:   "rule-2",
-// 					Expr: `student.GPA < 1000.0 || student.Status == school.Student.status_type.PROBATION`,
+// 					Expr: `student.Gpa < 1000.0 || student.Status == school.Student.status_type.PROBATION`,
 // 					Meta: true,
 // 				})
 // 				is.NoErr(err)
@@ -857,9 +857,9 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
-			{Name: "self", Type: indigo.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+			{Name: "self", Type: indigo.Proto{Protoname: "testdata.school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 
@@ -871,7 +871,7 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 		Rules: map[string]*indigo.Rule{
 			"a": {
 				ID:     "at_risk",
-				Expr:   `student.GPA < self.Minimum_GPA && student.Status == school.Student.status_type.PROBATION`,
+				Expr:   `student.GPA < self.Minimum_GPA && student.Status == testdata.school.Student.status_type.PROBATION`,
 				Self:   &school.HonorsConfiguration{Minimum_GPA: 3.7},
 				Schema: schema,
 				Meta:   false,
@@ -886,7 +886,7 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 
 	s := school.Student{
 		Age:            16,
-		GPA:            3,
+		Gpa:            3,
 		Status:         school.Student_PROBATION,
 		Grades:         []float64{4.0, 4.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
@@ -911,7 +911,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
 		},
 	}
@@ -923,7 +923,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 		Rules: map[string]*indigo.Rule{
 			"a": {
 				ID:     "at_risk",
-				Expr:   `student.GPA < 2.5 || student.Status == school.Student.status_type.PROBATION`,
+				Expr:   `student.GPA < 2.5 || student.Status == testdata.school.Student.status_type.PROBATION`,
 				Schema: schema,
 				Meta:   false,
 			},
@@ -937,7 +937,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 
 	s := school.Student{
 		Age:            16,
-		GPA:            3.76,
+		Gpa:            3.76,
 		Status:         school.Student_ENROLLED,
 		Grades:         []float64{4.0, 4.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
@@ -958,18 +958,18 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 func BenchmarkProtoCreation(b *testing.B) {
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
 		},
 	}
 
 	r := &indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
-			school.StudentSummary {
+			testdata.school.StudentSummary {
 				GPA: student.GPA,
 				RiskFactor: 2.0 + 3.0,
 				Tenure: duration("12h")
@@ -995,9 +995,9 @@ func BenchmarkEval2000Rules(b *testing.B) {
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
-			{Name: "self", Type: indigo.Proto{Protoname: "school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+			{Name: "self", Type: indigo.Proto{Protoname: "testdata.school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
 
@@ -1012,7 +1012,7 @@ func BenchmarkEval2000Rules(b *testing.B) {
 	for i := 0; i < 2_000; i++ {
 		cr := &indigo.Rule{
 			ID:     fmt.Sprintf("at_risk_%d", i),
-			Expr:   `student.GPA < self.Minimum_GPA && student.Status == school.Student.status_type.PROBATION`,
+			Expr:   `student.GPA < self.Minimum_GPA && student.Status == testdata.school.Student.status_type.PROBATION`,
 			Schema: schema,
 			Self:   &school.HonorsConfiguration{Minimum_GPA: 3.7},
 			Meta:   false,
@@ -1027,7 +1027,7 @@ func BenchmarkEval2000Rules(b *testing.B) {
 
 	s := school.Student{
 		Age:            16,
-		GPA:            3,
+		Gpa:            3,
 		Status:         school.Student_PROBATION,
 		Grades:         []float64{4.0, 4.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},

@@ -1,10 +1,3 @@
-// Package cel provides an implementation of the Indigo evaluator and compiler interfaces backed by Google's cel-go rules engine.
-//
-// See https://github.com/google/cel-go and https://opensource.google/projects/cel for more information
-// about CEL.
-//
-// The rule expressions you write must conform to the CEL spec: https://github.com/google/cel-spec.
-//
 package cel
 
 import (

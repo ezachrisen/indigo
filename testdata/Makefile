@@ -1,12 +1,20 @@
-protofiles = ./testdata/proto/*.proto
-pbfiles =  ./testdata/school/*.pb.go
+protofiles = ./proto/*.proto
+outputdir=./school
+protodir=./proto
+pbfiles =  ./school/*.pb.go
+
 
 
 all: $(pbfiles) test
 	go test -v ./...
 
 $(pbfiles): $(protofiles)
-	protoc -I . testdata/proto/*.proto --go_out=plugins=grpc:testdata/school
+	protoc --go_out=$(outputdir) --go_opt=paths=source_relative \
+	--go-grpc_out=$(outputdir) --go-grpc_opt=paths=source_relative,require_unimplemented_servers=false \
+	-I=$(protodir) \
+	$(protodir)/*.proto
+
+#protoc -I . $(protofiles) --go_out=plugins=grpc:school
 
 clean:
 	rm -f $(pbfiles)
@@ -14,5 +22,5 @@ clean:
 .PHONY:	test
 
 test: $(pbfiles)
-	go test -v -run ExampleSchool ./... 
+	cd .. && go test -v ./... 
 
