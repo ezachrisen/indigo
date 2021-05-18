@@ -2,7 +2,6 @@
 This document describes the ways you can use Indigo to solve various use cases. A combination of a rule hierarchy and evaluation options give you flexibility beyond evaluating an expression. 
 
 
-
 ## Case 1: Is this rule true?
 The most basic use is to check whether a single rule is satisfied by the input provided. The structure to do this looks like this:
 

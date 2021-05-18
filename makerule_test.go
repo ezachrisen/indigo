@@ -34,7 +34,7 @@ func makeRule() *indigo.Rule {
 		ID:   "rule1",
 		Expr: `true`,
 		Rules: map[string]*indigo.Rule{
-			"D": &indigo.Rule{
+			"D": {
 				ID:   "D",
 				Expr: `true`,
 				Rules: map[string]*indigo.Rule{
