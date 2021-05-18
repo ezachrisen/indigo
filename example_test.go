@@ -71,10 +71,15 @@ func ExampleApplyToRule() {
 
 	r := makeRule()
 
-	indigo.ApplyToRule(r, func(r *indigo.Rule) error {
+	err := indigo.ApplyToRule(r, func(r *indigo.Rule) error {
 		fmt.Printf("%s ", r.ID)
 		return nil
 	})
+
+	if err != nil {
+		fmt.Println("Failure!")
+	}
+
 	fmt.Printf("\n")
 	// Output unordered: rule1 B b1 b2 b3 b4 b4-1 b4-2 E e1 e2 e3 D d1 d2 d3
 }
@@ -85,10 +90,17 @@ func ExampleSortFunc() {
 
 	r := makeRule()
 
-	indigo.ApplyToRule(r, func(r *indigo.Rule) error {
+	err := indigo.ApplyToRule(r, func(r *indigo.Rule) error {
 		r.EvalOptions.SortFunc = func(rules []*indigo.Rule, i, j int) bool {
 			return rules[i].ID < rules[j].ID
 		}
 		return nil
 	})
+
+	if err != nil {
+		fmt.Println("Failure!")
+	}
+
+	fmt.Println("Ok")
+	//Output: Ok
 }

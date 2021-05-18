@@ -3,7 +3,6 @@
 // Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules.
 // Rules are expressions (such as "a > b") that are evaluated, and the outcomes used to direct appliation logic.
 //
-
 // Indigo does not specify a language for rules, relying instead on a rule evaluator to perform the work.
 // The default rule evaluator (in the cel package) is the Common Expression Language from Google (https://github.com/google/cel-go).
 //

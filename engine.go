@@ -205,7 +205,7 @@ type EvalOptions struct {
 	// Stops the evaluation of child rules when the first negative child is encountered.
 	// Results will be partial. Only the child rules that were evaluated will be in the results.
 	// By default rules are evaluated in alphabetical order.
-	// Use case: you require ALL child rules to be satisifed.
+	// Use case: you require ALL child rules to be satisfied.
 	StopFirstNegativeChild bool `json:"stop_first_negative_child"`
 
 	// Do not return rules that passed

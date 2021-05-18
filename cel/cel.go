@@ -60,7 +60,7 @@ func (e *CELEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.T
 		return nil, err
 	}
 
-	if opts == nil || len(opts) == 0 {
+	if len(opts) == 0 {
 		return nil, fmt.Errorf("no valid schema")
 	}
 
@@ -206,10 +206,10 @@ func indigoType(t *expr.Type) (indigo.Type, error) {
 		case expr.Type_DOUBLE:
 			return indigo.Float{}, nil
 		default:
-			return nil, fmt.Errorf("Unexpected primitive type %v", v)
+			return nil, fmt.Errorf("unexpected primitive type %v", v)
 		}
 	default:
-		return nil, fmt.Errorf("Unexpected type %v", v)
+		return nil, fmt.Errorf("unexpected type %v", v)
 	}
 }
 
@@ -232,17 +232,17 @@ func celType(t indigo.Type) (*expr.Type, error) {
 	case indigo.Map:
 		key, err := celType(v.KeyType)
 		if err != nil {
-			return nil, fmt.Errorf("Setting key of %v map: %w", v.KeyType, err)
+			return nil, fmt.Errorf("setting key of %v map: %w", v.KeyType, err)
 		}
 		val, err := celType(v.ValueType)
 		if err != nil {
-			return nil, fmt.Errorf("Setting value of %v map: %w", v.ValueType, err)
+			return nil, fmt.Errorf("setting value of %v map: %w", v.ValueType, err)
 		}
 		return decls.NewMapType(key, val), nil
 	case indigo.List:
 		val, err := celType(v.ValueType)
 		if err != nil {
-			return nil, fmt.Errorf("Setting value of %v list: %w", v.ValueType, err)
+			return nil, fmt.Errorf("setting value of %v list: %w", v.ValueType, err)
 		}
 		return decls.NewListType(val), nil
 	case indigo.Proto:
@@ -285,8 +285,8 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 
 	indent := strings.Repeat(" ", n*2)
 
-	value := "?"
-	valueSource := ""
+	var value string
+	var valueSource string
 	evaluatedValue, ok := details.State().Value(ex.Id)
 
 	if ok {
@@ -307,7 +307,7 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 	switch i := ex.GetExprKind().(type) {
 	case *expr.Expr_CallExpr:
 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, strings.Trim(i.CallExpr.GetFunction(), "_")))
-		for x, _ := range i.CallExpr.Args {
+		for x := range i.CallExpr.Args {
 			s.WriteString(printAST(i.CallExpr.Args[x], n+1, details, data))
 		}
 	case *expr.Expr_ComprehensionExpr:
@@ -392,24 +392,24 @@ func collectDiagnostics(ast *cel.Ast, details *cel.EvalDetails, data map[string]
 	}
 
 	s := strings.Builder{}
-	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
+	s.WriteString("----------------------------------------------------------------------------------------------------\n")
 	//	s.WriteString(fmt.Sprintf("Rule ID: %s\n", r.RuleID))
-	s.WriteString(fmt.Sprintf("Expression:\n"))
-	s.WriteString(fmt.Sprintf("%s\n\n", word_wrap(ast.Source().Content(), 100)))
+	s.WriteString("Expression:\n")
+	s.WriteString(fmt.Sprintf("%s\n\n", wordWrap(ast.Source().Content(), 100)))
 	// s.WriteString(fmt.Sprintf("Evaluation Result   :  %t\n", r.Pass))
 	// s.WriteString(fmt.Sprintf("Evaluation Raw Value:  %v\n", r.Value))
 	// s.WriteString(fmt.Sprintf("Rule Expression:\n"))
 	// s.WriteString(fmt.Sprintf("%s\n", word_wrap(ast.Source().Content(), 100)))
-	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
-	s.WriteString(fmt.Sprintf("                                          EVALUATION TREE\n"))
-	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
+	s.WriteString("----------------------------------------------------------------------------------------------------\n")
+	s.WriteString("                                          EVALUATION TREE\n")
+	s.WriteString("----------------------------------------------------------------------------------------------------\n")
 	s.WriteString(fmt.Sprintf("%60s    %-30s\n", "VALUE", "EXPRESSION"))
-	s.WriteString(fmt.Sprintf("----------------------------------------------------------------------------------------------------\n"))
+	s.WriteString("----------------------------------------------------------------------------------------------------\n")
 	s.WriteString(printAST(ast.Expr(), 0, details, data))
 	return s.String()
 }
 
-func word_wrap(text string, lineWidth int) string {
+func wordWrap(text string, lineWidth int) string {
 	words := strings.Fields(strings.TrimSpace(text))
 	if len(words) == 0 {
 		return text

@@ -169,125 +169,125 @@ func makeEducationRules1() *indigo.Rule {
 	return root
 }
 
-func makeEducationRules() map[string]*indigo.Rule {
+// func makeEducationRules() map[string]*indigo.Rule {
 
-	rule1 := &indigo.Rule{
-		ID:     "student_actions",
-		Meta:   "d04ab6d9-f59d-9474-5c38-34d65380c612",
-		Schema: makeEducationSchema(),
-		Rules: map[string]*indigo.Rule{
-			"honors_student": {
-				ID:         "honors_student",
-				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
-				ResultType: indigo.Bool{},
-				Schema:     makeEducationSchema(),
-			},
-			"at_risk": {
-				ID:     "at_risk",
-				Expr:   `student.GPA < 2.5 || student.Status == "Probation"`,
-				Schema: makeEducationSchema(),
-				Rules: map[string]*indigo.Rule{
-					"risk_factor": {
-						ID:   "risk_factor",
-						Expr: `2.0+6.0`,
-					},
-				},
-			},
-		},
-	}
+// 	rule1 := &indigo.Rule{
+// 		ID:     "student_actions",
+// 		Meta:   "d04ab6d9-f59d-9474-5c38-34d65380c612",
+// 		Schema: makeEducationSchema(),
+// 		Rules: map[string]*indigo.Rule{
+// 			"honors_student": {
+// 				ID:         "honors_student",
+// 				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+// 				ResultType: indigo.Bool{},
+// 				Schema:     makeEducationSchema(),
+// 			},
+// 			"at_risk": {
+// 				ID:     "at_risk",
+// 				Expr:   `student.GPA < 2.5 || student.Status == "Probation"`,
+// 				Schema: makeEducationSchema(),
+// 				Rules: map[string]*indigo.Rule{
+// 					"risk_factor": {
+// 						ID:   "risk_factor",
+// 						Expr: `2.0+6.0`,
+// 					},
+// 				},
+// 			},
+// 		},
+// 	}
 
-	rule2 := &indigo.Rule{
-		ID:     "depthRules",
-		Schema: makeEducationSchema(),
-		Expr:   `student.GPA > 3.5`, // false
-		Rules: map[string]*indigo.Rule{
-			"a": {
-				ID:     "c1",
-				Expr:   `student.Adjustment > 0.0`, // true
-				Schema: makeEducationSchema(),
-			},
-			"b": {
-				ID:     "c2",
-				Expr:   `student.Adjustment > 3.0`, // false
-				Schema: makeEducationSchema(),
-			},
-			"c": {
-				ID:     "c3",
-				Expr:   `student.Adjustment < 2.6`, // true
-				Schema: makeEducationSchema(),
-			},
-			"d": {
-				ID:     "c4",
-				Expr:   `student.Adjustment > 3.0`, // false
-				Schema: makeEducationSchema(),
-			},
-		},
-	}
+// 	rule2 := &indigo.Rule{
+// 		ID:     "depthRules",
+// 		Schema: makeEducationSchema(),
+// 		Expr:   `student.GPA > 3.5`, // false
+// 		Rules: map[string]*indigo.Rule{
+// 			"a": {
+// 				ID:     "c1",
+// 				Expr:   `student.Adjustment > 0.0`, // true
+// 				Schema: makeEducationSchema(),
+// 			},
+// 			"b": {
+// 				ID:     "c2",
+// 				Expr:   `student.Adjustment > 3.0`, // false
+// 				Schema: makeEducationSchema(),
+// 			},
+// 			"c": {
+// 				ID:     "c3",
+// 				Expr:   `student.Adjustment < 2.6`, // true
+// 				Schema: makeEducationSchema(),
+// 			},
+// 			"d": {
+// 				ID:     "c4",
+// 				Expr:   `student.Adjustment > 3.0`, // false
+// 				Schema: makeEducationSchema(),
+// 			},
+// 		},
+// 	}
 
-	rule3 := &indigo.Rule{
-		ID:     "ruleOptions",
-		Schema: makeEducationSchema(),
-		Expr:   `student.GPA > 3.5`, // false
-		Rules: map[string]*indigo.Rule{
-			"A": {
-				ID:          "D",
-				Expr:        `student.Adjustment > 0.0`, // true
-				EvalOptions: indigo.EvalOptions{StopFirstPositiveChild: true},
-				Schema:      makeEducationSchema(),
-				Rules: map[string]*indigo.Rule{
-					"d1": {
-						ID:     "d1",
-						Expr:   `student.Adjustment < 2.6`, // true
-						Schema: makeEducationSchema(),
-					},
-					"d2": {
-						ID:     "d2",
-						Expr:   `student.Adjustment > 3.0`, // false
-						Schema: makeEducationSchema(),
-					},
-					"d3": {
-						ID:     "d3",
-						Expr:   `student.Adjustment < 2.6`, // true
-						Schema: makeEducationSchema(),
-					},
-				},
-			},
-			"B": {
-				ID:     "b1",
-				Expr:   `student.Adjustment > 3.0`, // false
-				Schema: makeEducationSchema(),
-			},
-			"E": {
-				ID:     "E",
-				Expr:   `student.Adjustment > 0.0`, // true
-				Schema: makeEducationSchema(),
-				Rules: map[string]*indigo.Rule{
-					"e1": {
-						ID:     "e1",
-						Expr:   `student.Adjustment < 2.6`, // true
-						Schema: makeEducationSchema(),
-					},
-					"e2": {
-						ID:     "e2",
-						Expr:   `student.Adjustment > 3.0`, // false
-						Schema: makeEducationSchema(),
-					},
-					"e3": {
-						ID:     "e3",
-						Expr:   `student.Adjustment < 2.6`, // true
-						Schema: makeEducationSchema(),
-					},
-				},
-			},
-		},
-	}
+// 	rule3 := &indigo.Rule{
+// 		ID:     "ruleOptions",
+// 		Schema: makeEducationSchema(),
+// 		Expr:   `student.GPA > 3.5`, // false
+// 		Rules: map[string]*indigo.Rule{
+// 			"A": {
+// 				ID:          "D",
+// 				Expr:        `student.Adjustment > 0.0`, // true
+// 				EvalOptions: indigo.EvalOptions{StopFirstPositiveChild: true},
+// 				Schema:      makeEducationSchema(),
+// 				Rules: map[string]*indigo.Rule{
+// 					"d1": {
+// 						ID:     "d1",
+// 						Expr:   `student.Adjustment < 2.6`, // true
+// 						Schema: makeEducationSchema(),
+// 					},
+// 					"d2": {
+// 						ID:     "d2",
+// 						Expr:   `student.Adjustment > 3.0`, // false
+// 						Schema: makeEducationSchema(),
+// 					},
+// 					"d3": {
+// 						ID:     "d3",
+// 						Expr:   `student.Adjustment < 2.6`, // true
+// 						Schema: makeEducationSchema(),
+// 					},
+// 				},
+// 			},
+// 			"B": {
+// 				ID:     "b1",
+// 				Expr:   `student.Adjustment > 3.0`, // false
+// 				Schema: makeEducationSchema(),
+// 			},
+// 			"E": {
+// 				ID:     "E",
+// 				Expr:   `student.Adjustment > 0.0`, // true
+// 				Schema: makeEducationSchema(),
+// 				Rules: map[string]*indigo.Rule{
+// 					"e1": {
+// 						ID:     "e1",
+// 						Expr:   `student.Adjustment < 2.6`, // true
+// 						Schema: makeEducationSchema(),
+// 					},
+// 					"e2": {
+// 						ID:     "e2",
+// 						Expr:   `student.Adjustment > 3.0`, // false
+// 						Schema: makeEducationSchema(),
+// 					},
+// 					"e3": {
+// 						ID:     "e3",
+// 						Expr:   `student.Adjustment < 2.6`, // true
+// 						Schema: makeEducationSchema(),
+// 					},
+// 				},
+// 			},
+// 		},
+// 	}
 
-	return map[string]*indigo.Rule{
-		rule1.ID: rule1,
-		rule2.ID: rule2,
-		rule3.ID: rule3,
-	}
-}
+// 	return map[string]*indigo.Rule{
+// 		rule1.ID: rule1,
+// 		rule2.ID: rule2,
+// 		rule3.ID: rule3,
+// 	}
+// }
 
 func makeEducationRulesWithIncorrectTypes() *indigo.Rule {
 	rule1 := &indigo.Rule{
@@ -312,7 +312,8 @@ func TestBasicRules(t *testing.T) {
 
 	e := indigo.NewEngine(cel.NewEvaluator())
 	r := makeEducationRules1()
-	e.Compile(r)
+	err := e.Compile(r)
+	is.NoErr(err)
 
 	sa := r.Rules["student_actions"]
 
@@ -364,21 +365,21 @@ func makeEducationProtoRules(id string) *indigo.Rule {
 
 }
 
-func makeEducationProtoRulesSimple(id string) *indigo.Rule {
-	return &indigo.Rule{
-		ID:     id,
-		Schema: makeEducationProtoSchema(),
-		Rules: map[string]*indigo.Rule{
-			"honor_student": {
-				ID:   "honor_student",
-				Expr: `student.Gpa >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
-				Self: &school.HonorsConfiguration{Minimum_GPA: 3.7},
-				Meta: true,
-			},
-		},
-	}
+// func makeEducationProtoRulesSimple(id string) *indigo.Rule {
+// 	return &indigo.Rule{
+// 		ID:     id,
+// 		Schema: makeEducationProtoSchema(),
+// 		Rules: map[string]*indigo.Rule{
+// 			"honor_student": {
+// 				ID:   "honor_student",
+// 				Expr: `student.Gpa >= self.Minimum_GPA && student.Status != school.Student.status_type.PROBATION && student.Grades.all(g, g>=3.0)`,
+// 				Self: &school.HonorsConfiguration{Minimum_GPA: 3.7},
+// 				Meta: true,
+// 			},
+// 		},
+// 	}
 
-}
+// }
 
 func makeStudentProtoData() map[string]interface{} {
 	s := school.Student{
@@ -789,7 +790,10 @@ func BenchmarkSimpleRule(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(context.Background(), &r, data)
+		_, err := e.Eval(context.Background(), &r, data)
+		if err != nil {
+			b.Error(err)
+		}
 	}
 }
 
@@ -817,7 +821,10 @@ func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(context.Background(), &r, data, indigo.ReturnDiagnostics(true))
+		_, err := e.Eval(context.Background(), &r, data, indigo.ReturnDiagnostics(true))
+		if err != nil {
+			b.Error(err)
+		}
 	}
 }
 
@@ -846,14 +853,21 @@ func BenchmarkRuleWithArray(b *testing.B) {
 
 	data := makeStudentData()
 	for i := 0; i < b.N; i++ {
-		e.Eval(context.Background(), r, data)
+		_, err := e.Eval(context.Background(), r, data)
+		if err != nil {
+			b.Error(err)
+		}
+
 	}
 }
 
 func BenchmarkProtoWithSelfX(b *testing.B) {
 	b.StopTimer()
 
-	pb.DefaultDb.RegisterMessage(&school.Student{})
+	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
+	if err != nil {
+		b.Error(err)
+	}
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
@@ -879,7 +893,7 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 		},
 	}
 
-	err := e.Compile(r)
+	err = e.Compile(r)
 	if err != nil {
 		log.Fatalf("Error adding ruleset: %v", err)
 	}
@@ -900,14 +914,21 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(context.Background(), r, data)
+		_, err := e.Eval(context.Background(), r, data)
+		if err != nil {
+			b.Error(err)
+		}
+
 	}
 
 }
 
 func BenchmarkProtoWithoutSelf(b *testing.B) {
 
-	pb.DefaultDb.RegisterMessage(&school.Student{})
+	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
+	if err != nil {
+		b.Error(err)
+	}
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
@@ -930,7 +951,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 		},
 	}
 
-	err := e.Compile(r)
+	err = e.Compile(r)
 	if err != nil {
 		log.Fatalf("Error adding ruleset: %v", err)
 	}
@@ -950,7 +971,11 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(context.Background(), r, data)
+		_, err := e.Eval(context.Background(), r, data)
+		if err != nil {
+			b.Error(err)
+		}
+
 	}
 
 }
@@ -984,14 +1009,21 @@ func BenchmarkProtoCreation(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		e.Eval(context.Background(), r, map[string]interface{}{})
+		_, err := e.Eval(context.Background(), r, map[string]interface{}{})
+		if err != nil {
+			b.Error(err)
+		}
+
 	}
 
 }
 
 func BenchmarkEval2000Rules(b *testing.B) {
 	b.StopTimer()
-	pb.DefaultDb.RegisterMessage(&school.Student{})
+	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
+	if err != nil {
+		b.Error(err)
+	}
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
@@ -1020,7 +1052,7 @@ func BenchmarkEval2000Rules(b *testing.B) {
 		r.Rules[cr.ID] = cr
 	}
 
-	err := e.Compile(r)
+	err = e.Compile(r)
 	if err != nil {
 		log.Fatalf("Error adding ruleset: %v", err)
 	}
@@ -1040,7 +1072,11 @@ func BenchmarkEval2000Rules(b *testing.B) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		e.Eval(context.Background(), r, data)
+		_, err := e.Eval(context.Background(), r, data)
+		if err != nil {
+			b.Error(err)
+		}
+
 	}
 }
 
@@ -1048,7 +1084,7 @@ func BenchmarkCompileRule(b *testing.B) {
 	is := is.New(b)
 	e := indigo.NewEngine(cel.NewEvaluator())
 
-	r := makeEducationProtoRules(fmt.Sprintf("rule"))
+	r := makeEducationProtoRules("rule")
 	for i := 1; i < b.N; i++ {
 		err := e.Compile(r)
 		is.NoErr(err)
