@@ -43,6 +43,7 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 
 	err := e.Compile(r)
 	is.NoErr(err)
+	//	is.True(err != nil)
 
 	result, err := e.Eval(context.Background(), r, map[string]interface{}{})
 	is.NoErr(err)
@@ -60,12 +61,16 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	r := makeRule()
 
 	// Specify the sort order for all rules
-	indigo.ApplyToRule(r, func(r *indigo.Rule) error {
+	err := indigo.ApplyToRule(r, func(r *indigo.Rule) error {
 		r.EvalOptions.SortFunc = sortRulesAlpha
 		return nil
 	})
 
-	err := e.Compile(r)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = e.Compile(r)
 	is.NoErr(err)
 
 	//	fmt.Println(r)
@@ -127,6 +132,7 @@ func TestSelf(t *testing.T) {
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 	err := e.Compile(r)
+	is.NoErr(err)
 
 	// Set the self reference on D
 	D := r.Rules["D"]
@@ -135,10 +141,10 @@ func TestSelf(t *testing.T) {
 	d1 := D.Rules["d1"]
 	// Give d1 a self expression, but no self value
 	d1.Expr = "self"
-	result, err := e.Eval(context.Background(), r, nil)
+	_, err = e.Eval(context.Background(), r, nil)
 	is.True(err != nil) // should get an error if the data map is nil and we try to use 'self'
 
-	result, err = e.Eval(context.Background(), r, map[string]interface{}{"anything": "anything"})
+	result, err := e.Eval(context.Background(), r, map[string]interface{}{"anything": "anything"})
 	is.NoErr(err)
 	is.Equal(result.Results["D"].Value.(int), 22)           // D should return 'self', which is 22
 	is.Equal(result.Results["D"].Results["d1"].Pass, false) // d1 should not inherit D's self
@@ -417,6 +423,7 @@ func TestPartialDiagnostics(t *testing.T) {
 
 	// then, re-compile rule B, WITH diagnostics
 	err = e.Compile(r.Rules["B"], indigo.CollectDiagnostics(true))
+	is.NoErr(err)
 
 	u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
 	is.NoErr(err)

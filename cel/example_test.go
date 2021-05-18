@@ -46,6 +46,10 @@ func Example() {
 
 	// Step 5: Evaluate and check the results
 	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println("Failed!")
+	}
+
 	fmt.Println(results.Pass)
 	// Output: true
 }
