@@ -104,22 +104,23 @@ type Map struct {
 	ValueType Type // the type of the value stored in the map
 }
 
-func (t Int) String() string       { return "int" }
-func (t Bool) String() string      { return "bool" }
-func (t String) String() string    { return "string" }
-func (t List) String() string      { return "[]" + t.ValueType.String() }
-func (t Map) String() string       { return "map[" + t.KeyType.String() + "]" + t.ValueType.String() }
-func (t Any) String() string       { return "any" }
-func (t Duration) String() string  { return "duration" }
-func (t Timestamp) String() string { return "timestamp" }
-func (t Float) String() string     { return "float" }
-func (t Proto) String() string     { return "proto(" + t.Protoname + ")" }
+func (Int) String() string       { return "int" }
+func (Bool) String() string      { return "bool" }
+func (String) String() string    { return "string" }
+func (t List) String() string    { return "[]" + t.ValueType.String() }
+func (t Map) String() string     { return "map[" + t.KeyType.String() + "]" + t.ValueType.String() }
+func (Any) String() string       { return "any" }
+func (Duration) String() string  { return "duration" }
+func (Timestamp) String() string { return "timestamp" }
+func (Float) String() string     { return "float" }
+func (t Proto) String() string   { return "proto(" + t.Protoname + ")" }
 
 // Value is the result of evaluation returned in the Result.
 // Inspect the Type to determine what it is.
 type Value struct {
 	Val  interface{} // the value stored
 	Type Type        // the Indigo type stored
+	X    interface{}
 }
 
 // ParseType parses a string that represents an Indigo type and returns the type.
@@ -164,17 +165,27 @@ func ParseType(t string) (Type, error) {
 // The string must in the format map[<keytype]<valuetype>.
 // Example: map[string]int
 func parseMap(t string) (Type, error) {
-	startBracket := strings.Index(t, "[")
-	endBracket := strings.Index(t, "]")
-	if startBracket == -1 || endBracket == -1 || startBracket > endBracket || endBracket > len(t) {
-		return nil, fmt.Errorf("bad map specification")
+
+	var keyTypeName string
+	var valueTypeName string
+
+	t = strings.ReplaceAll(t, "[", " ")
+	t = strings.ReplaceAll(t, "]", " ")
+
+	n, err := fmt.Sscanf(t, "map %s %s", &keyTypeName, &valueTypeName)
+	if err != nil {
+		return Any{}, err
 	}
-	keyTypeName := t[startBracket+1 : endBracket]
-	valueTypeName := t[endBracket+1:]
+
+	if n < 2 {
+		return Any{}, fmt.Errorf("wanted 2 items parsed, got %d", n)
+	}
+
 	keyType, err := ParseType(keyTypeName)
 	if err != nil {
 		return Any{}, err
 	}
+
 	valueType, err := ParseType(valueTypeName)
 	if err != nil {
 		return Any{}, err
@@ -184,15 +195,18 @@ func parseMap(t string) (Type, error) {
 		KeyType:   keyType,
 		ValueType: valueType,
 	}, nil
-
 }
 
 // parseList parses a string and returns an Indigo list type.
 // The string must be in the format []<valuetype>
 // Example: []string
 func parseList(t string) (Type, error) {
-	typeName := t[2:]
-	valueType, err := ParseType(typeName)
+	var valueTypeName string
+	_, err := fmt.Sscanf(t, "[]%s", &valueTypeName)
+	if err != nil {
+		return Any{}, err
+	}
+	valueType, err := ParseType(valueTypeName)
 	if err != nil {
 		return Any{}, err
 	}
@@ -200,7 +214,6 @@ func parseList(t string) (Type, error) {
 	return List{
 		ValueType: valueType,
 	}, nil
-
 }
 
 // parseProto parses a string and returns a partial Indigo proto type.
@@ -208,7 +221,6 @@ func parseList(t string) (Type, error) {
 // The string must be in the form proto(<protoname>).
 // Example: proto("school.Student")
 func parseProto(t string) (Type, error) {
-
 	startParen := strings.Index(t, "(")
 	endParen := strings.Index(t, ")")
 

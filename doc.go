@@ -1,10 +1,12 @@
 // Package indigo provides a rules engine.
 //
-// Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules.
+// Indigo is a rules engine created to enable application developers to build systems whose logic
+// can be controlled by end-users via rules.
 // Rules are expressions (such as "a > b") that are evaluated, and the outcomes used to direct appliation logic.
 //
 // Indigo does not specify a language for rules, relying instead on a rule evaluator to perform the work.
-// The default rule evaluator (in the cel package) is the Common Expression Language from Google (https://github.com/google/cel-go).
+// The default rule evaluator (in the cel package) is the Common Expression Language from Google
+// (https://github.com/google/cel-go).
 //
 //
 // Compilation and Evaluation
@@ -21,8 +23,10 @@
 // rules. You do not have to organize rules in a complex tree; a single parent with 1,000s of child rules is OK.
 // There are 3 main reasons for using a tree to organize rules:
 //  1. Allow atomic rule updates (see separate section)
-//  2. Use options on the parent rule to control if child rules are evaluated (in effect, child rules "inherit" the parent rule's condition)
-//  3. Use options on the parent rule to control which child rules are returned as results (such as returning true or false results, or both)
+//  2. Use options on the parent rule to control if child rules are evaluated
+//     (in effect, child rules "inherit" the parent rule's condition)
+//  3. Use options on the parent rule to control which child rules are returned as
+//     results (such as returning true or false results, or both)
 //  4. Logically separate disparate groups of rules
 //
 //
@@ -64,7 +68,8 @@
 //     "Deny all traffic" (child 1)
 //     "Allow traffic from known_IPs" (child 2)
 //
-// If the user changes child 1 to be "Allow all traffic" and changes child 2 to "Deny all traffic, except for known_IPs",
+// If the user changes child 1 to be "Allow all traffic" and changes child 2 to "Deny all traffic,
+// except for known_IPs",
 // there's a risk that child 1 is changed first, without the child 2 change happening. This would leave us with this:
 //
 //   Firewall Rules (parent)
@@ -76,8 +81,9 @@
 // Instead of accepting a change to child 1 and child 2 separately, ONLY accept a change to your rule hierarchy for the
 // Firewall Rules parent. That way the update succeeds or fails as a "transaction".
 //
-// If Firewall Rules is itself a child of a larger set of parent rules, it's recommended to compile the Firewall Rules parent and
-// children BEFORE adding it to its eventual parent. That way you ensure that if compilation of Firewall Rules fails, the
-// "production" firewall rules are still intact.
+// If Firewall Rules is itself a child of a larger set of parent rules, it's recommended to compile the Firewall Rules
+// parent and
+// children BEFORE adding it to its eventual parent. That way you ensure that if compilation of Firewall Rules fails,
+// the "production" firewall rules are still intact.
 //
 package indigo

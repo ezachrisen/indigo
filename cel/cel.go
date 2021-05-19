@@ -3,37 +3,35 @@ package cel
 import (
 	"fmt"
 	"math"
+	"reflect" // required by CEL to construct a proto from an expression
 	"strings"
 	"time"
 
 	"github.com/ezachrisen/indigo"
 
-	"github.com/google/cel-go/cel"
+	celgo "github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
-	"github.com/google/cel-go/common/types"
-	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+	ctypes "github.com/google/cel-go/common/types"
+	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
-// CELEvaluator implements the indigo.Evaluator interface.
+// Evaluator implements the indigo.Evaluator interface.
 // It uses the CEL-Go package to compile and evaluate rules.
-type CELEvaluator struct {
-	programs map[*indigo.Rule]CELProgram
-}
+type Evaluator struct{}
 
-// CELProgram holds a compiled CEL Program and
+// celProgram holds a compiled CEL Program and
 // (potentially) an AST. The AST is used if we're collecting diagnostics
 // for the engine.
-type CELProgram struct {
-	program cel.Program
-	ast     *cel.Ast
+type celProgram struct {
+	program celgo.Program
+	ast     *celgo.Ast
 }
 
-// Initialize a new CEL Evaluator
+// NewEvaluator creates a new CEL Evaluator.
 // The evaluator contains internal data used to facilitate CEL expression evaluation.
-func NewEvaluator() *CELEvaluator {
-	e := CELEvaluator{
-		programs: map[*indigo.Rule]CELProgram{},
-	}
+func NewEvaluator() *Evaluator {
+	e := Evaluator{}
 	return &e
 }
 
@@ -44,14 +42,15 @@ func NewEvaluator() *CELEvaluator {
 //
 // Any errors in compilation are returned, and the rule.Program is set to nil.
 // If dryRun is true, this does nothing.
-func (e *CELEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, dryRun bool) (interface{}, error) {
-	prog := CELProgram{}
+func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type,
+	collectDiagnostics bool, dryRun bool) (interface{}, error) {
+	prog := celProgram{}
 
 	if expr == "" {
 		return nil, nil
 	}
 
-	var opts []cel.EnvOption
+	var opts []celgo.EnvOption
 	var err error
 
 	// Convert from an Indigo schema to a set of CEL options
@@ -64,7 +63,7 @@ func (e *CELEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.T
 		return nil, fmt.Errorf("no valid schema")
 	}
 
-	env, err := cel.NewEnv(opts...)
+	env, err := celgo.NewEnv(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -89,9 +88,9 @@ func (e *CELEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.T
 		}
 	}
 
-	options := cel.EvalOptions()
+	options := celgo.EvalOptions()
 	if collectDiagnostics {
-		options = cel.EvalOptions(cel.OptTrackState)
+		options = celgo.EvalOptions(celgo.OptTrackState)
 	}
 
 	prog.program, err = env.Program(c, options)
@@ -110,9 +109,10 @@ func (e *CELEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.T
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
-func (e *CELEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, evalData interface{}, returnDiagnostics bool) (indigo.Value, string, error) {
+func (*Evaluator) Evaluate(data map[string]interface{}, _ string,
+	_ indigo.Schema, _ interface{}, evalData interface{}, resultValue indigo.Type, returnDiagnostics bool) (indigo.Value, string, error) {
 
-	program, ok := evalData.(CELProgram)
+	program, ok := evalData.(celProgram)
 
 	// If the rule doesn't have a program, return a default result
 	if !ok {
@@ -124,12 +124,11 @@ func (e *CELEvaluator) Evaluate(data map[string]interface{}, expr string, s indi
 
 	rawValue, details, err := program.program.Eval(data)
 	// Do not check the error yet. Grab the diagnostics first
-	// TODO: Return diagnostics with errors
 
 	// TODO: Check return type
 	// Determine if the value produced matched the rule's expectations
 	// if r.ResulType != nil {
-	// 	err := doTypesMatch(result *expr.Type, r.ResultType)
+	// 	err := doTypesMatch(result *gexpr.Type, r.ResultType)
 	// }
 
 	var diagnostics string
@@ -141,70 +140,104 @@ func (e *CELEvaluator) Evaluate(data map[string]interface{}, expr string, s indi
 		return indigo.Value{}, diagnostics, fmt.Errorf("evaluating rule: %w", err)
 	}
 
+	var iv indigo.Value
+
 	switch v := rawValue.Value().(type) {
 	case bool:
-		return indigo.Value{
-			Val:  v,
-			Type: indigo.Bool{},
-		}, diagnostics, nil
+		iv.Val = v
+		iv.Type = indigo.Bool{}
+	case *dynamicpb.Message:
+		resultProto, ok := resultValue.(indigo.Proto)
+		if !ok {
+			return indigo.Value{}, diagnostics, fmt.Errorf("expected type %T, got proto of type %v", resultValue, v.ProtoReflect().Descriptor().FullName())
+		}
+		pb, err := rawValue.ConvertToNative(reflect.TypeOf(resultProto.Message))
+		if err != nil {
+			return indigo.Value{}, diagnostics, fmt.Errorf("conversion to %T failed: %v", resultProto, err)
+		}
+		iv.Val = pb
+		iv.Type = indigo.Proto{
+			Protoname: string(v.ProtoReflect().Descriptor().FullName()),
+			Message:   pb,
+		}
 	default:
-		return indigo.Value{
-			Val:  v,
-			Type: indigo.Any{},
-		}, diagnostics, nil
+		iv.Val = v
+		iv.Type = indigo.Any{}
 	}
+
+	return iv, diagnostics, nil
 
 }
 
-// --------------------------------------------------------------------------- COMPILATION
+// --------------------------------------------------------------------------- TYPE CONVERSIONS
+//
 
-// Parse, check and store the rule
+// doTypesMatch determines if the indigo and cel types match, meaning
+// they can be converted from one to the other
+func doTypesMatch(cel *gexpr.Type, indigo indigo.Type) error {
 
-func doTypesMatch(result *expr.Type, expected indigo.Type) error {
-
-	// Convert the CEL result type to an Indigo type
-	indigoResultType, err := indigoType(result)
+	celConverted, err := indigoType(cel)
 	if err != nil {
 		return err
 	}
 
-	switch e := expected.(type) {
-	case indigo.Proto:
-		resultAsProto, ok := indigoResultType.(indigo.Proto)
-		if !ok {
-			return fmt.Errorf("Rule.ResultValue is a proto message. Result from rule compilation is %T", result)
-		}
-		if resultAsProto.Protoname != e.Protoname {
-			return fmt.Errorf("Rule.ResultValue is a proto message with type %s, the result from compilation is a proto message with type %s", e.Protoname, resultAsProto.Protoname)
-		}
-	case indigo.Bool:
-		_, ok := indigoResultType.(indigo.Bool)
-		if !ok {
-			return fmt.Errorf("Rule.ResultValue is a boolean. Result from rule compilation is %T", result)
-		}
-	case indigo.Float:
-		_, ok := indigoResultType.(indigo.Float)
-		if !ok {
-			return fmt.Errorf("Rule.ResultValue is a float. Result from rule compilation is %T", result)
-		}
+	if celConverted.String() != indigo.String() {
+		return fmt.Errorf("types do no match: %T (%v), %T (%v)", celConverted, celConverted, indigo, indigo)
 	}
 
 	return nil
 }
 
 // indigoType convertes from a CEL type to an indigo.Type
-// TODO: cover more types
-func indigoType(t *expr.Type) (indigo.Type, error) {
+func indigoType(t *gexpr.Type) (indigo.Type, error) {
 
 	switch v := t.TypeKind.(type) {
-	case *expr.Type_MessageType:
+	case *gexpr.Type_MessageType:
 		return indigo.Proto{Protoname: t.GetMessageType()}, nil
-	case *expr.Type_Primitive:
+	case *gexpr.Type_WellKnown:
+		switch v.WellKnown {
+		case gexpr.Type_DURATION:
+			return indigo.Duration{}, nil
+		case gexpr.Type_TIMESTAMP:
+			return indigo.Timestamp{}, nil
+		default:
+			return nil, fmt.Errorf("unknown 'wellknow' type: %T", v)
+		}
+	case *gexpr.Type_MapType_:
+		kType, err := indigoType(v.MapType.KeyType)
+		if err != nil {
+			return nil, err
+		}
+
+		vType, err := indigoType(v.MapType.ValueType)
+		if err != nil {
+			return nil, err
+		}
+
+		return indigo.Map{
+			KeyType:   kType,
+			ValueType: vType,
+		}, nil
+	case *gexpr.Type_ListType_:
+		vType, err := indigoType(v.ListType.ElemType)
+		if err != nil {
+			return nil, err
+		}
+		return indigo.List{
+			ValueType: vType,
+		}, nil
+	case *gexpr.Type_Dyn:
+		return indigo.Any{}, nil
+	case *gexpr.Type_Primitive:
 		switch t.GetPrimitive() {
-		case expr.Type_BOOL:
+		case gexpr.Type_BOOL:
 			return indigo.Bool{}, nil
-		case expr.Type_DOUBLE:
+		case gexpr.Type_DOUBLE:
 			return indigo.Float{}, nil
+		case gexpr.Type_STRING:
+			return indigo.String{}, nil
+		case gexpr.Type_INT64:
+			return indigo.Int{}, nil
 		default:
 			return nil, fmt.Errorf("unexpected primitive type %v", v)
 		}
@@ -213,8 +246,8 @@ func indigoType(t *expr.Type) (indigo.Type, error) {
 	}
 }
 
-// celType converts from a indigo.Type to a CEL type
-func celType(t indigo.Type) (*expr.Type, error) {
+// celType converts from an indigo type to a CEL type
+func celType(t indigo.Type) (*gexpr.Type, error) {
 
 	switch v := t.(type) {
 	case indigo.String:
@@ -247,15 +280,16 @@ func celType(t indigo.Type) (*expr.Type, error) {
 		return decls.NewListType(val), nil
 	case indigo.Proto:
 		return decls.NewObjectType(v.Protoname), nil
+	default:
+		return nil, fmt.Errorf("unknown indigo type %s", t)
 	}
-	return decls.Any, nil
 
 }
 
 // schemaToDeclarations converts from a rules/Schema to a set of CEL declarations that
 // are passed to the CEL engine
-func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, error) {
-	declarations := []*expr.Decl{}
+func schemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, error) {
+	declarations := []*gexpr.Decl{}
 	types := []interface{}{}
 
 	for _, d := range s.Elements {
@@ -265,22 +299,20 @@ func schemaToDeclarations(s indigo.Schema) ([]cel.EnvOption, error) {
 		}
 		declarations = append(declarations, decls.NewVar(d.Name, typ))
 
-		switch v := d.Type.(type) {
-		case indigo.Proto:
+		if v, ok := d.Type.(indigo.Proto); ok {
 			types = append(types, v.Message)
-			//fmt.Printf("Added a new type: %T with name %s\n", v.Message, v.Protoname)
 		}
-
 	}
-	opts := []cel.EnvOption{}
-	opts = append(opts, cel.Declarations(declarations...))
-	opts = append(opts, cel.Types(types...))
+	opts := []celgo.EnvOption{}
+	opts = append(opts, celgo.Declarations(declarations...))
+	//	opts = append(opts, celgo.TypeDescs(types...))
+	opts = append(opts, celgo.Types(types...))
 	return opts, nil
 }
 
 // --------------------------------------------------------------------------- DIAGNOSTICS
 
-func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]interface{}) string {
+func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails, data map[string]interface{}) string {
 	s := strings.Builder{}
 
 	indent := strings.Repeat(" ", n*2)
@@ -291,11 +323,11 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 
 	if ok {
 		switch v := evaluatedValue.(type) {
-		case types.Duration:
-			dur := time.Duration(v.Seconds * int64(math.Pow10(9)))
+		case ctypes.Duration:
+			dur := time.Duration(v.Seconds() * float64(math.Pow10(9)))
 			value = fmt.Sprintf("%60s", dur)
-		case types.Timestamp:
-			value = fmt.Sprintf("%60s", time.Unix(v.Seconds, 0))
+		case ctypes.Timestamp:
+			value = fmt.Sprintf("%60s", time.Unix(int64(v.Second()), 0))
 		default:
 			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", evaluatedValue))
 		}
@@ -305,12 +337,13 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 	}
 
 	switch i := ex.GetExprKind().(type) {
-	case *expr.Expr_CallExpr:
-		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, strings.Trim(i.CallExpr.GetFunction(), "_")))
+	case *gexpr.Expr_CallExpr:
+		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent,
+			strings.Trim(i.CallExpr.GetFunction(), "_")))
 		for x := range i.CallExpr.Args {
 			s.WriteString(printAST(i.CallExpr.Args[x], n+1, details, data))
 		}
-	case *expr.Expr_ComprehensionExpr:
+	case *gexpr.Expr_ComprehensionExpr:
 		operandName := i.ComprehensionExpr.IterRange.GetSelectExpr().Operand.GetIdentExpr().GetName()
 		fieldName := i.ComprehensionExpr.IterRange.GetSelectExpr().Field
 		comprehensionName := i.ComprehensionExpr.LoopCondition.GetCallExpr().Function
@@ -318,10 +351,12 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 		if comprehensionName == "@not_strictly_false" {
 			comprehensionName = "all"
 		}
-		s.WriteString(fmt.Sprintf("%s %s %s %s.%s.%s %s\n", value, valueSource, indent, operandName, fieldName, comprehensionName, callExpression))
-	case *expr.Expr_ConstExpr:
-		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, strings.Trim(i.ConstExpr.String(), " ")))
-	case *expr.Expr_SelectExpr:
+		s.WriteString(fmt.Sprintf("%s %s %s %s.%s.%s %s\n", value, valueSource, indent,
+			operandName, fieldName, comprehensionName, callExpression))
+	case *gexpr.Expr_ConstExpr:
+		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent,
+			strings.Trim(i.ConstExpr.String(), " ")))
+	case *gexpr.Expr_SelectExpr:
 		operandName := getSelectIdent(i)
 		fieldName := i.SelectExpr.Field
 
@@ -340,7 +375,7 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 		}
 
 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, operandName+"."+fieldName))
-	case *expr.Expr_IdentExpr:
+	case *gexpr.Expr_IdentExpr:
 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, i.IdentExpr.Name))
 	default:
 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, "** Unknown"))
@@ -348,7 +383,7 @@ func printAST(ex *expr.Expr, n int, details *cel.EvalDetails, data map[string]in
 	return s.String()
 }
 
-func getCallExpression(e *expr.Expr_Call) string {
+func getCallExpression(e *gexpr.Expr_Call) string {
 
 	x := ""
 
@@ -358,32 +393,32 @@ func getCallExpression(e *expr.Expr_Call) string {
 
 	for _, a := range e.Args {
 		switch aa := a.GetExprKind().(type) {
-		case *expr.Expr_IdentExpr:
+		case *gexpr.Expr_IdentExpr:
 			if aa.IdentExpr.Name != "__result__" {
 				x = x + " " + aa.IdentExpr.Name
 			}
-		case *expr.Expr_CallExpr:
+		case *gexpr.Expr_CallExpr:
 			x = x + "(" + getCallExpression(a.GetCallExpr()) + ")"
-		case *expr.Expr_ConstExpr:
+		case *gexpr.Expr_ConstExpr:
 			x = x + " " + aa.ConstExpr.String()
 		}
 	}
 	return x
 }
 
-func getSelectIdent(i *expr.Expr_SelectExpr) string {
+func getSelectIdent(i *gexpr.Expr_SelectExpr) string {
 
 	switch v := i.SelectExpr.Operand.GetExprKind().(type) {
-	case *expr.Expr_SelectExpr:
+	case *gexpr.Expr_SelectExpr:
 		return getSelectIdent(v) + "." + v.SelectExpr.Field
-	case *expr.Expr_IdentExpr:
+	case *gexpr.Expr_IdentExpr:
 		return v.IdentExpr.Name
 	}
 
 	return ""
 }
 
-func collectDiagnostics(ast *cel.Ast, details *cel.EvalDetails, data map[string]interface{}) string {
+func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails, data map[string]interface{}) string {
 
 	if ast == nil || details == nil {
 		fmt.Println(ast, details)
@@ -392,7 +427,7 @@ func collectDiagnostics(ast *cel.Ast, details *cel.EvalDetails, data map[string]
 	}
 
 	s := strings.Builder{}
-	s.WriteString("----------------------------------------------------------------------------------------------------\n")
+	s.WriteString("-------------------------------------------------------------------------------------------------\n")
 	//	s.WriteString(fmt.Sprintf("Rule ID: %s\n", r.RuleID))
 	s.WriteString("Expression:\n")
 	s.WriteString(fmt.Sprintf("%s\n\n", wordWrap(ast.Source().Content(), 100)))
@@ -400,11 +435,11 @@ func collectDiagnostics(ast *cel.Ast, details *cel.EvalDetails, data map[string]
 	// s.WriteString(fmt.Sprintf("Evaluation Raw Value:  %v\n", r.Value))
 	// s.WriteString(fmt.Sprintf("Rule Expression:\n"))
 	// s.WriteString(fmt.Sprintf("%s\n", word_wrap(ast.Source().Content(), 100)))
-	s.WriteString("----------------------------------------------------------------------------------------------------\n")
+	s.WriteString("-------------------------------------------------------------------------------------------------\n")
 	s.WriteString("                                          EVALUATION TREE\n")
-	s.WriteString("----------------------------------------------------------------------------------------------------\n")
+	s.WriteString("-------------------------------------------------------------------------------------------------\n")
 	s.WriteString(fmt.Sprintf("%60s    %-30s\n", "VALUE", "EXPRESSION"))
-	s.WriteString("----------------------------------------------------------------------------------------------------\n")
+	s.WriteString("-------------------------------------------------------------------------------------------------\n")
 	s.WriteString(printAST(ast.Expr(), 0, details, data))
 	return s.String()
 }

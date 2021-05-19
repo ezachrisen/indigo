@@ -21,6 +21,8 @@ type Result struct {
 	// Calculations or string manipulations will return the appropriate type.
 	Value interface{}
 
+	IndigoValue Value
+
 	// Results of evaluating the child rules.
 	Results map[string]*Result
 
@@ -52,7 +54,8 @@ func (u *Result) summarizeResults(n int) string {
 	if !u.Pass {
 		boolString = "FAIL"
 	}
-	s.WriteString(fmt.Sprintf("%-40s %-4s %4d %v\n", fmt.Sprintf("%s%s", indent, u.Rule.ID), boolString, len(u.Results), u.Value))
+	s.WriteString(fmt.Sprintf("%-40s %-4s %4d %v\n",
+		fmt.Sprintf("%s%s", indent, u.Rule.ID), boolString, len(u.Results), u.Value))
 	for _, c := range u.Results {
 		s.WriteString(c.summarizeResults(n + 1))
 	}

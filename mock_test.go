@@ -40,7 +40,7 @@ func (m *mockEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.
 }
 
 // The mockEvaluator only knows how to evaluate 1 string: `true`. If the expression is this, the evaluation is true, otherwise false.
-func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, prog interface{}, returnDiagnostics bool) (indigo.Value, string, error) {
+func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, prog interface{}, resultType indigo.Type, returnDiagnostics bool) (indigo.Value, string, error) {
 	//	m.rulesTested = append(m.rulesTested, r.ID)
 	time.Sleep(m.evalDelay)
 	prg := program{}
