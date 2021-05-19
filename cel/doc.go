@@ -1,9 +1,12 @@
-// Package cel provides an implementation of the Indigo evaluator and compiler interfaces backed by Google's cel-go rules engine.
+// Package cel provides an implementation of the Indigo evaluator and compiler interfaces
+// backed by Google's cel-go rules engine.
 //
 // See https://github.com/google/cel-go and https://opensource.google/projects/cel for more information
 // about CEL.
 //
 // The rule expressions you write must conform to the CEL spec: https://github.com/google/cel-spec.
+//
+// Google has a nice tutorial here: https://codelabs.developers.google.com/codelabs/cel-go/index.html#0
 //
 // Working with Protocol Buffers
 //
@@ -20,8 +23,10 @@
 //
 // Protocol Buffer Names
 //
-// When declaring the protocol buffer type in the schema, the Protoname is the proto package name followed by the type.
-// For example, in the indigo/testdata/proto/student.proto file, the package name is "testdata.school" and the type defined is Student.
+// When declaring the protocol buffer type in the schema, the Protoname is the proto package name
+// followed by the type.
+// For example, in the indigo/testdata/proto/student.proto file, the package name is "testdata.school"
+// and the type defined is Student.
 // When using this type in the schema, the declaration looks like this:
 //
 // In student.proto:
@@ -37,7 +42,8 @@
 //
 // Protocol Buffer Fields in Expressions
 //
-// When refererring to fields of a protocol buffer in an expression, the field names are the proto names, NOT the generated Go names.
+// When refererring to fields of a protocol buffer in an expression, the field names are the proto names, NOT the
+// generated Go names.
 // For example, in the student.proto file, a field called "enrollment_date" is defined.
 // When the Go struct is generated, this field name is now called "EnrollmentDate".
 // In the CEL expression, you must use the "enrollment_date" name, as in
@@ -51,7 +57,9 @@
 // In Go code:
 //
 //     s := school.Student{}
-//     s.EnrollmentDate = &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()}
+//     s.EnrollmentDate = &timestamp.Timestamp{
+//         Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()
+//     }
 //
 // In the CEL expression:
 //

@@ -6,7 +6,10 @@ type Evaluator interface {
 	// Evaluate tests the rule expression against the data.
 	// Returns the result of the evaluation and a string containing diagnostic information.
 	// Diagnostic information is only returned if explicitly requested.
-	Evaluate(data map[string]interface{}, expr string, s Schema, self interface{}, evalData interface{}, returnDiagnostics bool) (Value, string, error)
+	// Evaluate should check the result against the expected resultType and return an error if the
+	// result does not match.
+	Evaluate(data map[string]interface{}, expr string, s Schema,
+		self interface{}, evalData interface{}, resultType Type, returnDiagnostics bool) (Value, string, error)
 
 	// Compile pre-processes the expression, returning a compiled version.
 	// The Indigo engine will store the compiled version, later providing it back to the
