@@ -62,13 +62,15 @@ func makeEducationRules1() *indigo.Rule {
 				Schema:     makeEducationSchema(),
 			},
 			"at_risk": {
-				ID:     "at_risk",
-				Expr:   `student.GPA < 2.5 || student.Status == "Probation"`,
-				Schema: makeEducationSchema(),
+				ID:         "at_risk",
+				Expr:       `student.GPA < 2.5 || student.Status == "Probation"`,
+				Schema:     makeEducationSchema(),
+				ResultType: indigo.Bool{},
 				Rules: map[string]*indigo.Rule{
 					"risk_factor": {
-						ID:   "risk_factor",
-						Expr: `2.0+6.0`,
+						ID:         "risk_factor",
+						Expr:       `2.0+6.0`,
+						ResultType: indigo.Float{},
 					},
 				},
 			},
@@ -461,34 +463,90 @@ func TestRuleResultTypes(t *testing.T) {
 		{
 			indigo.Rule{
 				ID:         "shouldBeBool",
-				Schema:     makeEducationSchema(),
+				Schema:     makeEducationProtoSchema(),
 				ResultType: indigo.Bool{},
-				Expr:       `student.GPA >= 3.6 && student.Status!="Probation" && !("C" in student.Grades)`,
+				Expr:       `student.gpa >= 3.6`,
 			},
 			nil,
 		},
 		{
 			indigo.Rule{
 				ID:         "shouldBeBFloat",
-				Schema:     makeEducationSchema(),
+				Schema:     makeEducationProtoSchema(),
 				ResultType: indigo.Float{},
-				Expr:       `student.GPA + 1.0`,
+				Expr:       `student.gpa + 1.0`,
 			},
 			nil,
 		},
 		{
 			indigo.Rule{
+				ID:         "shouldBeInt",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.Int{},
+				Expr:       `4`,
+			},
+			nil,
+		},
+		{
+			indigo.Rule{
+				ID:         "shouldBeList",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.List{ValueType: indigo.Float{}},
+				Expr:       `student.grades`,
+			},
+			nil,
+		},
+		{
+			indigo.Rule{
+				ID:         "shouldBeIntList",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.List{ValueType: indigo.Int{}},
+				Expr:       `[1,2,3]`,
+			},
+			nil,
+		},
+		{
+			indigo.Rule{
+				ID:         "shouldBeMap",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.Int{}},
+				Expr:       `{'blue': 1, 'red': 2}`,
+			},
+			nil,
+		},
+
+		{
+			indigo.Rule{
 				ID:         "shouldBeStudent",
 				Schema:     makeEducationProtoSchema(),
-				ResultType: indigo.Proto{Protoname: "testdata.school.Student"},
+				ResultType: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}},
 				Expr:       `testdata.school.Student { gpa: 1.2 }`,
 			},
 			nil,
 		},
 		{
 			indigo.Rule{
+				ID:         "shouldBeTimestamp",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.Timestamp{},
+				Expr:       `now`,
+			},
+			nil,
+		},
+		{
+			indigo.Rule{
+				ID:         "shouldBeDuration",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.Duration{},
+				Expr:       `duration("12h")`,
+			},
+			nil,
+		},
+
+		{
+			indigo.Rule{
 				ID:         "NEGATIVEshouldBeBFloat",
-				Schema:     makeEducationSchema(),
+				Schema:     makeEducationProtoSchema(),
 				ResultType: indigo.Bool{},
 				Expr:       `student.gpa + 1.0`,
 			},
@@ -507,10 +565,22 @@ func TestRuleResultTypes(t *testing.T) {
 
 	e := indigo.NewEngine(cel.NewEvaluator())
 
-	for _, c := range cases {
-		err := e.Compile(&c.rule)
-		if c.err == nil && err != nil {
-			t.Errorf("For rule %s, wanted err = %v, got %v", c.rule.ID, c.err, err)
+	for i := range cases {
+		//		lc := c
+		//		fmt.Println("Case: ", cases[i].rule.ID)
+		err := e.Compile(&cases[i].rule)
+		if cases[i].err == nil && err != nil {
+			t.Errorf("For rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
+		}
+
+		_, err = e.Eval(context.Background(), &cases[i].rule, makeStudentProtoData())
+		if err != nil && cases[i].err == nil {
+			t.Fatalf("For rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
+		} else {
+			// if res != nil {
+			// 	fmt.Printf("Result: %v\n", res)
+			// 	fmt.Printf("Result = %v, type %T,  rule = %v\n", res.Value, res.Value, cases[i].rule.Expr)
+			// }
 		}
 	}
 }
@@ -641,7 +711,7 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 		Rules: map[string]*indigo.Rule{
 			"a": {
 				ID:     "at_risk",
-				Expr:   `student.GPA < self.Minimum_GPA && student.Status == testdata.school.Student.status_type.PROBATION`,
+				Expr:   `student.gpa < self.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
 				Self:   &school.HonorsConfiguration{Minimum_GPA: 3.7},
 				Schema: schema,
 				Meta:   false,
@@ -700,7 +770,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 		Rules: map[string]*indigo.Rule{
 			"a": {
 				ID:     "at_risk",
-				Expr:   `student.GPA < 2.5 || student.Status == testdata.school.Student.status_type.PROBATION`,
+				Expr:   `student.gpa < 2.5 || student.status == testdata.school.Student.status_type.PROBATION`,
 				Schema: schema,
 				Meta:   false,
 			},
@@ -751,9 +821,9 @@ func BenchmarkProtoCreation(b *testing.B) {
 		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
 		Expr: `
 			testdata.school.StudentSummary {
-				GPA: student.GPA,
-				RiskFactor: 2.0 + 3.0,
-				Tenure: duration("12h")
+				gpa: student.gpa,
+				risk_factor: 2.0 + 3.0,
+				tenure: duration("12h")
 			}`,
 	}
 
@@ -765,7 +835,7 @@ func BenchmarkProtoCreation(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		_, err := e.Eval(context.Background(), r, map[string]interface{}{})
+		_, err := e.Eval(context.Background(), r, makeStudentProtoData())
 		if err != nil {
 			b.Error(err)
 		}
@@ -800,7 +870,7 @@ func BenchmarkEval2000Rules(b *testing.B) {
 	for i := 0; i < 2_000; i++ {
 		cr := &indigo.Rule{
 			ID:     fmt.Sprintf("at_risk_%d", i),
-			Expr:   `student.GPA < self.Minimum_GPA && student.Status == testdata.school.Student.status_type.PROBATION`,
+			Expr:   `student.gpa < self.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
 			Schema: schema,
 			Self:   &school.HonorsConfiguration{Minimum_GPA: 3.7},
 			Meta:   false,

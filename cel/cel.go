@@ -2,8 +2,7 @@ package cel
 
 import (
 	"fmt"
-	"math"
-	"reflect" // required by CEL to construct a proto from an expression
+	"math" // required by CEL to construct a proto from an expression
 	"strings"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/google/cel-go/checker/decls"
 	ctypes "github.com/google/cel-go/common/types"
 	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
-	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // Evaluator implements the indigo.Evaluator interface.
@@ -84,7 +82,7 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type,
 	if resultType != nil {
 		err := doTypesMatch(c.ResultType(), resultType)
 		if err != nil {
-			return nil, fmt.Errorf("compiling rule: %w", err)
+			return nil, fmt.Errorf("compiling: %w", err)
 		}
 	}
 
@@ -109,13 +107,19 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type,
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
-func (*Evaluator) Evaluate(data map[string]interface{}, _ string,
-	_ indigo.Schema, _ interface{}, evalData interface{}, resultValue indigo.Type, returnDiagnostics bool) (indigo.Value, string, error) {
+func (*Evaluator) Evaluate(data map[string]interface{}, expr string,
+	_ indigo.Schema, _ interface{}, evalData interface{}, expectedResultType indigo.Type, returnDiagnostics bool) (indigo.Value, string, error) {
 
 	program, ok := evalData.(celProgram)
 
 	// If the rule doesn't have a program, return a default result
 	if !ok {
+		if expr != "" {
+			return indigo.Value{
+				Val:  true,
+				Type: indigo.Bool{},
+			}, "", fmt.Errorf("missing program")
+		}
 		return indigo.Value{
 			Val:  true,
 			Type: indigo.Bool{},
@@ -140,40 +144,48 @@ func (*Evaluator) Evaluate(data map[string]interface{}, _ string,
 		return indigo.Value{}, diagnostics, fmt.Errorf("evaluating rule: %w", err)
 	}
 
-	var iv indigo.Value
+	// x, err := rawValue.ConvertToNative(reflect.TypeOf(true))
+	// if err != nil {
+	// 	fmt.Printf("ERR: %v\n", err)
+	// }
 
-	switch v := rawValue.Value().(type) {
-	case bool:
-		iv.Val = v
-		iv.Type = indigo.Bool{}
-	case *dynamicpb.Message:
-		resultProto, ok := resultValue.(indigo.Proto)
-		if !ok {
-			return indigo.Value{}, diagnostics, fmt.Errorf("expected type %T, got proto of type %v", resultValue, v.ProtoReflect().Descriptor().FullName())
-		}
-		pb, err := rawValue.ConvertToNative(reflect.TypeOf(resultProto.Message))
-		if err != nil {
-			return indigo.Value{}, diagnostics, fmt.Errorf("conversion to %T failed: %v", resultProto, err)
-		}
-		iv.Val = pb
-		iv.Type = indigo.Proto{
-			Protoname: string(v.ProtoReflect().Descriptor().FullName()),
-			Message:   pb,
-		}
-	default:
-		iv.Val = v
-		iv.Type = indigo.Any{}
-	}
+	//	iv, err := indigoType(rawValue.Value())
 
-	return iv, diagnostics, nil
+	iv, err := convertRefValToIndigo(rawValue, expectedResultType)
+
+	return iv, diagnostics, err
+
+	//	fmt.Printf("Got %v, %T\n", iv, iv)
+	// switch v := rawValue.Value().(type) {
+	// case bool:
+	// 	iv.Val = v
+	// 	iv.Type = indigo.Bool{}
+	// case *dynamicpb.Message:
+	// 	resultProto, ok := resultValue.(indigo.Proto)
+	// 	if !ok {
+	// 		return indigo.Value{}, diagnostics, fmt.Errorf("expected type %T, got proto of type %v", resultValue, v.ProtoReflect().Descriptor().FullName())
+	// 	}
+	// 	pb, err := rawValue.ConvertToNative(reflect.TypeOf(resultProto.Message))
+	// 	if err != nil {
+	// 		return indigo.Value{}, diagnostics, fmt.Errorf("conversion to %T failed: %v", resultProto, err)
+	// 	}
+	// 	iv.Val = pb
+	// 	iv.Type = indigo.Proto{
+	// 		Protoname: string(v.ProtoReflect().Descriptor().FullName()),
+	// 		Message:   pb,
+	// 	}
+	// default:
+	// 	iv.Val = v
+	// 	iv.Type = indigo.Any{}
+	// }
 
 }
 
 // --------------------------------------------------------------------------- TYPE CONVERSIONS
 //
 
-// doTypesMatch determines if the indigo and cel types match, meaning
-// they can be converted from one to the other
+// // doTypesMatch determines if the indigo and cel types match, meaning
+// // they can be converted from one to the other
 func doTypesMatch(cel *gexpr.Type, indigo indigo.Type) error {
 
 	celConverted, err := indigoType(cel)
@@ -182,7 +194,7 @@ func doTypesMatch(cel *gexpr.Type, indigo indigo.Type) error {
 	}
 
 	if celConverted.String() != indigo.String() {
-		return fmt.Errorf("types do no match: %T (%v), %T (%v)", celConverted, celConverted, indigo, indigo)
+		return fmt.Errorf("types do no match: CEL: %T (%v), Indigo: %T (%v)", celConverted, celConverted, indigo, indigo)
 	}
 
 	return nil
@@ -194,6 +206,7 @@ func indigoType(t *gexpr.Type) (indigo.Type, error) {
 	switch v := t.TypeKind.(type) {
 	case *gexpr.Type_MessageType:
 		return indigo.Proto{Protoname: t.GetMessageType()}, nil
+
 	case *gexpr.Type_WellKnown:
 		switch v.WellKnown {
 		case gexpr.Type_DURATION:
@@ -246,8 +259,8 @@ func indigoType(t *gexpr.Type) (indigo.Type, error) {
 	}
 }
 
-// celType converts from an indigo type to a CEL type
-func celType(t indigo.Type) (*gexpr.Type, error) {
+// convertToDeclaration converts from an indigo type to a CEL type
+func convertToDeclaration(t indigo.Type) (*gexpr.Type, error) {
 
 	switch v := t.(type) {
 	case indigo.String:
@@ -263,23 +276,46 @@ func celType(t indigo.Type) (*gexpr.Type, error) {
 	case indigo.Timestamp:
 		return decls.Timestamp, nil
 	case indigo.Map:
-		key, err := celType(v.KeyType)
+		key, err := convertToDeclaration(v.KeyType)
 		if err != nil {
 			return nil, fmt.Errorf("setting key of %v map: %w", v.KeyType, err)
 		}
-		val, err := celType(v.ValueType)
+		val, err := convertToDeclaration(v.ValueType)
 		if err != nil {
 			return nil, fmt.Errorf("setting value of %v map: %w", v.ValueType, err)
 		}
 		return decls.NewMapType(key, val), nil
 	case indigo.List:
-		val, err := celType(v.ValueType)
+		val, err := convertToDeclaration(v.ValueType)
 		if err != nil {
 			return nil, fmt.Errorf("setting value of %v list: %w", v.ValueType, err)
 		}
 		return decls.NewListType(val), nil
 	case indigo.Proto:
 		return decls.NewObjectType(v.Protoname), nil
+	// case indigo.Native:
+	// 	x := reflect.ValueOf(v.Value)
+	// 	switch x.Kind() {
+	// 	case reflect.Int:
+	// 		return decls.Int, nil
+	// 	case reflect.Slice:
+	// 		fmt.Printf("It's a slice, with values of type %T, with elements %T\n", x.Interface(), reflect.TypeOf(v.Value).Elem())
+	// 		elem := reflect.TypeOf(v.Value).Elem()
+	// 		fmt.Printf("Type of elem: %T, %v\n", elem, elem)
+	// 		fmt.Printf("XType of elem: %T, %v\n", reflect.Zero(elem), reflect.Zero(elem))
+	// 		fmt.Printf("YType of elem: %T, %v\n", reflect.Zero(elem).Interface(), reflect.Zero(elem).Interface())
+
+	// 		val, err := convertToDeclaration(indigo.Native{reflect.Zero(elem).Interface()})
+	// 		if err != nil {
+	// 			return nil, fmt.Errorf("slice type: %v", err)
+	// 		}
+	// 		fmt.Printf("Val = %v, %T\n", val, val)
+	// 		return decls.NewListType(val), nil
+	// 		//			return nil,
+	// 	default:
+	// 		return nil, fmt.Errorf("unknown native indigo type %v", x.Kind())
+	// 	}
+
 	default:
 		return nil, fmt.Errorf("unknown indigo type %s", t)
 	}
@@ -288,12 +324,34 @@ func celType(t indigo.Type) (*gexpr.Type, error) {
 
 // schemaToDeclarations converts from a rules/Schema to a set of CEL declarations that
 // are passed to the CEL engine
+// func schemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, error) {
+// 	declarations := []*gexpr.Decl{}
+// 	types := []interface{}{}
+
+// 	for _, d := range s.Elements {
+// 		typ, err := celType(d.Type)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		declarations = append(declarations, decls.NewVar(d.Name, typ))
+
+// 		if v, ok := d.Type.(indigo.Proto); ok {
+// 			types = append(types, v.Message)
+// 		}
+// 	}
+// 	opts := []celgo.EnvOption{}
+// 	opts = append(opts, celgo.Declarations(declarations...))
+// 	//	opts = append(opts, celgo.TypeDescs(types...))
+// 	opts = append(opts, celgo.Types(types...))
+// 	return opts, nil
+// }
+
 func schemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, error) {
 	declarations := []*gexpr.Decl{}
 	types := []interface{}{}
 
 	for _, d := range s.Elements {
-		typ, err := celType(d.Type)
+		typ, err := convertToDeclaration(d.Type)
 		if err != nil {
 			return nil, err
 		}

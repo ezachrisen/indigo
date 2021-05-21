@@ -12,7 +12,6 @@ message Student {
   int32 age = 2;
   double gpa = 3;
   status_type status = 4;
-
   google.protobuf.Timestamp enrollment_date = 7; 
   
   enum status_type {
