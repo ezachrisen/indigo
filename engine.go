@@ -71,9 +71,16 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 		Results: make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
 	}
 
-	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, r.ResultType, o.ReturnDiagnostics)
+	// Default the result type to boolean
+	resultType := r.ResultType
+	if resultType == nil {
+		resultType = Bool{}
+	}
+
+	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, resultType, o.ReturnDiagnostics)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
+
 	}
 
 	pr.Value = val.Val
@@ -139,7 +146,7 @@ func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
 
 	prg, err := e.e.Compile(r.Expr, r.Schema, r.ResultType, o.collectDiagnostics, o.dryRun)
 	if err != nil {
-		return err
+		return fmt.Errorf("rule %s: %w", r.ID, err)
 	}
 
 	if !o.dryRun {
