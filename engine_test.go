@@ -433,12 +433,12 @@ func TestPartialDiagnostics(t *testing.T) {
 	// We expect that only the B rules will have diagnostics
 	for k, v := range f {
 		if k == "B" || k == "b1" || k == "b2" || k == "b3" || k == "b4" || k == "b4-1" || k == "b4-2" {
-			is.True(v == "diagnostics here")
+			is.True(v != nil)
 		} else {
-			if v != "" {
+			if v != nil {
 				fmt.Println("V = ", v, k)
 			}
-			is.True(v == "")
+			is.True(v == nil)
 		}
 	}
 }
