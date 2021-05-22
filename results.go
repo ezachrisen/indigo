@@ -27,7 +27,7 @@ type Result struct {
 	Results map[string]*Result
 
 	// Diagnostic data; only available if you turn on diagnostics for the evaluation
-	Diagnostics string
+	Diagnostics *Diagnostics
 
 	// A list of the rules evaluated, in the order they were evaluated
 	// Only available if you turn on diagnostics for the evaluation
@@ -44,20 +44,24 @@ func (u *Result) summarizeResults(n int) string {
 
 	if n == 0 {
 		s.WriteString("\n")
-		s.WriteString("---------- Result Diagnostic ---------------------------\n")
-		s.WriteString("                                         Pass Chil-     \n")
-		s.WriteString("Rule                                     Fail dren Value\n")
-		s.WriteString("--------------------------------------------------------\n")
+		//		s.WriteString("----------------------------------------------------------------------------\n")
+		s.WriteString("============================================================================\n")
+		s.WriteString("| INDIGO RESULT DIAGNOSTICS                Pass Chil-                      |\n")
+		s.WriteString("| Rule                                     Fail dren Value                 |\n")
+		s.WriteString("============================================================================\n")
+		//		s.WriteString("----------------------------------------------------------------------------\n")
 	}
 	indent := strings.Repeat(" ", n)
 	boolString := "PASS"
 	if !u.Pass {
 		boolString = "FAIL"
 	}
-	s.WriteString(fmt.Sprintf("%-40s %-4s %4d %v\n",
-		fmt.Sprintf("%s%s", indent, u.Rule.ID), boolString, len(u.Results), u.Value))
+	s.WriteString(fmt.Sprintf("| %-40s %-4s %4d %-22v|\n",
+		fmt.Sprintf("%s%-30s", indent, u.Rule.ID), boolString, len(u.Results), u.Value))
 	for _, c := range u.Results {
 		s.WriteString(c.summarizeResults(n + 1))
 	}
+	s.WriteString("============================================================================\n")
+	//	s.WriteString("----------------------------------------------------------------------------\n")
 	return s.String()
 }

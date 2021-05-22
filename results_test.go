@@ -44,8 +44,8 @@ func flattenResultsEvaluated(result *indigo.Result) []string {
 // flattenResults takes a hierarchy of Result objects and flattens it
 // to a map of rule ID to pass/fail. This is so that it's easy to
 // compare the results to expected.
-func flattenResultsDiagnostics(result *indigo.Result) map[string]string {
-	m := map[string]string{}
+func flattenResultsDiagnostics(result *indigo.Result) map[string]*indigo.Diagnostics {
+	m := map[string]*indigo.Diagnostics{}
 	m[result.Rule.ID] = result.Diagnostics
 	for k := range result.Results {
 		r := result.Results[k]
@@ -59,10 +59,10 @@ func flattenResultsDiagnostics(result *indigo.Result) map[string]string {
 
 // anyNotEmpty checks if any of the flattened result diagnostics are missing
 // Input is the result of flattenResultsDiagnostics
-func anyNotEmpty(m map[string]string) error {
+func anyNotEmpty(m map[string]*indigo.Diagnostics) error {
 	for k, v := range m {
-		if v != "" {
-			return fmt.Errorf("diagnostics for rule '%s' is not empty: '%s'", k, v)
+		if v != nil {
+			return fmt.Errorf("diagnostics for rule '%s' is not empty", k)
 		}
 	}
 	return nil
@@ -70,9 +70,9 @@ func anyNotEmpty(m map[string]string) error {
 
 // allNotEmpty checks if all entries in the map are populated
 // Input is the result of flattenResultsDiagnostics
-func allNotEmpty(m map[string]string) error {
+func allNotEmpty(m map[string]*indigo.Diagnostics) error {
 	for k, v := range m {
-		if v != "diagnostics here" {
+		if v != nil {
 			return fmt.Errorf("diagnostics missing for rule '%s'", k)
 		}
 	}

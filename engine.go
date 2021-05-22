@@ -144,7 +144,12 @@ func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
 	o := compileOptions{}
 	applyCompilerOptions(&o, opts...)
 
-	prg, err := e.e.Compile(r.Expr, r.Schema, r.ResultType, o.collectDiagnostics, o.dryRun)
+	resultType := r.ResultType
+	if resultType == nil {
+		resultType = Bool{}
+	}
+
+	prg, err := e.e.Compile(r.Expr, r.Schema, resultType, o.collectDiagnostics, o.dryRun)
 	if err != nil {
 		return fmt.Errorf("rule %s: %w", r.ID, err)
 	}

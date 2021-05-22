@@ -46,6 +46,7 @@ type Rule struct {
 	// The output type of the expression. Evaluators with the ability to check
 	// whether an expression produces the desired output should return an error
 	// if the expression does not.
+	// If no type is provided, evaluation and compilation will default to Bool
 	ResultType Type `json:"result_type,omitempty"`
 
 	// The schema describing the data provided in the Evaluate input. (optional)

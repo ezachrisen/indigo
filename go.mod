@@ -3,6 +3,8 @@ module github.com/ezachrisen/indigo
 go 1.16
 
 require (
+	github.com/Delta456/box-cli-maker/v2 v2.2.1 // indirect
+	github.com/alexeyco/simpletable v1.0.0 // indirect
 	github.com/antlr/antlr4 v0.0.0-20201029161626-9a95f0cc3d7c // indirect
 	//	github.com/golang/protobuf v1.5.0
 	github.com/golang/protobuf v1.4.3

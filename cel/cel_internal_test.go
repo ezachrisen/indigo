@@ -178,7 +178,7 @@ func TestTypeConversion(t *testing.T) {
 
 	// Check if converting FROM indigo TO cel works
 	for _, c := range cases {
-		cl, err := convertToDeclaration(c.indigoType)
+		cl, err := convertIndigoToExprType(c.indigoType)
 		if err != nil {
 			t.Error(err)
 		}

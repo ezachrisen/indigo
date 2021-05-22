@@ -40,7 +40,7 @@ func (m *mockEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.
 }
 
 // The mockEvaluator only knows how to evaluate 1 string: `true`. If the expression is this, the evaluation is true, otherwise false.
-func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, prog interface{}, resultType indigo.Type, returnDiagnostics bool) (indigo.Value, string, error) {
+func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, prog interface{}, resultType indigo.Type, returnDiagnostics bool) (indigo.Value, *indigo.Diagnostics, error) {
 	//	m.rulesTested = append(m.rulesTested, r.ID)
 	time.Sleep(m.evalDelay)
 	prg := program{}
@@ -51,16 +51,16 @@ func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s ind
 			return indigo.Value{
 				Val:  false,
 				Type: indigo.Bool{},
-			}, "", fmt.Errorf("compiled data type assertion failed")
+			}, nil, fmt.Errorf("compiled data type assertion failed")
 		} else {
 			prg = p
 		}
 	}
 
-	var diagnostics string
+	var diagnostics *indigo.Diagnostics
 
 	if returnDiagnostics && ((m.diagnosticCompileRequired && prg.compiledDiagnostics) || !m.diagnosticCompileRequired) {
-		diagnostics = "diagnostics here"
+		diagnostics = &indigo.Diagnostics{}
 	}
 
 	if expr == `true` {
