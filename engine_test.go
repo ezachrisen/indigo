@@ -328,7 +328,8 @@ func TestEvalOptions(t *testing.T) {
 
 		u, err := e.Eval(context.Background(), r, d)
 		is.NoErr(err)
-
+		fmt.Println(r)
+		fmt.Println(u)
 		err = match(flattenResults(u), c.want())
 		if err != nil {
 			t.Errorf("Error in case %s: %v", k, err)

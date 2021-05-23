@@ -150,7 +150,7 @@ func convertRefValToIndigo2(r ref.Val) (indigo.Value, error) {
 		return list(r)
 	case types.MapType:
 		return mapType(r)
-	case types.BoolType, types.IntType, types.DoubleType:
+	case types.BoolType, types.IntType, types.DoubleType, types.StringType:
 		return primitive(r)
 	case types.TimestampType:
 		return timestamp(r)

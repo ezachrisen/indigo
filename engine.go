@@ -85,6 +85,11 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 	pr.Value = val.Val
 	pr.Diagnostics = diagnostics
+	if pr.Diagnostics != nil {
+		pr.Diagnostics.Rule = r
+		pr.Diagnostics.Data = d
+	}
+	pr.EvalOptions = o
 
 	if pass, ok := val.Val.(bool); ok {
 		pr.Pass = pass

@@ -16,10 +16,10 @@ import (
 
 // collectDiagnostics walks the CEL AST and annotates it with the result of the evaluation, returning
 // a string representation.
-func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails, data map[string]interface{}) *indigo.Diagnostics {
+func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails, data map[string]interface{}) (*indigo.Diagnostics, error) {
 
 	if ast == nil || details == nil {
-		return nil
+		return nil, fmt.Errorf("no ast or eval details")
 	}
 
 	//	s := strings.Builder{}
@@ -41,7 +41,7 @@ func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails, data map[str
 
 	d, err := printAST(ast.Expr(), 0, details, ast, data)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	d.InputData = data
@@ -58,7 +58,7 @@ func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails, data map[str
 	// // }
 
 	// return s.String()
-	return &d
+	return &d, nil
 }
 
 // printAST recursively walks the expression and its children, providing a one-line string for each
@@ -75,7 +75,7 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails, ast *celgo.Ast,
 	details.State().Value(ex.Id)
 	value, err := convertRefValToIndigo2(evaluatedValue)
 	if err != nil {
-		return d, fmt.Errorf("converting from evaluated value to indigo value: %W", err)
+		return d, fmt.Errorf("converting from evaluated value to indigo value: %w", err)
 	}
 
 	d.Value = value
@@ -87,7 +87,7 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails, ast *celgo.Ast,
 		for x := range i.CallExpr.Args {
 			dc, err := printAST(i.CallExpr.Args[x], n+1, details, ast, data)
 			if err != nil {
-				return d, fmt.Errorf("callExpr %d", x)
+				return d, fmt.Errorf("callExpr %d: %w", x, err)
 			}
 			d.Children = append(d.Children, dc)
 		}
