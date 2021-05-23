@@ -117,7 +117,10 @@ func (*Evaluator) Evaluate(data map[string]interface{}, expr string,
 	// Do not check the error yet. Grab the diagnostics first
 	var diagnostics *indigo.Diagnostics
 	if returnDiagnostics {
-		diagnostics = collectDiagnostics(program.ast, details, data)
+		diagnostics, err = collectDiagnostics(program.ast, details, data)
+		if err != nil {
+			return indigo.Value{}, nil, fmt.Errorf("collecting diagnostics: %w", err)
+		}
 	}
 
 	if err != nil {

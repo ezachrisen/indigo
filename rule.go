@@ -1,8 +1,12 @@
 package indigo
 
 import (
+	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 )
 
 // A Rule defines logic that can be evaluated by an Evaluator.
@@ -105,7 +109,56 @@ func ApplyToRule(r *Rule, f func(r *Rule) error) error {
 // String returns a list of all the rules in hierarchy, with
 // child rules sorted in evaluation order.
 func (r *Rule) String() string {
-	return r.describe(0)
+	tw := table.NewWriter()
+	tw.AppendHeader(table.Row{"INDIGO RULES\nRule", "\nSchema", "\nExpression", "Result\nType", "\nMeta"})
+
+	maxWidthOfExpressionColumn := 40
+	rows, maxExprLength := r.rulesToRows(0)
+	for _, r := range rows {
+		tw.AppendRow(r)
+	}
+
+	tw.SetColumnConfigs([]table.ColumnConfig{
+		{Number: 1},
+		{Number: 2},
+		{Number: 3, WidthMax: maxWidthOfExpressionColumn},
+		{Number: 4},
+		{Number: 5},
+	})
+
+	style := table.StyleLight
+	style.Format.Header = text.FormatDefault
+	// Only add the row separator if the expression is wide enough to wrap.
+	if maxExprLength > maxWidthOfExpressionColumn {
+		style.Options.SeparateRows = true
+	}
+	tw.SetStyle(style)
+	return tw.Render()
+
+}
+
+func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
+	rows := []table.Row{}
+	indent := strings.Repeat("  ", n)
+
+	row := table.Row{
+		fmt.Sprintf("%s%s", indent, r.ID),
+		r.Schema.ID,
+		r.Expr,
+		fmt.Sprintf("%v", r.ResultType),
+		fmt.Sprintf("%T", r.Meta),
+	}
+	rows = append(rows, row)
+	maxExprLength := len(r.Expr)
+
+	for _, c := range r.Rules {
+		cr, max := c.rulesToRows(n + 1)
+		if max > maxExprLength {
+			maxExprLength = max
+		}
+		rows = append(rows, cr...)
+	}
+	return rows, maxExprLength
 }
 
 func (r *Rule) describe(n int) string {

@@ -50,8 +50,8 @@ func flattenResultsDiagnostics(result *indigo.Result) map[string]*indigo.Diagnos
 	for k := range result.Results {
 		r := result.Results[k]
 		mc := flattenResultsDiagnostics(r)
-		for k := range mc {
-			m[k] = mc[k]
+		for ck := range mc {
+			m[ck] = mc[ck]
 		}
 	}
 	return m
@@ -72,7 +72,7 @@ func anyNotEmpty(m map[string]*indigo.Diagnostics) error {
 // Input is the result of flattenResultsDiagnostics
 func allNotEmpty(m map[string]*indigo.Diagnostics) error {
 	for k, v := range m {
-		if v != nil {
+		if v == nil {
 			return fmt.Errorf("diagnostics missing for rule '%s'", k)
 		}
 	}
@@ -82,10 +82,6 @@ func allNotEmpty(m map[string]*indigo.Diagnostics) error {
 // Match compares the results to expected results.
 // Call flattenResults on the *indigo.Result first.
 func match(result map[string]bool, expected map[string]bool) error {
-
-	// fmt.Printf("Expected: %+v\n\n", expected)
-	// fmt.Printf("Got: %+v\n\n", result)
-
 	for k, v := range result {
 		ev, ok := expected[k]
 		if !ok {

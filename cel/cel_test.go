@@ -330,6 +330,7 @@ func TestBasicRules(t *testing.T) {
 
 func makeEducationProtoSchema() indigo.Schema {
 	return indigo.Schema{
+		ID: "educationProto",
 		Elements: []indigo.DataElement{
 			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
@@ -443,18 +444,14 @@ func TestDiagnosticOptions(t *testing.T) {
 	err := e.Compile(r2, indigo.CollectDiagnostics(true))
 	is.NoErr(err)
 
-	//	r2 = r2.Rules["honor_student"]
-
 	results, err := e.Eval(context.Background(), r2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
-	// fmt.Println(r2)
-	// fmt.Println(results.Diagnostics)
+	fmt.Println(r2)
 	for _, c := range results.Results {
 		if c.Diagnostics == nil {
 			t.Errorf("Wanted diagnostics for rule %s", c.Rule.ID)
 		} else {
-			//			fmt.Println(c)
-			fmt.Println(c.Diagnostics.AsString(c.Rule, makeStudentProtoData()))
+			//	fmt.Println(c.Diagnostics)
 		}
 	}
 
@@ -580,12 +577,12 @@ func TestRuleResultTypes(t *testing.T) {
 		}
 
 		_, err = e.Eval(context.Background(), &cases[i].rule, makeStudentProtoData())
+
 		if err != nil && cases[i].err == nil {
 			t.Fatalf("For rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
 		} else {
 			// if res != nil {
-			// 	fmt.Printf("Result: %v\n", res)
-			// 	fmt.Printf("Result = %v, type %T,  rule = %v\n", res.Value, res.Value, cases[i].rule.Expr)
+			// 	fmt.Printf("%v\nn", res)
 			// }
 		}
 	}
