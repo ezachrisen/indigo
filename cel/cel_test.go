@@ -446,12 +446,14 @@ func TestDiagnosticOptions(t *testing.T) {
 
 	results, err := e.Eval(context.Background(), r2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
-	fmt.Println(r2)
+	//	fmt.Println(r2)
 	for _, c := range results.Results {
 		if c.Diagnostics == nil {
 			t.Errorf("Wanted diagnostics for rule %s", c.Rule.ID)
 		} else {
-			//	fmt.Println(c.Diagnostics)
+			// fmt.Println(results)
+			// fmt.Println(c.Diagnostics)
+			// fmt.Println(indigo.DiagnosticsReport(r2, makeStudentProtoData(), c.Diagnostics))
 		}
 	}
 

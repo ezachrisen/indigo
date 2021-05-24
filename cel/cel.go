@@ -99,8 +99,10 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type,
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
+// Expression  expression
 func (*Evaluator) Evaluate(data map[string]interface{}, expr string,
-	_ indigo.Schema, _ interface{}, evalData interface{}, expectedResultType indigo.Type, returnDiagnostics bool) (indigo.Value, *indigo.Diagnostics, error) {
+	_ indigo.Schema, _ interface{}, evalData interface{}, expectedResultType indigo.Type,
+	returnDiagnostics bool) (indigo.Value, *indigo.Diagnostics, error) {
 
 	program, ok := evalData.(celProgram)
 
@@ -168,19 +170,19 @@ func indigoType(t *gexpr.Type) (indigo.Type, error) {
 			return nil, fmt.Errorf("unknown 'wellknow' type: %T", v)
 		}
 	case *gexpr.Type_MapType_:
-		kType, err := indigoType(v.MapType.KeyType)
+		keyType, err := indigoType(v.MapType.KeyType)
 		if err != nil {
 			return nil, err
 		}
 
-		vType, err := indigoType(v.MapType.ValueType)
+		valType, err := indigoType(v.MapType.ValueType)
 		if err != nil {
 			return nil, err
 		}
 
 		return indigo.Map{
-			KeyType:   kType,
-			ValueType: vType,
+			KeyType:   keyType,
+			ValueType: valType,
 		}, nil
 	case *gexpr.Type_ListType_:
 		vType, err := indigoType(v.ListType.ElemType)
