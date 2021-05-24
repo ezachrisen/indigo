@@ -143,10 +143,6 @@ func (t List) Zero() (retval interface{}) {
 	}
 
 	rt := reflect.SliceOf(tt)
-	if rt == nil {
-		return nil
-	}
-
 	s := reflect.MakeSlice(rt, 0, 0)
 	return s.Interface()
 }

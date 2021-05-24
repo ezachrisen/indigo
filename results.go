@@ -43,7 +43,9 @@ type Result struct {
 func (u *Result) String() string {
 
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"INDIGO RESULT SUMMARY\nRule", "Pass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?", "Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail"})
+	tw.SetTitle("\nINDIGO RESULT SUMMARY\n")
+	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?",
+		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail"})
 	rows := u.resultsToRows(0)
 
 	for _, r := range rows {
@@ -72,7 +74,7 @@ func (u *Result) resultsToRows(n int) []table.Row {
 
 	row := table.Row{
 		fmt.Sprintf("%s%s", indent, u.Rule.ID),
-		fmt.Sprintf("%s", boolString),
+		boolString,
 		fmt.Sprintf("%d", len(u.Results)),
 		fmt.Sprintf("%v", u.Value),
 		trueFalse(fmt.Sprintf("%t", diag)),

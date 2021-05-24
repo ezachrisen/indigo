@@ -110,7 +110,8 @@ func ApplyToRule(r *Rule, f func(r *Rule) error) error {
 // child rules sorted in evaluation order.
 func (r *Rule) String() string {
 	tw := table.NewWriter()
-	tw.AppendHeader(table.Row{"INDIGO RULES\nRule", "\nSchema", "\nExpression", "Result\nType", "\nMeta"})
+	tw.SetTitle("\nINDIGO RULES\n")
+	tw.AppendHeader(table.Row{"\nRule", "\nSchema", "\nExpression", "Result\nType", "\nMeta"})
 
 	maxWidthOfExpressionColumn := 40
 	rows, maxExprLength := r.rulesToRows(0)
@@ -161,19 +162,19 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 	return rows, maxExprLength
 }
 
-func (r *Rule) describe(n int) string {
-	s := strings.Builder{}
-	s.WriteString(strings.Repeat("  ", n)) // indent
-	s.WriteString(r.ID)
-	s.WriteString("\n")
-	s.WriteString(" Schema: " + r.ID + "\n")
-	s.WriteString(" Expr:   " + r.Expr + "\n")
+// func (r *Rule) describe(n int) string {
+// 	s := strings.Builder{}
+// 	s.WriteString(strings.Repeat("  ", n)) // indent
+// 	s.WriteString(r.ID)
+// 	s.WriteString("\n")
+// 	s.WriteString(" Schema: " + r.ID + "\n")
+// 	s.WriteString(" Expr:   " + r.Expr + "\n")
 
-	for _, c := range r.Rules {
-		s.WriteString(c.describe(n + 1))
-	}
-	return s.String()
-}
+// 	for _, c := range r.Rules {
+// 		s.WriteString(c.describe(n + 1))
+// 	}
+// 	return s.String()
+// }
 
 // sortChildKeys sorts the IDs of the child rules according to the
 // SortFunc set in evaluation options. If no SortFunc is set, the evaluation

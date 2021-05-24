@@ -4,40 +4,21 @@ package cel
 
 import (
 	"fmt"
-	"math"
 	"strings"
-	"time"
 
 	"github.com/ezachrisen/indigo"
 	celgo "github.com/google/cel-go/cel"
-	ctypes "github.com/google/cel-go/common/types"
 	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
 // collectDiagnostics walks the CEL AST and annotates it with the result of the evaluation, returning
 // a string representation.
-func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails, data map[string]interface{}) (*indigo.Diagnostics, error) {
+func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails,
+	data map[string]interface{}) (*indigo.Diagnostics, error) {
 
 	if ast == nil || details == nil {
 		return nil, fmt.Errorf("no ast or eval details")
 	}
-
-	//	s := strings.Builder{}
-	//	s.WriteString("-------------------------------------------------------------------------------------------------\n")
-	//	s.WriteString(fmt.Sprintf("Rule ID: %s\n", r.RuleID))
-	//	s.WriteString("Expression:\n")
-	//	s.WriteString(fmt.Sprintf("%s\n\n", wordWrap(ast.Source().Content(), 100)))
-	// // s.WriteString(fmt.Sprintf("Evaluation Result   :  %t\n", r.Pass))
-	// // s.WriteString(fmt.Sprintf("Evaluation Raw Value:  %v\n", r.Value))
-	// // s.WriteString(fmt.Sprintf("Rule Expression:\n"))
-	// // s.WriteString(fmt.Sprintf("%s\n", word_wrap(ast.Source().Content(), 100)))
-	// s.WriteString("-------------------------------------------------------------------------------------------------\n")
-	// s.WriteString("                                          EVALUATION TREE\n")
-	// s.WriteString("-------------------------------------------------------------------------------------------------\n")
-	// s.WriteString(fmt.Sprintf("%60s    %-30s\n", "VALUE", "EXPRESSION"))
-	// s.WriteString("-------------------------------------------------------------------------------------------------\n")
-	// //	s.WriteString(printAST(ast.Expr(), 0, details, data))
-	// s.WriteString(printAST2(ast.Expr(), 0, details, data))
 
 	d, err := printAST(ast.Expr(), 0, details, ast, data)
 	if err != nil {
@@ -45,26 +26,14 @@ func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails, data map[str
 	}
 
 	d.InputData = data
-	// s.WriteString(fmt.Sprintf("%s\n", d))
-	// // s.WriteString(fmt.Sprintf("%+v\n", ast.Source().Content()))
-	// // s.WriteString(fmt.Sprintf("%+v\n", ast.SourceInfo()))
-
-	// // s.WriteString("Positions: \n")
-	// // for k, v := range ast.SourceInfo().Positions {
-	// // 	s.WriteString(fmt.Sprintf("id %d = Offset %d\n", k, v))
-	// // 	if loc, ok := ast.Source().OffsetLocation(v); ok {
-	// // 		s.WriteString(fmt.Sprintf("   Line: %d, Column: %d\n", loc.Line(), loc.Column()))
-	// // 	}
-	// // }
-
-	// return s.String()
 	return &d, nil
 }
 
 // printAST recursively walks the expression and its children, providing a one-line string for each
 // element of the expression. The line contains the variable names, the evaluated value of the variables,
 // and the result of any operation (>, ==, etc.).
-func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails, ast *celgo.Ast, data map[string]interface{}) (indigo.Diagnostics, error) {
+func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails,
+	ast *celgo.Ast, data map[string]interface{}) (indigo.Diagnostics, error) {
 
 	d := indigo.Diagnostics{}
 	evaluatedValue, ok := details.State().Value(ex.Id)
@@ -120,7 +89,7 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails, ast *celgo.Ast,
 		} else {
 			_, ok := data[operandName]
 			if ok {
-				//				value = fmt.Sprintf("%60s", fmt.Sprintf("%v", obj)) //fmt.Sprintf("%v", x.FieldByName(fieldName)))
+				//value = fmt.Sprintf("%60s", fmt.Sprintf("%v", obj)) //fmt.Sprintf("%v", x.FieldByName(fieldName)))
 				d.Source = indigo.Input
 			}
 		}
@@ -164,78 +133,78 @@ func getLocation(id int64, ast *celgo.Ast) (offset, line, column int) {
 	return
 }
 
-// printAST recursively walks the expression and its children, providing a one-line string for each
-// element of the expression. The line contains the variable names, the evaluated value of the variables,
-// and the result of any operation (>, ==, etc.).
-func printAST2(ex *gexpr.Expr, n int, details *celgo.EvalDetails, data map[string]interface{}) string {
-	s := strings.Builder{}
+// // printAST recursively walks the expression and its children, providing a one-line string for each
+// // element of the expression. The line contains the variable names, the evaluated value of the variables,
+// // and the result of any operation (>, ==, etc.).
+// func printAST2(ex *gexpr.Expr, n int, details *celgo.EvalDetails, data map[string]interface{}) string {
+// 	s := strings.Builder{}
 
-	indent := strings.Repeat(" ", n*2)
+// 	indent := strings.Repeat(" ", n*2)
 
-	var value string
-	var valueSource string
-	evaluatedValue, ok := details.State().Value(ex.Id)
+// 	var value string
+// 	var valueSource string
+// 	evaluatedValue, ok := details.State().Value(ex.Id)
 
-	if ok {
-		switch v := evaluatedValue.(type) {
-		case ctypes.Duration:
-			dur := time.Duration(v.Seconds() * float64(math.Pow10(9)))
-			value = fmt.Sprintf("%60s", dur)
-		case ctypes.Timestamp:
-			value = fmt.Sprintf("%60s", time.Unix(int64(v.Second()), 0))
-		default:
-			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", evaluatedValue))
-		}
-		valueSource = "E"
-	} else {
-		value = fmt.Sprintf("%60s (%v)", "?", ex.Id)
-	}
+// 	if ok {
+// 		switch v := evaluatedValue.(type) {
+// 		case ctypes.Duration:
+// 			dur := time.Duration(v.Seconds() * float64(math.Pow10(9)))
+// 			value = fmt.Sprintf("%60s", dur)
+// 		case ctypes.Timestamp:
+// 			value = fmt.Sprintf("%60s", time.Unix(int64(v.Second()), 0))
+// 		default:
+// 			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", evaluatedValue))
+// 		}
+// 		valueSource = "E"
+// 	} else {
+// 		value = fmt.Sprintf("%60s (%v)", "?", ex.Id)
+// 	}
 
-	switch i := ex.GetExprKind().(type) {
-	case *gexpr.Expr_CallExpr:
-		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent,
-			strings.Trim(i.CallExpr.GetFunction(), "_")))
-		for x := range i.CallExpr.Args {
-			s.WriteString(printAST2(i.CallExpr.Args[x], n+1, details, data))
-		}
-	case *gexpr.Expr_ComprehensionExpr:
-		operandName := i.ComprehensionExpr.IterRange.GetSelectExpr().Operand.GetIdentExpr().GetName()
-		fieldName := i.ComprehensionExpr.IterRange.GetSelectExpr().Field
-		comprehensionName := i.ComprehensionExpr.LoopCondition.GetCallExpr().Function
-		callExpression := getCallExpression(i.ComprehensionExpr.GetLoopStep().GetCallExpr())
-		if comprehensionName == "@not_strictly_false" {
-			comprehensionName = "all"
-		}
-		s.WriteString(fmt.Sprintf("%s %s %s %s.%s.%s %s\n", value, valueSource, indent,
-			operandName, fieldName, comprehensionName, callExpression))
-	case *gexpr.Expr_ConstExpr:
-		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent,
-			strings.Trim(i.ConstExpr.String(), " ")))
-	case *gexpr.Expr_SelectExpr:
-		operandName := getSelectIdent(i)
-		fieldName := i.SelectExpr.Field
+// 	switch i := ex.GetExprKind().(type) {
+// 	case *gexpr.Expr_CallExpr:
+// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent,
+// 			strings.Trim(i.CallExpr.GetFunction(), "_")))
+// 		for x := range i.CallExpr.Args {
+// 			s.WriteString(printAST2(i.CallExpr.Args[x], n+1, details, data))
+// 		}
+// 	case *gexpr.Expr_ComprehensionExpr:
+// 		operandName := i.ComprehensionExpr.IterRange.GetSelectExpr().Operand.GetIdentExpr().GetName()
+// 		fieldName := i.ComprehensionExpr.IterRange.GetSelectExpr().Field
+// 		comprehensionName := i.ComprehensionExpr.LoopCondition.GetCallExpr().Function
+// 		callExpression := getCallExpression(i.ComprehensionExpr.GetLoopStep().GetCallExpr())
+// 		if comprehensionName == "@not_strictly_false" {
+// 			comprehensionName = "all"
+// 		}
+// 		s.WriteString(fmt.Sprintf("%s %s %s %s.%s.%s %s\n", value, valueSource, indent,
+// 			operandName, fieldName, comprehensionName, callExpression))
+// 	case *gexpr.Expr_ConstExpr:
+// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent,
+// 			strings.Trim(i.ConstExpr.String(), " ")))
+// 	case *gexpr.Expr_SelectExpr:
+// 		operandName := getSelectIdent(i)
+// 		fieldName := i.SelectExpr.Field
 
-		dottedName := operandName + "." + fieldName
-		inputValue, ok := data[dottedName]
-		if ok {
-			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", inputValue))
-			valueSource = "I"
-		} else {
-			obj, ok := data[operandName]
-			if ok {
-				value = fmt.Sprintf("%60s", fmt.Sprintf("%v", obj)) //fmt.Sprintf("%v", x.FieldByName(fieldName)))
-				valueSource = "I"
-			}
-		}
+// 		dottedName := operandName + "." + fieldName
+// 		inputValue, ok := data[dottedName]
+// 		if ok {
+// 			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", inputValue))
+// 			valueSource = "I"
+// 		} else {
+// 			obj, ok := data[operandName]
+// 			if ok {
+// 				value = fmt.Sprintf("%60s", fmt.Sprintf("%v", obj)) //fmt.Sprintf("%v", x.FieldByName(fieldName)))
+// 				valueSource = "I"
+// 			}
+// 		}
 
-		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, operandName+"."+fieldName))
-	case *gexpr.Expr_IdentExpr:
-		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, i.IdentExpr.Name))
-	default:
-		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, "** Unknown"))
-	}
-	return s.String()
-}
+// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, operandName+"."+fieldName))
+// 	case *gexpr.Expr_IdentExpr:
+// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, i.IdentExpr.Name))
+// 	default:
+// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, "** Unknown"))
+// 	}
+// 	return s.String()
+// }
 
 // getCallExpression unwraps a function call, returning a string representation
 func getCallExpression(e *gexpr.Expr_Call) string {
