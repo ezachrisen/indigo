@@ -20,15 +20,13 @@ const (
 )
 
 type Diagnostics struct {
-	Expr      string
-	Value     Value
-	Source    ValueSource
-	Children  []Diagnostics
-	InputData map[string]interface{}
-	Line      int
-	Column    int
-	Offset    int
-	//	RuleID    string
+	Expr     string
+	Value    Value
+	Source   ValueSource
+	Children []Diagnostics
+	Line     int
+	Column   int
+	Offset   int
 }
 
 func (d *Diagnostics) String() string {

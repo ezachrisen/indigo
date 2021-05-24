@@ -25,7 +25,6 @@ func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails,
 		return nil, err
 	}
 
-	d.InputData = data
 	return &d, nil
 }
 
