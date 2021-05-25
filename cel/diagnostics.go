@@ -12,7 +12,7 @@ import (
 )
 
 // collectDiagnostics walks the CEL AST and annotates it with the result of the evaluation, returning
-// a string representation.
+// a Diagnositc node.
 func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails,
 	data map[string]interface{}) (*indigo.Diagnostics, error) {
 
@@ -28,19 +28,24 @@ func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails,
 	return &d, nil
 }
 
-// printAST recursively walks the expression and its children, providing a one-line string for each
-// element of the expression. The line contains the variable names, the evaluated value of the variables,
-// and the result of any operation (>, ==, etc.).
+// printAST recursively walks the expression and its children, returning an indigo.Diagnostics
+// node.
 func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails,
 	ast *celgo.Ast, data map[string]interface{}) (indigo.Diagnostics, error) {
 
 	d := indigo.Diagnostics{}
 	evaluatedValue, ok := details.State().Value(ex.Id)
-	if ok {
-		d.Source = indigo.Evaluated
+	if !ok {
+		// The expression was not evaluated by CEL.
+		// This happens when an expression's result can be
+		// determined without evaluating all expressions. For
+		// example, in the expression "true || blah > 2.0", "blah > 2.0"
+		// will never be evaluated.
+		return d, nil
 	}
 
-	details.State().Value(ex.Id)
+	d.Source = indigo.Evaluated
+
 	value, err := convertRefValToIndigo2(evaluatedValue)
 	if err != nil {
 		return d, fmt.Errorf("converting from evaluated value to indigo value: %w", err)
@@ -57,7 +62,9 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails,
 			if err != nil {
 				return d, fmt.Errorf("callExpr %d: %w", x, err)
 			}
-			d.Children = append(d.Children, dc)
+			if dc.Expr != "" {
+				d.Children = append(d.Children, dc)
+			}
 		}
 	case *gexpr.Expr_ComprehensionExpr:
 		operandName := i.ComprehensionExpr.IterRange.GetSelectExpr().Operand.GetIdentExpr().GetName()
@@ -72,7 +79,7 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails,
 		d.Expr = i.ConstExpr.String()
 	case *gexpr.Expr_SelectExpr:
 		operandName := getSelectIdent(i)
-		fieldName := i.SelectExpr.Field
+		//fieldName := i.SelectExpr.Field
 		//fmt.Println("operand ", operandName, "fieldname", fieldName, "Operand ID: ", i.SelectExpr.Operand.Id)
 		oper := i.SelectExpr.Operand
 		if oper == nil {
@@ -92,19 +99,17 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails,
 				d.Source = indigo.Input
 			}
 		}
-		d.Expr = fmt.Sprintf("%s.%s", operandName, fieldName)
 		//		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, operandName+"."+fieldName))
 	case *gexpr.Expr_IdentExpr:
 		d.Expr = i.IdentExpr.Name
 	default:
 		d.Expr = "undefined"
 	}
-
-	//	d.Expr = fmt.Sprintf("%s (%v) = %s", d.Expr, ex.Id, "")
-
 	return d, nil
 }
 
+// getLocation determines the position of an expression with the id in the original
+// source expression for the rule
 func getLocation(id int64, ast *celgo.Ast) (offset, line, column int) {
 
 	si := ast.SourceInfo()
@@ -131,79 +136,6 @@ func getLocation(id int64, ast *celgo.Ast) (offset, line, column int) {
 	offset = int(offs)
 	return
 }
-
-// // printAST recursively walks the expression and its children, providing a one-line string for each
-// // element of the expression. The line contains the variable names, the evaluated value of the variables,
-// // and the result of any operation (>, ==, etc.).
-// func printAST2(ex *gexpr.Expr, n int, details *celgo.EvalDetails, data map[string]interface{}) string {
-// 	s := strings.Builder{}
-
-// 	indent := strings.Repeat(" ", n*2)
-
-// 	var value string
-// 	var valueSource string
-// 	evaluatedValue, ok := details.State().Value(ex.Id)
-
-// 	if ok {
-// 		switch v := evaluatedValue.(type) {
-// 		case ctypes.Duration:
-// 			dur := time.Duration(v.Seconds() * float64(math.Pow10(9)))
-// 			value = fmt.Sprintf("%60s", dur)
-// 		case ctypes.Timestamp:
-// 			value = fmt.Sprintf("%60s", time.Unix(int64(v.Second()), 0))
-// 		default:
-// 			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", evaluatedValue))
-// 		}
-// 		valueSource = "E"
-// 	} else {
-// 		value = fmt.Sprintf("%60s (%v)", "?", ex.Id)
-// 	}
-
-// 	switch i := ex.GetExprKind().(type) {
-// 	case *gexpr.Expr_CallExpr:
-// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent,
-// 			strings.Trim(i.CallExpr.GetFunction(), "_")))
-// 		for x := range i.CallExpr.Args {
-// 			s.WriteString(printAST2(i.CallExpr.Args[x], n+1, details, data))
-// 		}
-// 	case *gexpr.Expr_ComprehensionExpr:
-// 		operandName := i.ComprehensionExpr.IterRange.GetSelectExpr().Operand.GetIdentExpr().GetName()
-// 		fieldName := i.ComprehensionExpr.IterRange.GetSelectExpr().Field
-// 		comprehensionName := i.ComprehensionExpr.LoopCondition.GetCallExpr().Function
-// 		callExpression := getCallExpression(i.ComprehensionExpr.GetLoopStep().GetCallExpr())
-// 		if comprehensionName == "@not_strictly_false" {
-// 			comprehensionName = "all"
-// 		}
-// 		s.WriteString(fmt.Sprintf("%s %s %s %s.%s.%s %s\n", value, valueSource, indent,
-// 			operandName, fieldName, comprehensionName, callExpression))
-// 	case *gexpr.Expr_ConstExpr:
-// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent,
-// 			strings.Trim(i.ConstExpr.String(), " ")))
-// 	case *gexpr.Expr_SelectExpr:
-// 		operandName := getSelectIdent(i)
-// 		fieldName := i.SelectExpr.Field
-
-// 		dottedName := operandName + "." + fieldName
-// 		inputValue, ok := data[dottedName]
-// 		if ok {
-// 			value = fmt.Sprintf("%60s", fmt.Sprintf("%v", inputValue))
-// 			valueSource = "I"
-// 		} else {
-// 			obj, ok := data[operandName]
-// 			if ok {
-// 				value = fmt.Sprintf("%60s", fmt.Sprintf("%v", obj)) //fmt.Sprintf("%v", x.FieldByName(fieldName)))
-// 				valueSource = "I"
-// 			}
-// 		}
-
-// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, operandName+"."+fieldName))
-// 	case *gexpr.Expr_IdentExpr:
-// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, i.IdentExpr.Name))
-// 	default:
-// 		s.WriteString(fmt.Sprintf("%s %s %s %s\n", value, valueSource, indent, "** Unknown"))
-// 	}
-// 	return s.String()
-// }
 
 // getCallExpression unwraps a function call, returning a string representation
 func getCallExpression(e *gexpr.Expr_Call) string {
