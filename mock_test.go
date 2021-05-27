@@ -40,7 +40,7 @@ func (m *mockEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.
 }
 
 // The mockEvaluator only knows how to evaluate 1 string: `true`. If the expression is this, the evaluation is true, otherwise false.
-func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, prog interface{}, resultType indigo.Type, returnDiagnostics bool) (indigo.Value, *indigo.Diagnostics, error) {
+func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, prog interface{}, resultType indigo.Type, returnDiagnostics bool) (interface{}, *indigo.Diagnostics, error) {
 	//	m.rulesTested = append(m.rulesTested, r.ID)
 	time.Sleep(m.evalDelay)
 	prg := program{}
@@ -48,10 +48,7 @@ func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s ind
 	p, ok := prog.(program)
 	if m.diagnosticCompileRequired {
 		if !ok {
-			return indigo.Value{
-				Val:  false,
-				Type: indigo.Bool{},
-			}, nil, fmt.Errorf("compiled data type assertion failed")
+			return false, nil, fmt.Errorf("compiled data type assertion failed")
 		} else {
 			prg = p
 		}
@@ -64,24 +61,26 @@ func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s ind
 	}
 
 	if expr == `true` {
-		return indigo.Value{
-			Val:  true,
-			Type: indigo.Bool{},
-		}, diagnostics, nil
+		// return indigo.Value{
+		// 	Val:  true,
+		// 	Type: indigo.Bool{},
+		// }, diagnostics, nil
+		return true, diagnostics, nil
 	}
 
 	if expr == `self` && self != nil {
-		return indigo.Value{
-			Val:  self,
-			Type: indigo.Int{},
-		}, diagnostics, nil
+		return self, diagnostics, nil
+		// return indigo.Value{
+		// 	Val:  self,
+		// 	Type: indigo.Int{},
+		// }, diagnostics, nil
 	}
 
-	return indigo.Value{
-		Val:  false,
-		Type: indigo.Bool{},
-	}, diagnostics, nil
-
+	// return indigo.Value{
+	// 	Val:  false,
+	// 	Type: indigo.Bool{},
+	// }, diagnostics, nil
+	return false, diagnostics, nil
 }
 
 func (m *mockEvaluator) Reset() {
