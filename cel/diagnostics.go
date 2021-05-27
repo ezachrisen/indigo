@@ -16,8 +16,8 @@ import (
 func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails,
 	data map[string]interface{}) (*indigo.Diagnostics, error) {
 
-	if ast == nil || details == nil {
-		return nil, fmt.Errorf("no ast or eval details")
+	if ast == nil {
+		return nil, fmt.Errorf("ast is nil")
 	}
 
 	d, err := printAST(ast.Expr(), 0, details, ast, data)
@@ -34,6 +34,15 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails,
 	ast *celgo.Ast, data map[string]interface{}) (indigo.Diagnostics, error) {
 
 	d := indigo.Diagnostics{}
+
+	if details == nil || details.State() == nil {
+		return d, fmt.Errorf("details or details.State is nil")
+	}
+
+	if ex == nil {
+		return d, fmt.Errorf("expression from AST is nil")
+	}
+
 	evaluatedValue, ok := details.State().Value(ex.Id)
 	if !ok {
 		// The expression was not evaluated by CEL.
@@ -46,12 +55,14 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails,
 
 	d.Source = indigo.Evaluated
 
-	value, err := convertRefValToIndigo2(evaluatedValue)
-	if err != nil {
-		return d, fmt.Errorf("converting from evaluated value to indigo value: %w", err)
-	}
+	// value, err := convertRefValToIndigo2(evaluatedValue)
+	// if err != nil {
+	// 	return d, fmt.Errorf("converting from evaluated value to indigo value: %w", err)
+	// }
 
-	d.Value = value
+	// d.Value = value
+	d.Interface = evaluatedValue.Value()
+
 	d.Offset, d.Line, d.Column = getLocation(ex.Id, ast) // some types may override this below
 
 	switch i := ex.GetExprKind().(type) {

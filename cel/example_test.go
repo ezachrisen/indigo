@@ -15,7 +15,7 @@ import (
 
 func Example() {
 
-	// Step 1: Create a schema
+	//Step 1: Create a schema
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
 			{Name: "message", Type: indigo.String{}},

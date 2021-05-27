@@ -2,9 +2,7 @@ package indigo
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
-	"time"
 )
 
 // Schema defines the keys (variable names) and their data types used in a
@@ -54,6 +52,9 @@ type DataElement struct {
 	// One of the Type interface defined.
 	Type Type `json:"type"`
 
+	// //
+	// T interface{}
+
 	// Optional description of the type.
 	Description string `json:"description"`
 }
@@ -69,7 +70,7 @@ type Type interface {
 	// Zero returns a 'template' of the type to enable
 	// use of reflection in Evaluators and elsewhere to convert to/from
 	// indigo types and the types native to the Evaluators.
-	Zero() interface{}
+	//	Zero() interface{}
 }
 
 // String defines an Indigo string type.
@@ -112,83 +113,83 @@ type Map struct {
 	ValueType Type // the type of the value stored in the map
 }
 
-// Zero Methods
-func (String) Zero() interface{}    { return string("") }
-func (Int) Zero() interface{}       { return int(0) }
-func (Bool) Zero() interface{}      { return bool(false) }
-func (Float) Zero() interface{}     { return float64(0.0) }
-func (Timestamp) Zero() interface{} { return time.Now() }
-func (Duration) Zero() interface{}  { return time.Duration(0) }
-func (t Proto) Zero() interface{}   { return t.Message }
-func (Any) Zero() interface{}       { return nil }
+// // Zero Methods
+// func (String) Zero() interface{}    { return string("") }
+// func (Int) Zero() interface{}       { return int(0) }
+// func (Bool) Zero() interface{}      { return bool(false) }
+// func (Float) Zero() interface{}     { return float64(0.0) }
+// func (Timestamp) Zero() interface{} { return time.Now() }
+// func (Duration) Zero() interface{}  { return time.Duration(0) }
+// func (t Proto) Zero() interface{}   { return t.Message }
+// func (Any) Zero() interface{}       { return nil }
 
-func (t List) Zero() (retval interface{}) {
-	defer func() {
-		if r := recover(); r != nil {
-			retval = nil
-		}
-	}()
+// func (t List) Zero() (retval interface{}) {
+// 	defer func() {
+// 		if r := recover(); r != nil {
+// 			retval = nil
+// 		}
+// 	}()
 
-	if t.ValueType == nil {
-		return nil
-	}
+// 	if t.ValueType == nil {
+// 		return nil
+// 	}
 
-	if t.ValueType.Zero() == nil {
-		return nil
-	}
+// 	if t.ValueType.Zero() == nil {
+// 		return nil
+// 	}
 
-	tt := reflect.TypeOf(t.ValueType.Zero())
-	if tt == nil {
-		return nil
-	}
+// 	tt := reflect.TypeOf(t.ValueType.Zero())
+// 	if tt == nil {
+// 		return nil
+// 	}
 
-	rt := reflect.SliceOf(tt)
-	s := reflect.MakeSlice(rt, 0, 0)
-	return s.Interface()
-}
+// 	rt := reflect.SliceOf(tt)
+// 	s := reflect.MakeSlice(rt, 0, 0)
+// 	return s.Interface()
+// }
 
-func (t Map) Zero() (retval interface{}) {
-	// A panic handler here because we're using reflection
-	defer func() {
-		if r := recover(); r != nil {
-			retval = nil
-		}
-	}()
+// func (t Map) Zero() (retval interface{}) {
+// 	// A panic handler here because we're using reflection
+// 	defer func() {
+// 		if r := recover(); r != nil {
+// 			retval = nil
+// 		}
+// 	}()
 
-	if t.ValueType == nil {
-		return nil
-	}
+// 	if t.ValueType == nil {
+// 		return nil
+// 	}
 
-	if t.ValueType.Zero() == nil {
-		return nil
-	}
+// 	if t.ValueType.Zero() == nil {
+// 		return nil
+// 	}
 
-	if t.KeyType == nil {
-		return nil
-	}
+// 	if t.KeyType == nil {
+// 		return nil
+// 	}
 
-	if t.KeyType.Zero() == nil {
-		return nil
-	}
+// 	if t.KeyType.Zero() == nil {
+// 		return nil
+// 	}
 
-	tv := reflect.TypeOf(t.ValueType.Zero())
-	if tv == nil {
-		return nil
-	}
+// 	tv := reflect.TypeOf(t.ValueType.Zero())
+// 	if tv == nil {
+// 		return nil
+// 	}
 
-	tk := reflect.TypeOf(t.KeyType.Zero())
-	if tk == nil {
-		return nil
-	}
+// 	tk := reflect.TypeOf(t.KeyType.Zero())
+// 	if tk == nil {
+// 		return nil
+// 	}
 
-	tm := reflect.MapOf(tk, tv)
-	if tm == nil {
-		return nil
-	}
+// 	tm := reflect.MapOf(tk, tv)
+// 	if tm == nil {
+// 		return nil
+// 	}
 
-	m := reflect.MakeMap(tm)
-	return m.Interface()
-}
+// 	m := reflect.MakeMap(tm)
+// 	return m.Interface()
+// }
 
 // String Methods
 func (Int) String() string       { return "int" }
@@ -316,4 +317,26 @@ func parseProto(t string) (Type, error) {
 
 	name := t[startParen+1 : endParen]
 	return Proto{Protoname: name}, nil
+}
+
+func PrimitiveGoToIndigo(g interface{}) (Type, error) {
+
+	switch g.(type) {
+	case string:
+		return String{}, nil
+	case int, int32, int64:
+		return Int{}, nil
+	case float64:
+		return Float{}, nil
+	case bool:
+		return Bool{}, nil
+	// case "duration":
+	// 	return Duration{}, nil
+	// case "timestamp":
+	// 	return Timestamp{}, nil
+	// case "any":
+	// 	return Any{}, nil
+	default:
+		return Any{}, fmt.Errorf("unrecognized type: %s", g)
+	}
 }

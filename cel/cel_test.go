@@ -48,6 +48,25 @@ func makeEducationSchema() indigo.Schema {
 			{Name: "isSummer", Type: indigo.Bool{}},
 		},
 	}
+
+	// return indigo.Schema{
+	// 	Elements: []indigo.DataElement{
+	// 		{Name: "student.ID", T: string("")},
+	// 		{Name: "student.Age", T: int(0)},
+	// 		{Name: "student.GPA", T: float64(0.0)},
+	// 		{Name: "student.Adjustment", T: float64(0.0)},
+	// 		{Name: "student.Status", T: string("")},
+	// 		{Name: "student.Grades", T: []string{}},
+	// 		{Name: "student.EnrollmentDate", T: string("")},
+	// 		{Name: "gradeNames", T: map[int]string{}},
+	// 		{Name: "nested", T: [][]string{}},
+	// 		{Name: "nested2", T: map[string][]string{}},
+	// 		{Name: "now", T: string("")},
+	// 		{Name: "alsoNow", T: time.Time{}},
+	// 		{Name: "isSummer", T: bool(false)},
+	// 	},
+	// }
+
 }
 
 func makeEducationRules1() *indigo.Rule {
@@ -80,6 +99,11 @@ func makeEducationRules1() *indigo.Rule {
 			"notsummer": {
 				ID:     "notsummer",
 				Expr:   "isSummer && student.GPA < 2.5",
+				Schema: makeEducationSchema(),
+			},
+			"timecheck": {
+				ID:     "timecheck",
+				Expr:   "now > student.EnrollmentDate",
 				Schema: makeEducationSchema(),
 			},
 		},
@@ -196,27 +220,6 @@ func makeEducationRulesWithIncorrectTypes() *indigo.Rule {
 	return rule1
 }
 
-func TestBasicRules(t *testing.T) {
-
-	is := is.New(t)
-
-	e := indigo.NewEngine(cel.NewEvaluator())
-	r := makeEducationRules1()
-	err := e.Compile(r, indigo.CollectDiagnostics(true))
-	is.NoErr(err)
-
-	sa := r.Rules["student_actions"]
-
-	results, err := e.Eval(context.Background(), sa, makeStudentData(), indigo.ReturnDiagnostics(true))
-	is.NoErr(err)
-	is.Equal(results.Rule, sa)
-	is.True(results.Pass)
-	is.True(!results.Results["honors_student"].Pass)
-	is.True(results.Results["at_risk"].Pass)
-	is.Equal(results.Results["at_risk"].Results["risk_factor"].Value.(float64), 8.0)
-
-}
-
 func makeEducationProtoSchema() indigo.Schema {
 	return indigo.Schema{
 		ID: "educationProto",
@@ -226,6 +229,16 @@ func makeEducationProtoSchema() indigo.Schema {
 			{Name: "self", Type: indigo.Proto{Protoname: "testdata.school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
 		},
 	}
+
+	// return indigo.Schema{
+	// 	ID: "educationProto",
+	// 	Elements: []indigo.DataElement{
+	// 		{Name: "student", T: &school.Student{}},
+	// 		{Name: "now", T: time.Time{}},
+	// 		{Name: "self", T: &school.HonorsConfiguration{}},
+	// 	},
+	// }
+
 }
 
 func makeEducationProtoRules(id string) *indigo.Rule {
@@ -267,12 +280,31 @@ func makeStudentProtoData() map[string]interface{} {
 		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
-	s.ProtoReflect()
-
 	return map[string]interface{}{
 		"student": &s,
 		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
 	}
+
+}
+
+func TestBasicRules(t *testing.T) {
+
+	is := is.New(t)
+
+	e := indigo.NewEngine(cel.NewEvaluator())
+	r := makeEducationRules1()
+	err := e.Compile(r, indigo.CollectDiagnostics(true))
+	is.NoErr(err)
+
+	sa := r.Rules["student_actions"]
+
+	results, err := e.Eval(context.Background(), sa, makeStudentData(), indigo.ReturnDiagnostics(true))
+	is.NoErr(err)
+	is.Equal(results.Rule, sa)
+	is.True(results.Pass)
+	is.True(!results.Results["honors_student"].Pass)
+	is.True(results.Results["at_risk"].Pass)
+	is.Equal(results.Results["at_risk"].Results["risk_factor"].Value.(float64), 8.0)
 
 }
 
@@ -320,13 +352,13 @@ func TestDiagnosticOptions(t *testing.T) {
 	results, err := e.Eval(context.Background(), r2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 	//	fmt.Println(r2)
-	fmt.Println(indigo.DiagnosticsReport(r2, makeStudentProtoData(), results))
+	//fmt.Println(indigo.DiagnosticsReport(r2, makeStudentProtoData(), results))
 	for _, c := range results.Results {
 		if c.Diagnostics == nil {
 			t.Errorf("Wanted diagnostics for rule %s", c.Rule.ID)
 		} else {
-			// fmt.Println(results)
-			// fmt.Println(c.Diagnostics)
+			fmt.Println(results)
+			fmt.Println(c.Diagnostics)
 		}
 	}
 
@@ -367,19 +399,28 @@ func TestRuleResultTypes(t *testing.T) {
 		},
 		{
 			indigo.Rule{
-				ID:         "shouldBeList",
+				ID:         "shouldBeIntList",
 				Schema:     makeEducationProtoSchema(),
-				ResultType: indigo.List{ValueType: indigo.Float{}},
-				Expr:       `student.grades`,
+				ResultType: indigo.List{ValueType: indigo.Int{}},
+				Expr:       `[1,2,3]`,
 			},
 			nil,
 		},
 		{
 			indigo.Rule{
-				ID:         "shouldBeIntList",
+				ID:         "shouldBeAnyList",
 				Schema:     makeEducationProtoSchema(),
-				ResultType: indigo.List{ValueType: indigo.Int{}},
-				Expr:       `[1,2,3]`,
+				ResultType: indigo.List{ValueType: indigo.Any{}},
+				Expr:       `[1,"2",3]`,
+			},
+			nil,
+		},
+		{
+			indigo.Rule{
+				ID:         "shouldBeList",
+				Schema:     makeEducationProtoSchema(),
+				ResultType: indigo.List{ValueType: indigo.Float{}},
+				Expr:       `student.grades`,
 			},
 			nil,
 		},
@@ -448,19 +489,46 @@ func TestRuleResultTypes(t *testing.T) {
 		//		fmt.Println("Case: ", cases[i].rule.ID)
 		err := e.Compile(&cases[i].rule)
 		if cases[i].err == nil && err != nil {
-			t.Errorf("For rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
+			t.Errorf("compiling rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
 		}
 
 		_, err = e.Eval(context.Background(), &cases[i].rule, makeStudentProtoData())
 
 		if err != nil && cases[i].err == nil {
 			t.Fatalf("For rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
-		} else {
-			// if res != nil {
-			// 	fmt.Printf("%v\nn", res)
-			// }
-		}
+		} /* else {
+				if res != nil {
+				 	fmt.Printf("%v\nn", res)
+				 }
+		} */
 	}
+}
+
+// Generate all diagnostics for both sets of rules to make sure
+// no panics
+func TestDiagnosticGeneration(t *testing.T) {
+	is := is.New(t)
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	red1 := makeEducationRules1()
+	e.Compile(red1, indigo.CollectDiagnostics(true))
+	u, err := e.Eval(context.Background(), red1, makeStudentData())
+	is.NoErr(err)
+	fmt.Sprintf("%s", u.Diagnostics)
+	fmt.Sprintf("%s", indigo.DiagnosticsReport(red1, makeStudentData(), u))
+
+	red2 := makeEducationProtoRules("red2")
+	e.Compile(red2, indigo.CollectDiagnostics(true))
+	u, err = e.Eval(context.Background(), red2, makeStudentProtoData())
+	is.NoErr(err)
+	fmt.Sprintf("%s", u.Diagnostics)
+	fmt.Sprintf("%s", indigo.DiagnosticsReport(red2, makeStudentData(), u))
+
+	// Check that calling diagnostics with nils is ok
+	u.Diagnostics = nil
+	fmt.Sprintf("%s", u.Diagnostics)
+	fmt.Sprintf("%s", indigo.DiagnosticsReport(nil, nil, nil))
+
 }
 
 // ------------------------------------------------------------------------------------------

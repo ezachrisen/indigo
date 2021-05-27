@@ -395,6 +395,14 @@ func TestDiagnosticOptions(t *testing.T) {
 				t.Errorf("In case '%s', wanted list of rules diagnostics", k)
 			}
 
+			fmt.Sprintf("%s", u.Diagnostics)
+			fmt.Sprintf("%s", indigo.DiagnosticsReport(r, d, u))
+
+			// Check that calling diagnostics with nils is ok
+			u.Diagnostics = nil
+			fmt.Sprintf("%s", u.Diagnostics)
+			fmt.Sprintf("%s", indigo.DiagnosticsReport(nil, nil, nil))
+
 		default:
 			err = anyNotEmpty(flattenResultsDiagnostics(u))
 			if err != nil {

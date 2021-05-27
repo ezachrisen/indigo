@@ -8,6 +8,7 @@ import (
 
 	celgo "github.com/google/cel-go/cel"
 	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // Evaluator implements the indigo.Evaluator interface.
@@ -102,7 +103,7 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type,
 // Expression  expression
 func (*Evaluator) Evaluate(data map[string]interface{}, expr string,
 	_ indigo.Schema, _ interface{}, evalData interface{}, expectedResultType indigo.Type,
-	returnDiagnostics bool) (indigo.Value, *indigo.Diagnostics, error) {
+	returnDiagnostics bool) (interface{}, *indigo.Diagnostics, error) {
 
 	program, ok := evalData.(celProgram)
 
@@ -129,9 +130,21 @@ func (*Evaluator) Evaluate(data map[string]interface{}, expr string,
 		return indigo.Value{}, diagnostics, fmt.Errorf("evaluating rule: %w", err)
 	}
 
-	iv, err := convertRefValToIndigo(rawValue, expectedResultType)
+	value := rawValue.Value()
 
-	return iv, diagnostics, err
+	//iv, err := convertRefValToIndigo(rawValue, expectedResultType)
+	//	iv, err := convertRefValToIndigo2(rawValue)
+
+	if _, ok := rawValue.Value().(*dynamicpb.Message); ok {
+		pb, err := convertDynamicMessageToProto(rawValue, expectedResultType)
+		if err != nil {
+			return nil, diagnostics, err
+		}
+
+		value = pb
+	}
+
+	return value, diagnostics, err
 }
 
 // --------------------------------------------------------------------------- TYPE CONVERSIONS
@@ -139,15 +152,15 @@ func (*Evaluator) Evaluate(data map[string]interface{}, expr string,
 
 // // doTypesMatch determines if the indigo and cel types match, meaning
 // // they can be converted from one to the other
-func doTypesMatch(cel *gexpr.Type, indigo indigo.Type) error {
+func doTypesMatch(cel *gexpr.Type, igo indigo.Type) error {
 
 	celConverted, err := indigoType(cel)
 	if err != nil {
 		return err
 	}
 
-	if celConverted.String() != indigo.String() {
-		return fmt.Errorf("types do no match: CEL: %T (%v), Indigo: %T (%v)", celConverted, celConverted, indigo, indigo)
+	if celConverted.String() != igo.String() {
+		return fmt.Errorf("tyope mismatch: CEL: %T (%v), Indigo: %T (%v)", celConverted, celConverted, igo, igo)
 	}
 
 	return nil

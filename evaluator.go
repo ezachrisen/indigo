@@ -9,7 +9,7 @@ type Evaluator interface {
 	// Evaluate should check the result against the expected resultType and return an error if the
 	// result does not match.
 	Evaluate(data map[string]interface{}, expr string, s Schema,
-		self interface{}, evalData interface{}, resultType Type, returnDiagnostics bool) (Value, *Diagnostics, error)
+		self interface{}, evalData interface{}, resultType Type, returnDiagnostics bool) (interface{}, *Diagnostics, error)
 
 	// Compile pre-processes the expression, returning a compiled version.
 	// The Indigo engine will store the compiled version, later providing it back to the
