@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	//	"github.com/alexeyco/simpletable"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 )
@@ -15,14 +14,14 @@ type Result struct {
 	Rule *Rule
 
 	// Whether the rule yielded a TRUE logical value.
-	// The default is FALSE
+	// The default is TRUE
 	// This is the result of evaluating THIS rule only.
 	// The result will not be affected by the results of the child rules.
 	// If no rule expression is supplied for a rule, the result will be TRUE.
 	Pass bool
 
 	// The result of the evaluation. Boolean for logical expressions.
-	// Calculations or string manipulations will return the appropriate type.
+	// Calculations, object constructions or string manipulations will return the appropriate Go type.
 	Value interface{}
 
 	// Results of evaluating the child rules.
@@ -36,6 +35,9 @@ type Result struct {
 
 	// A list of the rules evaluated, in the order they were evaluated
 	// Only available if you turn on diagnostics for the evaluation
+	// This may be different from the rules represented in Results, if
+	// If we're discarding failed/passed rules, they will not be in the results,
+	// and will not show up in diagnostics, but they will be in this list.
 	RulesEvaluated []*Rule
 }
 

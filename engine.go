@@ -13,7 +13,7 @@ type Engine interface {
 	// evaluator.
 	Compile(r *Rule, opts ...CompilationOption) error
 
-	// Evaluate tests the rule and its child rules against the data.
+	// Eval tests the rule and its child rules against the data.
 	// Returns the result of the evaluation.
 	Eval(ctx context.Context, r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error)
 }
@@ -37,66 +37,37 @@ func NewEngine(e Evaluator) *DefaultEngine {
 // Eval uses the Evaluator provided to the engine to perform the expression evaluation.
 func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	d map[string]interface{}, opts ...EvalOption) (*Result, error) {
-	if r == nil {
-		return nil, fmt.Errorf("rule is nil")
-	}
 
-	if e == nil {
-		return nil, fmt.Errorf("engine is nil")
-	}
-
-	if e.e == nil {
-		return nil, fmt.Errorf("evaluator is nil")
-	}
-
-	if d == nil {
-		return nil, fmt.Errorf("data is nil")
+	if err := validateEvalArguments(r, e, d); err != nil {
+		return nil, err
 	}
 
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
+	setSelfKey(r, d)
 
-	// If this rule has a reference to a 'self' object, insert it into the d.
-	// If it doesn't, we must remove any existing reference to self, so that
-	// child rules do not accidentally "inherit" the self object.
-	if r.Self != nil {
-		d[selfKey] = r.Self
-	} else {
-		delete(d, selfKey)
-	}
-
-	pr := &Result{
-		Rule:    r,
-		Pass:    true,
-		Results: make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
-	}
-
-	// Default the result type to boolean
-	resultType := r.ResultType
-	if resultType == nil {
-		resultType = Bool{}
-	}
-
-	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, resultType, o.ReturnDiagnostics)
+	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, defaultResultType(r), o.ReturnDiagnostics)
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
-
 	}
 
-	pr.Value = val
-	pr.Diagnostics = diagnostics
-	// if pr.Diagnostics != nil {
-	// 	pr.Diagnostics.Rule = r
-	// 	pr.Diagnostics.Data = d
-	// }
-	pr.EvalOptions = o
+	u := &Result{
+		Rule:        r,
+		Pass:        true,                                   // default boolean result
+		Results:     make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
+		Value:       val,
+		Diagnostics: diagnostics,
+		EvalOptions: o,
+	}
 
+	// If the evaluation returned a boolean, set the Result's value,
+	// otherwise keep the default, true
 	if pass, ok := val.(bool); ok {
-		pr.Pass = pass
+		u.Pass = pass
 	}
 
-	if o.StopIfParentNegative && !pr.Pass {
-		return pr, nil
+	if o.StopIfParentNegative && !u.Pass {
+		return u, nil
 	}
 
 	for _, cr := range r.sortChildKeys(o) {
@@ -105,8 +76,9 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 			return nil, ctx.Err()
 		default:
 			if o.ReturnDiagnostics {
-				pr.RulesEvaluated = append(pr.RulesEvaluated, cr)
+				u.RulesEvaluated = append(u.RulesEvaluated, cr)
 			}
+
 			result, err := e.Eval(ctx, cr, d, opts...)
 			if err != nil {
 				return nil, err
@@ -114,36 +86,27 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 			if (!result.Pass && !o.DiscardFail) ||
 				(result.Pass && !o.DiscardPass) {
-				pr.Results[cr.ID] = result
+				u.Results[cr.ID] = result
 			}
 
 			if o.StopFirstPositiveChild && result.Pass {
-				return pr, nil
+				return u, nil
 			}
 
 			if o.StopFirstNegativeChild && !result.Pass {
-				return pr, nil
+				return u, nil
 			}
 		}
 	}
-	return pr, nil
+	return u, nil
 }
 
 // Compile uses the Evaluator's compile method to check the rule and its children,
 // returning any validation errors. Stores a compiled version of the rule in the
 // rule.Program field (if the compiler returns a program).
 func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
-
-	if r == nil {
-		return fmt.Errorf("rule is nil")
-	}
-
-	if e == nil {
-		return fmt.Errorf("engine is nil")
-	}
-
-	if e.e == nil {
-		return fmt.Errorf("evaluator is nil")
+	if err := validateCompileArguments(r, e); err != nil {
+		return err
 	}
 
 	o := compileOptions{}
@@ -259,6 +222,8 @@ func ReturnDiagnostics(b bool) EvalOption {
 }
 
 // SortFunc specifies the function used to sort child rules before evaluation.
+// Sorting is only performed if the evaluation order of the child rules is important (i.e.,
+// if an option such as StopFirstNegativeChild is set).
 func SortFunc(x func(rules []*Rule, i, j int) bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.SortFunc = x
@@ -303,9 +268,69 @@ func StopFirstPositiveChild(b bool) EvalOption {
 	}
 }
 
-// See the EvalOptions struct for documentation.
+// // See the EvalOptions struct for documentation.
 func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
 	for _, opt := range opts {
 		opt(o)
+	}
+}
+
+// validateEvalArguments checks the input parameters to engine.Eval
+func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]interface{}) error {
+
+	switch {
+	case r == nil:
+		return fmt.Errorf("rule is nil")
+	case e == nil:
+		return fmt.Errorf("engine is nil")
+	case e.e == nil:
+		return fmt.Errorf("evaluator is nil")
+	case d == nil:
+		return fmt.Errorf("data is nil")
+	default:
+		return nil
+	}
+}
+
+func setSelfKey(r *Rule, d map[string]interface{}) {
+	if d == nil {
+		return
+	}
+	// If this rule has a reference to a 'self' object, insert it into the d.
+	// If it doesn't, we must remove any existing reference to self, so that
+	// child rules do not accidentally "inherit" the self object.
+	if r.Self != nil {
+		d[selfKey] = r.Self
+	} else {
+		delete(d, selfKey)
+	}
+}
+
+// Default the result type to boolean
+// This is the result type passed to the evaluator. The evaluator may use it to
+// inspect / validate the result it generates.
+func defaultResultType(r *Rule) Type {
+
+	switch r.ResultType {
+	case nil:
+		return Bool{}
+	default:
+		return r.ResultType
+	}
+
+}
+
+// validateEvalArguments checks the input parameters to engine.Eval
+func validateCompileArguments(r *Rule, e *DefaultEngine) error {
+
+	switch {
+	case r == nil:
+		return fmt.Errorf("rule is nil")
+	case e == nil:
+		return fmt.Errorf("engine is nil")
+	case e.e == nil:
+		return fmt.Errorf("evaluator is nil")
+	default:
+		return nil
 	}
 }

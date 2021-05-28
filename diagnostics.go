@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Delta456/box-cli-maker/v2"
 	//	"github.com/alexeyco/simpletable"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -35,7 +34,6 @@ const (
 // The children represent elements of the expression evaluated.
 type Diagnostics struct {
 	Expr      string // the part of the rule expression evaluated
-	Value     Value  // the value of the expression part
 	Interface interface{}
 	Source    ValueSource   // where the value came from: input data, or evaluted by the engine
 	Line      int           // the 1-based line number in the original source expression
@@ -57,9 +55,8 @@ func (d *Diagnostics) String() string {
 		if cd.Interface != nil {
 			tw.AppendRow(table.Row{
 				cd.Expr,
-				//fmt.Sprintf("%v", cd.Value.Val),
 				fmt.Sprintf("%v", cd.Interface),
-				fmt.Sprintf("%T", cd.Interface), //cd.Value.Type.String(),
+				fmt.Sprintf("%T", cd.Interface),
 				cd.Source.String(),
 				fmt.Sprintf("%d:%d", cd.Line, cd.Column),
 			})
@@ -71,49 +68,95 @@ func (d *Diagnostics) String() string {
 	return tw.Render()
 }
 
-// DiagnosticsReport produces an ASCII report of the input rules, input data, the evaluation diagnostics and the results.
-func DiagnosticsReport(r *Rule, data map[string]interface{}, u *Result) string {
+// DiagnosticsReport produces an ASCII report of the input rules, input data,
+// the evaluation diagnostics and the results.
+func DiagnosticsReport(u *Result, data map[string]interface{}) string {
 
-	b := box.New(box.Config{Px: 2, Py: 1, Type: "Double", Color: "Cyan", TitlePos: "Top", ContentAlign: "Left"})
+	// b := box.New(box.Config{Px: 2, Py: 1, Type: "Double", Color: "Cyan", TitlePos: "Top", ContentAlign: "Left"})
+	s := strings.Builder{}
+	s.WriteString("\n\nINDIGO EVALUATION DIAGNOSTIC REPORT\n")
+	s.WriteString(diagnosticsRecursive(u, data))
+	return s.String()
+}
+
+// Descend recursively though the results
+func diagnosticsRecursive(u *Result, data map[string]interface{}) string {
 
 	s := strings.Builder{}
-	if r == nil && data == nil && u == nil {
-		s.WriteString("No rule, data or diagnostics provided")
+	if u == nil {
+		return "no Result provided"
 	}
 
-	if r != nil {
+	if u.Rule != nil {
+		s.WriteString("\n\n")
 		s.WriteString("Rule:\n")
 		s.WriteString("-----\n")
-		s.WriteString(r.ID)
+		s.WriteString(u.Rule.ID)
 		s.WriteString("\n\n")
 		s.WriteString("Expression:\n")
 		s.WriteString("-----------\n")
-		s.WriteString(wordWrap(r.Expr, 100))
+		if u.Rule.Expr == "" {
+			s.WriteString("(no expression)")
+		} else {
+			s.WriteString(wordWrap(u.Rule.Expr, 100))
+		}
 		s.WriteString("\n\n")
 	}
 
-	if u != nil {
-		s.WriteString("Results:\n")
-		s.WriteString("--------\n")
-		s.WriteString(u.String())
-		s.WriteString("\n\n")
-	}
+	s.WriteString("Results:\n")
+	s.WriteString("--------\n")
+	s.WriteString(u.String())
+	s.WriteString("\n\n")
 
-	if u != nil && u.Diagnostics != nil {
-		s.WriteString("Evaluation State:\n")
-		s.WriteString("-----------------\n")
+	if u.Diagnostics != nil {
+		s.WriteString("Evaluation:\n")
+		s.WriteString("-----------\n")
 		s.WriteString(u.Diagnostics.String())
+	}
+
+	if len(u.RulesEvaluated) > 0 {
+		s.WriteString("\n")
+		s.WriteString("Evaluated:\n")
+		s.WriteString("----------\n")
+		s.WriteString(rulesEvaluated(u, 0))
+		s.WriteString("\n")
 	}
 
 	if data != nil {
 		dt := dataTable(data)
-		s.WriteString("\n\n")
-		s.WriteString("Input Data:\n")
-		s.WriteString("-----------\n")
+		s.WriteString("\n")
+		s.WriteString("Input:\n")
+		s.WriteString("------\n")
 		s.WriteString(dt.Render())
 	}
 
-	return b.String("INDIGO EVALUATION DIAGNOSTIC REPORT", s.String())
+	s.WriteString("\n")
+	if u.Results != nil {
+		for k := range u.Results {
+			s.WriteString(diagnosticsRecursive(u.Results[k], nil))
+			s.WriteString("\n")
+		}
+	}
+	return s.String()
+
+}
+
+// rulesEvaluated prints a recursive list of rule IDs
+// that were evaluated
+func rulesEvaluated(u *Result, n int) string {
+
+	s := strings.Builder{}
+	indent := strings.Repeat("  ", n)
+
+	for i := range u.RulesEvaluated {
+		rid := u.RulesEvaluated[i].ID
+		s.WriteString(indent + rid)
+		s.WriteString("\n")
+		if r, ok := u.Results[rid]; ok {
+			s.WriteString(rulesEvaluated(r, n+1))
+		}
+	}
+	return s.String()
 }
 
 // dataTable renders a table of the input data to a rule
