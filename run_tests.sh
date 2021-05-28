@@ -1,7 +1,7 @@
 #!/bin/bash
 # run_test.sh runs all tests in the module:
-echo "----- Running tests with race condition flag"
-go test -v -race ./...
+#echo "----- Running tests with race condition flag"
+#go test -v -race ./...
 
 echo "----- Running benchmarks"
 if ! [ -x "$(command -v benchstat)" ]

@@ -63,12 +63,15 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	// Specify the sort order for all rules
 	err := indigo.ApplyToRule(r, func(r *indigo.Rule) error {
 		r.EvalOptions.SortFunc = sortRulesAlpha
+		r.EvalOptions.StopFirstNegativeChild = true
 		return nil
 	})
-
-	if err != nil {
-		t.Error(err)
-	}
+	is.NoErr(err)
+	err = indigo.ApplyToRule(r, func(r *indigo.Rule) error {
+		r.Expr = "true"
+		return nil
+	})
+	is.NoErr(err)
 
 	err = e.Compile(r)
 	is.NoErr(err)
@@ -78,18 +81,18 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 		"rule1": true,
 		"D":     true,
 		"d1":    true,
-		"d2":    false,
+		"d2":    true,
 		"d3":    true,
-		"B":     false,
+		"B":     true,
 		"b1":    true,
-		"b2":    false,
+		"b2":    true,
 		"b3":    true,
-		"b4":    false,
+		"b4":    true,
 		"b4-1":  true,
-		"b4-2":  false,
-		"E":     false,
+		"b4-2":  true,
+		"E":     true,
 		"e1":    true,
-		"e2":    false,
+		"e2":    true,
 		"e3":    true,
 	}
 
@@ -229,7 +232,7 @@ func TestEvalOptions(t *testing.T) {
 				r.Rules["B"].EvalOptions.DiscardFail = true
 			},
 			want: func() map[string]bool {
-				return deleteKeys(copyMap(w), "b2", "b4", "b4-1", "b4-2")
+				return deleteKeys(copyMap(w), "b2", "b4", "b4-1", "b4-2") // b4-1 is elim. because b4 is
 			},
 		},
 		"DiscardPass & DiscardFail": {
@@ -326,10 +329,10 @@ func TestEvalOptions(t *testing.T) {
 		r := makeRule()
 		c.prep(r)
 
-		u, err := e.Eval(context.Background(), r, d)
+		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
 		is.NoErr(err)
-		//		fmt.Println(r)
-		//		fmt.Println(u)
+		// fmt.Println(k)
+		// fmt.Println(indigo.DiagnosticsReport(u, nil))
 		err = match(flattenResults(u), c.want())
 		if err != nil {
 			t.Errorf("Error in case %s: %v", k, err)
@@ -358,7 +361,7 @@ func TestDiagnosticOptions(t *testing.T) {
 			evalDiagnostics:                 false,
 			wantDiagnostics:                 false,
 		},
-		"No diagnostics requested at compile time, but NOT at eval time": {
+		"No diagnostics requested at compile time, but at eval time": {
 			engineDiagnosticCompileRequired: true,
 			compileDiagnostics:              false,
 			evalDiagnostics:                 true,
@@ -384,7 +387,8 @@ func TestDiagnosticOptions(t *testing.T) {
 
 		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(c.evalDiagnostics))
 		is.NoErr(err)
-
+		//fmt.Println(k)
+		//fmt.Println(indigo.DiagnosticsReport(u, nil))
 		switch c.wantDiagnostics {
 		case true:
 			err = allNotEmpty(flattenResultsDiagnostics(u))
@@ -395,13 +399,11 @@ func TestDiagnosticOptions(t *testing.T) {
 				t.Errorf("In case '%s', wanted list of rules diagnostics", k)
 			}
 
-			fmt.Sprintf("%s", u.Diagnostics)
-			fmt.Sprintf("%s", indigo.DiagnosticsReport(r, d, u))
+			_ = u.Diagnostics.String()
+			indigo.DiagnosticsReport(u, d)
 
 			// Check that calling diagnostics with nils is ok
-			u.Diagnostics = nil
-			fmt.Sprintf("%s", u.Diagnostics)
-			fmt.Sprintf("%s", indigo.DiagnosticsReport(nil, nil, nil))
+			indigo.DiagnosticsReport(nil, nil)
 
 		default:
 			err = anyNotEmpty(flattenResultsDiagnostics(u))

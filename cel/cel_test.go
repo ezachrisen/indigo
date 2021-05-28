@@ -349,17 +349,18 @@ func TestDiagnosticOptions(t *testing.T) {
 	err := e.Compile(r2, indigo.CollectDiagnostics(true))
 	is.NoErr(err)
 
-	results, err := e.Eval(context.Background(), r2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
+	u, err := e.Eval(context.Background(), r2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 	//	fmt.Println(r2)
-	//fmt.Println(indigo.DiagnosticsReport(r2, makeStudentProtoData(), results))
-	for _, c := range results.Results {
+	//	fmt.Println(indigo.DiagnosticsReport(u, makeStudentProtoData()))
+	//	fmt.Println(u.Diagnostics.String())
+	for _, c := range u.Results {
 		if c.Diagnostics == nil {
 			t.Errorf("Wanted diagnostics for rule %s", c.Rule.ID)
-		} else {
-			fmt.Println(results)
-			fmt.Println(c.Diagnostics)
-		}
+		} // else {
+		// 	fmt.Println(u)
+		// 	fmt.Println(c.Diagnostics)
+		// }
 	}
 
 }
@@ -511,23 +512,22 @@ func TestDiagnosticGeneration(t *testing.T) {
 	e := indigo.NewEngine(cel.NewEvaluator())
 
 	red1 := makeEducationRules1()
-	e.Compile(red1, indigo.CollectDiagnostics(true))
-	u, err := e.Eval(context.Background(), red1, makeStudentData())
+	err := e.Compile(red1, indigo.CollectDiagnostics(true))
 	is.NoErr(err)
-	fmt.Sprintf("%s", u.Diagnostics)
-	fmt.Sprintf("%s", indigo.DiagnosticsReport(red1, makeStudentData(), u))
+
+	u, err := e.Eval(context.Background(), red1, makeStudentData(), indigo.ReturnDiagnostics(true))
+	is.NoErr(err)
+	//	fmt.Println(indigo.DiagnosticsReport(u, nil))
+	_ = u.Diagnostics.String()
 
 	red2 := makeEducationProtoRules("red2")
-	e.Compile(red2, indigo.CollectDiagnostics(true))
-	u, err = e.Eval(context.Background(), red2, makeStudentProtoData())
+	err = e.Compile(red2, indigo.CollectDiagnostics(true))
 	is.NoErr(err)
-	fmt.Sprintf("%s", u.Diagnostics)
-	fmt.Sprintf("%s", indigo.DiagnosticsReport(red2, makeStudentData(), u))
-
-	// Check that calling diagnostics with nils is ok
-	u.Diagnostics = nil
-	fmt.Sprintf("%s", u.Diagnostics)
-	fmt.Sprintf("%s", indigo.DiagnosticsReport(nil, nil, nil))
+	u, err = e.Eval(context.Background(), red2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
+	is.NoErr(err)
+	is.True(u.Diagnostics != nil)
+	_ = u.Diagnostics.String()
+	indigo.DiagnosticsReport(u, makeStudentData())
 
 }
 

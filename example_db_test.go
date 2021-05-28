@@ -35,7 +35,7 @@ func Example_loadFromDatabase() {
 	}
 
 	fmt.Println("OK")
-
+	// uncomment this to run // Output: OK
 }
 
 func LoadSchema(id string, db *sql.DB) (*indigo.Schema, error) {

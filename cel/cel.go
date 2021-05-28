@@ -7,7 +7,6 @@ import (
 	"github.com/ezachrisen/indigo"
 
 	celgo "github.com/google/cel-go/cel"
-	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
@@ -16,8 +15,8 @@ import (
 type Evaluator struct{}
 
 // celProgram holds a compiled CEL Program and
-// (potentially) an AST. The AST is used if we're collecting diagnostics
-// for the engine.
+// optionally an AST. The AST is used if we're collecting diagnostics
+// for the engine. Indigo will attach celProgram to the rule during compilation.
 type celProgram struct {
 	program celgo.Program
 	ast     *celgo.Ast
@@ -35,25 +34,22 @@ func NewEvaluator() *Evaluator {
 // and if we're collecting diagnostics, CELProgram also contains the CEL AST to provide
 // type and symbol information in diagnostics.
 //
-// Any errors in compilation are returned, and the rule.Program is set to nil.
-// If dryRun is true, this does nothing.
-func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type,
-	collectDiagnostics bool, dryRun bool) (interface{}, error) {
-	prog := celProgram{}
+// Any errors in compilation are returned with a nil program
+func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, _ bool) (interface{}, error) {
 
 	// A blank expression is ok, but it won't pass through the compilation
 	if expr == "" {
 		return nil, nil
 	}
 
-	var opts []celgo.EnvOption
-	var err error
+	prog := celProgram{}
 
 	// Convert from an Indigo schema to a set of CEL declarations (schema)
-	opts, err = convertIndigoSchemaToDeclarations(s)
+	opts, err := convertIndigoSchemaToDeclarations(s)
 	if err != nil {
 		return nil, err
 	}
+
 	env, err := celgo.NewEnv(opts...)
 	if err != nil {
 		return nil, err
@@ -72,11 +68,12 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type,
 		return nil, fmt.Errorf("checking rule:\n%w", iss.Err())
 	}
 
-	if resultType != nil {
-		err := doTypesMatch(c.ResultType(), resultType)
-		if err != nil {
-			return nil, fmt.Errorf("compiling: %w", err)
-		}
+	if err = doTypesMatch(c.ResultType(), resultType); err != nil {
+		return nil, fmt.Errorf("compiling: %w", err)
+	}
+
+	if collectDiagnostics {
+		prog.ast = ast
 	}
 
 	options := celgo.EvalOptions()
@@ -89,138 +86,57 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type,
 		return nil, fmt.Errorf("generating program: %w", err)
 	}
 
-	if !dryRun {
-		if collectDiagnostics {
-			prog.ast = ast
-		}
-	}
-
 	return prog, nil
 }
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
-// Expression  expression
-func (*Evaluator) Evaluate(data map[string]interface{}, expr string,
-	_ indigo.Schema, _ interface{}, evalData interface{}, expectedResultType indigo.Type,
-	returnDiagnostics bool) (interface{}, *indigo.Diagnostics, error) {
+func (*Evaluator) Evaluate(data map[string]interface{}, expr string, _ indigo.Schema, _ interface{},
+	evalData interface{}, expectedResultType indigo.Type, returnDiagnostics bool) (interface{}, *indigo.Diagnostics, error) {
 
 	program, ok := evalData.(celProgram)
 
 	// If the rule doesn't have a program, return a default result
 	if !ok {
-		// No program is not OK if we have an expression to evaluate
-		if expr != "" {
-			return indigo.Value{}, nil, fmt.Errorf("missing program")
+
+		// No program is ok if there's no expression to evauate, otherwise
+		// it is an error
+		if expr == "" {
+			return true, &indigo.Diagnostics{}, nil
 		}
-		return indigo.Value{true, indigo.Bool{}}, nil, nil
+		return nil, nil, fmt.Errorf("missing program")
 	}
 
 	rawValue, details, err := program.program.Eval(data)
+
 	// Do not check the error yet. Grab the diagnostics first
 	var diagnostics *indigo.Diagnostics
 	if returnDiagnostics {
 		diagnostics, err = collectDiagnostics(program.ast, details, data)
 		if err != nil {
-			return indigo.Value{}, nil, fmt.Errorf("collecting diagnostics: %w", err)
+			return nil, nil, fmt.Errorf("collecting diagnostics: %w", err)
 		}
 	}
 
 	if err != nil {
-		return indigo.Value{}, diagnostics, fmt.Errorf("evaluating rule: %w", err)
+		return nil, diagnostics, fmt.Errorf("evaluating rule: %w", err)
 	}
 
-	value := rawValue.Value()
+	if rawValue == nil {
+		return nil, diagnostics, nil
+	}
 
-	//iv, err := convertRefValToIndigo(rawValue, expectedResultType)
-	//	iv, err := convertRefValToIndigo2(rawValue)
-
-	if _, ok := rawValue.Value().(*dynamicpb.Message); ok {
+	// The output from CEL evaluation is a ref.Val.
+	// The underlying Go value is returned by .Value()
+	// One type requires special handling: protocol buffers dynamically constructed
+	// by CEL in the expression.
+	switch rawValue.Value().(type) {
+	case *dynamicpb.Message:
+		// If CEL returns a protocol buffer, attempt to convert it to the
+		// type of protocol buffer we expected to get.
 		pb, err := convertDynamicMessageToProto(rawValue, expectedResultType)
-		if err != nil {
-			return nil, diagnostics, err
-		}
-
-		value = pb
-	}
-
-	return value, diagnostics, err
-}
-
-// --------------------------------------------------------------------------- TYPE CONVERSIONS
-//
-
-// // doTypesMatch determines if the indigo and cel types match, meaning
-// // they can be converted from one to the other
-func doTypesMatch(cel *gexpr.Type, igo indigo.Type) error {
-
-	celConverted, err := indigoType(cel)
-	if err != nil {
-		return err
-	}
-
-	if celConverted.String() != igo.String() {
-		return fmt.Errorf("tyope mismatch: CEL: %T (%v), Indigo: %T (%v)", celConverted, celConverted, igo, igo)
-	}
-
-	return nil
-}
-
-// indigoType convertes from a CEL type to an indigo.Type
-func indigoType(t *gexpr.Type) (indigo.Type, error) {
-
-	switch v := t.TypeKind.(type) {
-	case *gexpr.Type_MessageType:
-		return indigo.Proto{Protoname: t.GetMessageType()}, nil
-
-	case *gexpr.Type_WellKnown:
-		switch v.WellKnown {
-		case gexpr.Type_DURATION:
-			return indigo.Duration{}, nil
-		case gexpr.Type_TIMESTAMP:
-			return indigo.Timestamp{}, nil
-		default:
-			return nil, fmt.Errorf("unknown 'wellknow' type: %T", v)
-		}
-	case *gexpr.Type_MapType_:
-		keyType, err := indigoType(v.MapType.KeyType)
-		if err != nil {
-			return nil, err
-		}
-
-		valType, err := indigoType(v.MapType.ValueType)
-		if err != nil {
-			return nil, err
-		}
-
-		return indigo.Map{
-			KeyType:   keyType,
-			ValueType: valType,
-		}, nil
-	case *gexpr.Type_ListType_:
-		vType, err := indigoType(v.ListType.ElemType)
-		if err != nil {
-			return nil, err
-		}
-		return indigo.List{
-			ValueType: vType,
-		}, nil
-	case *gexpr.Type_Dyn:
-		return indigo.Any{}, nil
-	case *gexpr.Type_Primitive:
-		switch t.GetPrimitive() {
-		case gexpr.Type_BOOL:
-			return indigo.Bool{}, nil
-		case gexpr.Type_DOUBLE:
-			return indigo.Float{}, nil
-		case gexpr.Type_STRING:
-			return indigo.String{}, nil
-		case gexpr.Type_INT64:
-			return indigo.Int{}, nil
-		default:
-			return nil, fmt.Errorf("unexpected primitive type %v", v)
-		}
+		return pb, diagnostics, err
 	default:
-		return nil, fmt.Errorf("unexpected type %v", v)
+		return rawValue.Value(), diagnostics, err
 	}
 }

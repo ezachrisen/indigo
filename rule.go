@@ -54,12 +54,13 @@ type Rule struct {
 	ResultType Type `json:"result_type,omitempty"`
 
 	// The schema describing the data provided in the Evaluate input. (optional)
-	// Some implementations of Evaluator require a
+	// Some implementations of Evaluator require a schema.
 	Schema Schema `json:"schema,omitempty"`
 
 	// A reference to an object whose values can be used in the rule expression.
 	// Add the corresponding object in the data with the reserved key name selfKey
 	// (see constants).
+	// Child rules do not inherit the self value.
 	// See example for usage. TODO: example
 	Self interface{} `json:"-"`
 
@@ -73,7 +74,7 @@ type Rule struct {
 	// Not used by the rules engine.
 	Meta interface{} `json:"-"`
 
-	// Options determining how the rule should be evaluated
+	// Options determining how the child rules should be handled.
 	EvalOptions EvalOptions `json:"eval_options"`
 }
 
@@ -162,20 +163,6 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 	return rows, maxExprLength
 }
 
-// func (r *Rule) describe(n int) string {
-// 	s := strings.Builder{}
-// 	s.WriteString(strings.Repeat("  ", n)) // indent
-// 	s.WriteString(r.ID)
-// 	s.WriteString("\n")
-// 	s.WriteString(" Schema: " + r.ID + "\n")
-// 	s.WriteString(" Expr:   " + r.Expr + "\n")
-
-// 	for _, c := range r.Rules {
-// 		s.WriteString(c.describe(n + 1))
-// 	}
-// 	return s.String()
-// }
-
 // sortChildKeys sorts the IDs of the child rules according to the
 // SortFunc set in evaluation options. If no SortFunc is set, the evaluation
 // order is not specified.
@@ -185,10 +172,21 @@ func (r *Rule) sortChildKeys(o EvalOptions) []*Rule {
 		keys = append(keys, r.Rules[k])
 	}
 
-	if o.SortFunc != nil {
+	if o.SortFunc != nil && sortOrderMatters(o) {
 		sort.Slice(keys, func(i, j int) bool {
 			return o.SortFunc(keys, i, j)
 		})
 	}
 	return keys
+}
+
+// Based on the evaluation options, determine if the order of evaluation matters
+func sortOrderMatters(o EvalOptions) bool {
+
+	if o.StopFirstNegativeChild || o.StopFirstPositiveChild {
+		return true
+	}
+
+	return false
+
 }

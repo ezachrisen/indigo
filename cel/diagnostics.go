@@ -1,6 +1,7 @@
+package cel
+
 // This file contains functions that collect and process diagnostic data from a CEL evaluation.
 // The diagnostic data is returned to the Indigo user if requested.
-package cel
 
 import (
 	"fmt"
@@ -13,25 +14,23 @@ import (
 
 // collectDiagnostics walks the CEL AST and annotates it with the result of the evaluation, returning
 // a Diagnositc node.
-func collectDiagnostics(ast *celgo.Ast, details *celgo.EvalDetails,
-	data map[string]interface{}) (*indigo.Diagnostics, error) {
+func collectDiagnostics(ast *celgo.Ast, d *celgo.EvalDetails, data map[string]interface{}) (*indigo.Diagnostics, error) {
 
 	if ast == nil {
 		return nil, fmt.Errorf("ast is nil")
 	}
 
-	d, err := printAST(ast.Expr(), 0, details, ast, data)
+	diag, err := printAST(ast.Expr(), 0, d, ast, data)
 	if err != nil {
 		return nil, err
 	}
 
-	return &d, nil
+	return &diag, nil
 }
 
 // printAST recursively walks the expression and its children, returning an indigo.Diagnostics
 // node.
-func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails,
-	ast *celgo.Ast, data map[string]interface{}) (indigo.Diagnostics, error) {
+func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails, ast *celgo.Ast, data map[string]interface{}) (indigo.Diagnostics, error) {
 
 	d := indigo.Diagnostics{}
 
