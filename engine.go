@@ -30,13 +30,14 @@ type Engine interface {
 // to evaluate rules locally.
 type DefaultEngine struct {
 	e ExpressionCompilerEvaluator
-	DefaultLocker
+	*DefaultLocker
 }
 
 // NewEngine initializes and returns a DefaultEngine.
 func NewEngine(e ExpressionCompilerEvaluator) *DefaultEngine {
 	return &DefaultEngine{
 		e: e,
+		DefaultLocker: NewLocker(),
 	}
 }
 

@@ -18,6 +18,9 @@ func TestDefaultEngine(t *testing.T) {
 
 	e := indigo.NewEngine(nil)
 	takesEngine(e)
+	takesLocker(e)
+	takesCompiler(e)
+	takesEvaluator(e)
 
 }
 
