@@ -106,6 +106,28 @@ func makeRule() *indigo.Rule {
 	}
 }
 
+func makeTinyRule(id string) *indigo.Rule {
+
+	return &indigo.Rule{
+		ID:   id,
+		Expr: `true`,
+	}
+}
+
+func makeParentChild(parent, child string) *indigo.Rule {
+
+	return &indigo.Rule{
+		ID:   parent,
+		Expr: `true`,
+		Rules: map[string]*indigo.Rule{
+			child: &indigo.Rule{
+				ID:   child,
+				Expr: "true",
+			},
+		},
+	}
+}
+
 // SortRulesAlpha will sort rules alphabetically by their rule ID
 func sortRulesAlpha(rules []*indigo.Rule, i, j int) bool {
 	return rules[i].ID < rules[j].ID

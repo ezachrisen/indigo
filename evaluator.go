@@ -1,8 +1,8 @@
 package indigo
 
-// Evaluator is the interface implemented by types that can evaluate expressions defined in
+// ExpressionEvaluator is the interface implemented by types that can evaluate expressions defined in
 // the rules.
-type Evaluator interface {
+type ExpressionEvaluator interface {
 	// Evaluate tests the rule expression against the data.
 	// Returns the result of the evaluation and a string containing diagnostic information.
 	// Diagnostic information is only returned if explicitly requested.
@@ -10,7 +10,9 @@ type Evaluator interface {
 	// result does not match.
 	Evaluate(data map[string]interface{}, expr string, s Schema,
 		self interface{}, evalData interface{}, resultType Type, returnDiagnostics bool) (interface{}, *Diagnostics, error)
+}
 
+type ExpressionCompiler interface {
 	// Compile pre-processes the expression, returning a compiled version.
 	// The Indigo engine will store the compiled version, later providing it back to the
 	// evaluator.
@@ -20,4 +22,9 @@ type Evaluator interface {
 	// dryRun performs the compilation, but doesn't store the results, mainly
 	// for the purpose of checking rule correctness.
 	Compile(expr string, s Schema, resultType Type, collectDiagnostics, dryRun bool) (interface{}, error)
+}
+
+type ExpressionCompilerEvaluator interface {
+	ExpressionCompiler
+	ExpressionEvaluator
 }

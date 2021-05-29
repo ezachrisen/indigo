@@ -14,6 +14,18 @@ import (
 	"github.com/matryer/is"
 )
 
+func TestDefaultEngine(t *testing.T) {
+
+	e := indigo.NewEngine(nil)
+	takesEngine(e)
+
+}
+
+func takesCompiler(c indigo.Compiler)   {}
+func takesEvaluator(e indigo.Evaluator) {}
+func takesLocker(l indigo.Locker)       {}
+func takesEngine(e indigo.Engine)       {}
+
 // Test that all rules are evaluated and yield the correct result in the default configuration
 func TestEvaluationTraversalDefault(t *testing.T) {
 	is := is.New(t)

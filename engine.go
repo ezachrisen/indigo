@@ -6,26 +6,35 @@ import (
 )
 
 // The Engine interface defines the behavior of the rules engine.
-type Engine interface {
+type Compiler interface {
 
 	// Compile pre-processes the rule, returning a compiled version of the rule.
 	// The rule will store the compiled version, later providing it back to the
 	// evaluator.
 	Compile(r *Rule, opts ...CompilationOption) error
+}
 
+type Evaluator interface {
 	// Eval tests the rule and its child rules against the data.
 	// Returns the result of the evaluation.
 	Eval(ctx context.Context, r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error)
 }
 
+type Engine interface {
+	Compiler
+	Evaluator
+	Locker
+}
+
 // DefaultEngine provides an implementation of the Indigo Engine interface
 // to evaluate rules locally.
 type DefaultEngine struct {
-	e Evaluator
+	e ExpressionCompilerEvaluator
+	DefaultLocker
 }
 
 // NewEngine initializes and returns a DefaultEngine.
-func NewEngine(e Evaluator) *DefaultEngine {
+func NewEngine(e ExpressionCompilerEvaluator) *DefaultEngine {
 	return &DefaultEngine{
 		e: e,
 	}
