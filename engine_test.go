@@ -168,6 +168,52 @@ func TestSelf(t *testing.T) {
 	is.Equal(result.Results["D"].Results["d1"].Pass, false) // d1 should not inherit D's self
 }
 
+func TestSelfList(t *testing.T) {
+	is := is.New(t)
+
+	e := indigo.NewEngine(newMockEvaluator())
+	r := makeRule()
+	err := e.Compile(r)
+	is.NoErr(err)
+
+	D := r.Rules["D"]
+	D.Expr = indigo.SelfKey
+
+	selfList := []interface{}{22, 1000}
+
+	result, err := e.Eval(context.Background(), r, map[string]interface{}{"anything": "anything"}, indigo.SelfList(selfList))
+	is.NoErr(err)
+	//	fmt.Println(result)
+
+	is.Equal(result.Results["D"].Results["D-0"].Value.(int), 22)   // D should return 'selfList[0]', which is 22
+	is.Equal(result.Results["D"].Results["D-1"].Value.(int), 1000) // D should return 'selfList[1]', which is 1000
+}
+
+func TestSelfMap(t *testing.T) {
+	is := is.New(t)
+
+	e := indigo.NewEngine(newMockEvaluator())
+	r := makeRule()
+	err := e.Compile(r)
+	is.NoErr(err)
+
+	D := r.Rules["D"]
+	D.Expr = indigo.SelfKey
+
+	selfMap := map[interface{}]interface{}{
+		"LONDON": 22,
+		"PARIS":  -1,
+	}
+
+	result, err := e.Eval(context.Background(), r, map[string]interface{}{"anything": "anything"}, indigo.SelfMap(selfMap))
+	is.NoErr(err)
+	fmt.Println(result)
+
+	is.Equal(result.Results["D"].Results["D-LONDON"].Value.(int), 22)
+	is.Equal(result.Results["D"].Results["D-PARIS"].Value.(int), -1)
+
+}
+
 // Test that the engine checks for nil data and rule
 func TestNilDataOrRule(t *testing.T) {
 	is := is.New(t)

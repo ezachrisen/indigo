@@ -39,7 +39,12 @@ func (m *mockEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.
 	return p, nil
 }
 
-// The mockEvaluator only knows how to evaluate 1 string: `true`. If the expression is this, the evaluation is true, otherwise false.
+// The mockEvaluator only knows how to evaluate 2 strings:
+//  `self`
+//    Return the self object
+//  `true`
+//    Return true
+// Otherwise return false
 func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s indigo.Schema, self interface{}, prog interface{}, resultType indigo.Type, returnDiagnostics bool) (interface{}, *indigo.Diagnostics, error) {
 	//	m.rulesTested = append(m.rulesTested, r.ID)
 	time.Sleep(m.evalDelay)
@@ -61,25 +66,13 @@ func (m *mockEvaluator) Evaluate(data map[string]interface{}, expr string, s ind
 	}
 
 	if expr == `true` {
-		// return indigo.Value{
-		// 	Val:  true,
-		// 	Type: indigo.Bool{},
-		// }, diagnostics, nil
 		return true, diagnostics, nil
 	}
 
-	if expr == `self` && self != nil {
+	if expr == indigo.SelfKey && self != nil {
 		return self, diagnostics, nil
-		// return indigo.Value{
-		// 	Val:  self,
-		// 	Type: indigo.Int{},
-		// }, diagnostics, nil
 	}
 
-	// return indigo.Value{
-	// 	Val:  false,
-	// 	Type: indigo.Bool{},
-	// }, diagnostics, nil
 	return false, diagnostics, nil
 }
 

@@ -81,7 +81,7 @@ type Rule struct {
 const (
 	// If the rule includes a Self object, it will be made available in the input
 	// data with this key name.
-	selfKey = "self"
+	SelfKey = "self"
 )
 
 // NewRule initializes a rule with the given ID
@@ -105,6 +105,10 @@ func ApplyToRule(r *Rule, f func(r *Rule) error) error {
 		}
 	}
 	return nil
+}
+
+func (r *Rule) ExpressionContainsSelf() bool {
+	return strings.Contains(r.Expr, SelfKey)
 }
 
 // String returns a list of all the rules in hierarchy, with

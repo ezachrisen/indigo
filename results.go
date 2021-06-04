@@ -46,9 +46,9 @@ func (u *Result) String() string {
 
 	tw := table.NewWriter()
 	tw.SetTitle("\nINDIGO RESULT SUMMARY\n")
-	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?",
+	tw.AppendHeader(table.Row{"\nRule", "Result\nKey", "Pass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?",
 		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail"})
-	rows := u.resultsToRows(0)
+	rows := u.resultsToRows("", 0)
 
 	for _, r := range rows {
 		tw.AppendRow(r)
@@ -61,7 +61,7 @@ func (u *Result) String() string {
 
 // resultsToRows transforms the Results data to a list of resultsToRows
 // for inclusion in a table.Writer table.
-func (u *Result) resultsToRows(n int) []table.Row {
+func (u *Result) resultsToRows(key string, n int) []table.Row {
 	rows := []table.Row{}
 	indent := strings.Repeat("  ", n)
 	boolString := "PASS"
@@ -76,6 +76,7 @@ func (u *Result) resultsToRows(n int) []table.Row {
 
 	row := table.Row{
 		fmt.Sprintf("%s%s", indent, u.Rule.ID),
+		key,
 		boolString,
 		fmt.Sprintf("%d", len(u.Results)),
 		fmt.Sprintf("%v", u.Value),
@@ -88,8 +89,14 @@ func (u *Result) resultsToRows(n int) []table.Row {
 	}
 
 	rows = append(rows, row)
-	for _, cd := range u.Results {
-		rows = append(rows, cd.resultsToRows(n+1)...)
+	for k, cd := range u.Results {
+		var childKey string
+		if key == "" {
+			childKey = k
+		} else {
+			childKey = key + "." + k
+		}
+		rows = append(rows, cd.resultsToRows(childKey, n+1)...)
 	}
 	return rows
 }

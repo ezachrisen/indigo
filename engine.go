@@ -36,7 +36,7 @@ type DefaultEngine struct {
 // NewEngine initializes and returns a DefaultEngine.
 func NewEngine(e ExpressionCompilerEvaluator) *DefaultEngine {
 	return &DefaultEngine{
-		e: e,
+		e:             e,
 		DefaultLocker: NewLocker(),
 	}
 }
@@ -45,8 +45,7 @@ func NewEngine(e ExpressionCompilerEvaluator) *DefaultEngine {
 // options of each rule to determine what to do with the results, and whether to proceed
 // evaluating. Options passed to this function will override the options set on the rules.
 // Eval uses the Evaluator provided to the engine to perform the expression evaluation.
-func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
-	d map[string]interface{}, opts ...EvalOption) (*Result, error) {
+func (e *DefaultEngine) Eval(ctx context.Context, r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error) {
 
 	if err := validateEvalArguments(r, e, d); err != nil {
 		return nil, err
@@ -54,59 +53,50 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
-	setSelfKey(r, d)
 
-	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, defaultResultType(r), o.ReturnDiagnostics)
-	if err != nil {
-		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
+	if o.SelfList != nil && r.ExpressionContainsSelf() {
+		return e.evalWithSelfListExpansion(ctx, r, d, o, opts...)
 	}
+
+	if o.SelfMap != nil && r.ExpressionContainsSelf() {
+		return e.evalWithSelfMapExpansion(ctx, r, d, o, opts...)
+	}
+
+	return e.evalOneRule(ctx, r, r.Self, d, opts...)
+}
+
+func (e *DefaultEngine) evalWithSelfListExpansion(ctx context.Context, r *Rule, d map[string]interface{}, o EvalOptions, opts ...EvalOption) (*Result, error) {
 
 	u := &Result{
 		Rule:        r,
-		Pass:        true,                                   // default boolean result
-		Results:     make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
-		Value:       val,
-		Diagnostics: diagnostics,
+		Pass:        true,                                      // default boolean result
+		Results:     make(map[string]*Result, len(o.SelfList)), // TODO: consider how large to make it
 		EvalOptions: o,
 	}
-
-	// If the evaluation returned a boolean, set the Result's value,
-	// otherwise keep the default, true
-	if pass, ok := val.(bool); ok {
-		u.Pass = pass
-	}
-
-	if o.StopIfParentNegative && !u.Pass {
-		return u, nil
-	}
-
-	for _, cr := range r.sortChildKeys(o) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			if o.ReturnDiagnostics {
-				u.RulesEvaluated = append(u.RulesEvaluated, cr)
-			}
-
-			result, err := e.Eval(ctx, cr, d, opts...)
-			if err != nil {
-				return nil, err
-			}
-
-			if (!result.Pass && !o.DiscardFail) ||
-				(result.Pass && !o.DiscardPass) {
-				u.Results[cr.ID] = result
-			}
-
-			if o.StopFirstPositiveChild && result.Pass {
-				return u, nil
-			}
-
-			if o.StopFirstNegativeChild && !result.Pass {
-				return u, nil
-			}
+	for i := range o.SelfList {
+		uc, err := e.evalOneRule(ctx, r, o.SelfList[i], d, opts...)
+		if err != nil {
+			return nil, err
 		}
+		u.Results[fmt.Sprintf("%s-%d", r.ID, i)] = uc
+	}
+	return u, nil
+}
+
+func (e *DefaultEngine) evalWithSelfMapExpansion(ctx context.Context, r *Rule, d map[string]interface{}, o EvalOptions, opts ...EvalOption) (*Result, error) {
+
+	u := &Result{
+		Rule:        r,
+		Pass:        true,                                      // default boolean result
+		Results:     make(map[string]*Result, len(o.SelfList)), // TODO: consider how large to make it
+		EvalOptions: o,
+	}
+	for k, v := range o.SelfMap {
+		uc, err := e.evalOneRule(ctx, r, v, d, opts...)
+		if err != nil {
+			return nil, err
+		}
+		u.Results[fmt.Sprintf("%s-%v", r.ID, k)] = uc
 	}
 	return u, nil
 }
@@ -211,6 +201,21 @@ type EvalOptions struct {
 	// collection at the engine level with the CollectDiagnostics EngineOption.
 	ReturnDiagnostics bool `json:"return_diagnostics"`
 
+	// List of items to set as "self" when evaluating rules.
+	// Every rule that references "self" will be evaluated once per entry in the self list.
+	// Normally, results are keyed by their rule IDs.
+	// With a self-list, results are keyed by "ruleID-<number>", where
+	// number is the position in the list, starting with 0.
+	// If both SelfList and SelfMap are set, only SelfList will be applied.
+	SelfList []interface{}
+
+	// Map of items to set as self when evaluating rules.
+	// Every rule that references "self" will be evaluated once per entry in the self list.
+	// Normally, results are keyed by their rule IDs.
+	// With a self map, results are keyed by "ruleID-<map key>".
+	// If both SelfList and SelfMap are set, only SelfList will be applied.
+	SelfMap map[interface{}]interface{}
+
 	// Specify the function used to sort the child rules before evaluation.
 	// Useful in scenarios where you are asking the engine to stop evaluating
 	// after either the first negative or first positive child.
@@ -237,6 +242,24 @@ func ReturnDiagnostics(b bool) EvalOption {
 func SortFunc(x func(rules []*Rule, i, j int) bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.SortFunc = x
+	}
+}
+
+// SortFunc specifies the function used to sort child rules before evaluation.
+// Sorting is only performed if the evaluation order of the child rules is important (i.e.,
+// if an option such as StopFirstNegativeChild is set).
+func SelfList(x []interface{}) EvalOption {
+	return func(f *EvalOptions) {
+		f.SelfList = x
+	}
+}
+
+// SortFunc specifies the function used to sort child rules before evaluation.
+// Sorting is only performed if the evaluation order of the child rules is important (i.e.,
+// if an option such as StopFirstNegativeChild is set).
+func SelfMap(x map[interface{}]interface{}) EvalOption {
+	return func(f *EvalOptions) {
+		f.SelfMap = x
 	}
 }
 
@@ -302,17 +325,17 @@ func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]interface{}) 
 	}
 }
 
-func setSelfKey(r *Rule, d map[string]interface{}) {
+func setSelfKey(self interface{}, d map[string]interface{}) {
 	if d == nil {
 		return
 	}
 	// If this rule has a reference to a 'self' object, insert it into the d.
 	// If it doesn't, we must remove any existing reference to self, so that
 	// child rules do not accidentally "inherit" the self object.
-	if r.Self != nil {
-		d[selfKey] = r.Self
+	if self != nil {
+		d[SelfKey] = self
 	} else {
-		delete(d, selfKey)
+		delete(d, SelfKey)
 	}
 }
 
@@ -343,4 +366,64 @@ func validateCompileArguments(r *Rule, e *DefaultEngine) error {
 	default:
 		return nil
 	}
+}
+
+func (e *DefaultEngine) evalOneRule(ctx context.Context, r *Rule, self interface{}, d map[string]interface{}, opts ...EvalOption) (*Result, error) {
+
+	o := r.EvalOptions
+	applyEvaluatorOptions(&o, opts...)
+	setSelfKey(self, d)
+	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, self, r.Program, defaultResultType(r), o.ReturnDiagnostics)
+	if err != nil {
+		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
+	}
+
+	u := &Result{
+		Rule:        r,
+		Pass:        true,                                   // default boolean result
+		Results:     make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
+		Value:       val,
+		Diagnostics: diagnostics,
+		EvalOptions: o,
+	}
+
+	// If the evaluation returned a boolean, set the Result's value,
+	// otherwise keep the default, true
+	if pass, ok := val.(bool); ok {
+		u.Pass = pass
+	}
+
+	if o.StopIfParentNegative && !u.Pass {
+		return u, nil
+	}
+
+	for _, cr := range r.sortChildKeys(o) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			if o.ReturnDiagnostics {
+				u.RulesEvaluated = append(u.RulesEvaluated, cr)
+			}
+
+			result, err := e.Eval(ctx, cr, d, opts...)
+			if err != nil {
+				return nil, err
+			}
+
+			if (!result.Pass && !o.DiscardFail) ||
+				(result.Pass && !o.DiscardPass) {
+				u.Results[cr.ID] = result
+			}
+
+			if o.StopFirstPositiveChild && result.Pass {
+				return u, nil
+			}
+
+			if o.StopFirstNegativeChild && !result.Pass {
+				return u, nil
+			}
+		}
+	}
+	return u, nil
 }
