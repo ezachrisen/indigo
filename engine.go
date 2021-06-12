@@ -5,27 +5,35 @@ import (
 	"fmt"
 )
 
-// The Engine interface defines the behavior of the rules engine.
-type Engine interface {
-
-	// Compile pre-processes the rule, returning a compiled version of the rule.
-	// The rule will store the compiled version, later providing it back to the
-	// evaluator.
+// Compiler is the interface that wraps the Compile method.
+// Compile pre-processes the rule recursively using an ExpressionCompiler, which
+// is applied to each rule.
+type Compiler interface {
 	Compile(r *Rule, opts ...CompilationOption) error
+}
 
-	// Eval tests the rule and its child rules against the data.
-	// Returns the result of the evaluation.
+// Evaluator is the interface that wraps the Evaluate method.
+// Evaluate tests the rule recursively against the input data using an ExpressionEvaluator,
+// which is applied to each rule.
+type Evaluator interface {
 	Eval(ctx context.Context, r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error)
+}
+
+// Engine is the interface that groups the Compiler and Evaluator interfaces.
+// An Engine is used to compile and evaluate rules.
+type Engine interface {
+	Compiler
+	Evaluator
 }
 
 // DefaultEngine provides an implementation of the Indigo Engine interface
 // to evaluate rules locally.
 type DefaultEngine struct {
-	e Evaluator
+	e ExpressionCompilerEvaluator
 }
 
 // NewEngine initializes and returns a DefaultEngine.
-func NewEngine(e Evaluator) *DefaultEngine {
+func NewEngine(e ExpressionCompilerEvaluator) *DefaultEngine {
 	return &DefaultEngine{
 		e: e,
 	}
