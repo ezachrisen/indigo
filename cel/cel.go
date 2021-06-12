@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/dynamicpb"
 )
 
-// Evaluator implements the indigo.Evaluator interface.
+// Evaluator implements the indigo.ExpressionEvaluator and indigo.ExpressionCompiler interfaces.
 // It uses the CEL-Go package to compile and evaluate rules.
 type Evaluator struct{}
 

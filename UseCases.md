@@ -171,7 +171,7 @@ Note that we will evaluate the child rules if the parent is negative, so that we
         [*] Rule "bursar"
             - Expression: "student.bursar_status != 'Hold'"
             - Meta: string:"Student cannot have a financial hold from the Bursar's office"
-        [*] Rule "bursar"
+        [*] Rule "enrollment"
             - Expression: "class.current_enrollment < 30"
             - Meta: string:"Max class enrollment met"
 ```
