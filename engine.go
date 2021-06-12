@@ -225,10 +225,11 @@ type EvalOptions struct {
 	// collection at the engine level with the CollectDiagnostics EngineOption.
 	ReturnDiagnostics bool `json:"return_diagnostics"`
 
-	// RollupChildResults indicates that the rule's pass/fail will
+	// RollupChildResults indicates that the rule's Pass will
 	// be the result of this rule AND the child rules.
 	// In order for this rule to return Pass, the rule itself must be
 	// true, and its child rules must all be true.
+	// This only affects the value of result.Pass; it does not affect the result.Value.
 	RollupChildResults bool `json:"rollup_child_results"`
 
 	// Specify the function used to sort the child rules before evaluation.

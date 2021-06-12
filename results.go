@@ -15,13 +15,15 @@ type Result struct {
 
 	// Whether the rule yielded a TRUE logical value.
 	// The default is TRUE
-	// This is the result of evaluating THIS rule only.
-	// The result will not be affected by the results of the child rules.
+	// By default, this is the result of evaluating THIS rule only.
+	// The result will not be affected by the results of the child rules, UNLESS
+	// specify the RollupChildResults option.
 	// If no rule expression is supplied for a rule, the result will be TRUE.
 	Pass bool
 
 	// The result of the evaluation. Boolean for logical expressions.
 	// Calculations, object constructions or string manipulations will return the appropriate Go type.
+	// This value is never affected by child rules, even if the RollupChildResults option is set.
 	Value interface{}
 
 	// Results of evaluating the child rules.
