@@ -70,6 +70,9 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 		return u, nil
 	}
 
+	// count the number of failed children
+	var failCount int
+
 	for _, cr := range r.sortChildKeys(o) {
 		select {
 		case <-ctx.Done():
@@ -82,6 +85,10 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 			result, err := e.Eval(ctx, cr, d, opts...)
 			if err != nil {
 				return nil, err
+			}
+
+			if !result.Pass {
+				failCount++
 			}
 
 			if (!result.Pass && !o.DiscardFail) ||
@@ -98,6 +105,15 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 			}
 		}
 	}
+
+	// if we're rolling up the child results, and any of them failed,
+	// we fail the parent rule as well
+	if o.RollupChildResults {
+		if failCount > 0 {
+			u.Pass = false
+		}
+	}
+
 	return u, nil
 }
 
@@ -201,6 +217,12 @@ type EvalOptions struct {
 	// collection at the engine level with the CollectDiagnostics EngineOption.
 	ReturnDiagnostics bool `json:"return_diagnostics"`
 
+	// RollupChildResults indicates that the rule's pass/fail will
+	// be the result of this rule AND the child rules.
+	// In order for this rule to return Pass, the rule itself must be
+	// true, and its child rules must all be true.
+	RollupChildResults bool `json:"rollup_child_results"`
+
 	// Specify the function used to sort the child rules before evaluation.
 	// Useful in scenarios where you are asking the engine to stop evaluating
 	// after either the first negative or first positive child.
@@ -265,6 +287,16 @@ func StopFirstNegativeChild(b bool) EvalOption {
 func StopFirstPositiveChild(b bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.StopFirstPositiveChild = b
+	}
+}
+
+// RollupChildResults indicates that the rule's pass/fail will
+// be the result of this rule AND the child rules.
+// In order for this rule to return Pass, the rule itself must be
+// true, and its child rules must all be true.
+func RollupChildResults(b bool) EvalOption {
+	return func(f *EvalOptions) {
+		f.RollupChildResults = b
 	}
 }
 

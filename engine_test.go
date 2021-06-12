@@ -253,6 +253,29 @@ func TestEvalOptions(t *testing.T) {
 				return map[string]bool{"rule1": true}
 			},
 		},
+
+		"RollupChildResults": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["D"].EvalOptions.RollupChildResults = true
+			},
+			want: func() map[string]bool {
+				result := copyMap(w)
+				result["D"] = false // since d2 is false
+				return result
+			},
+		},
+		"RollupChildResults and Discard Failures": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["D"].EvalOptions.RollupChildResults = true
+				r.Rules["D"].EvalOptions.DiscardFail = true
+			},
+			want: func() map[string]bool {
+				result := deleteKeys(copyMap(w), "d2")
+				result["D"] = false // since d2 is false
+				return result
+			},
+		},
+
 		"StopFirstPositiveChild": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
@@ -466,88 +489,6 @@ func TestJSON(t *testing.T) {
 
 }
 
-// // Test options set at the time eval is called
-// // (options apply to the entire tree)
-// func TestGlobalEvalOptions(t *testing.T) {
-// 	is := is.New(t)
-
-// 	cases := []struct {
-// 		opts []indigo.EvalOption  // Options to pass to evaluate
-// 		chk  func(*indigo.Result) // Function to check the results
-// 	}{
-// 		{
-// 			opts: []indigo.EvalOption{indigo.StopIfParentNegative(true)},
-// 			chk: func(r *indigo.Result) {
-// 				is.Equal(len(r.Results), 3)
-// 				is.Equal(len(r.Results["D"].Results), 3)
-// 				is.Equal(len(r.Results["E"].Results), 0)
-// 				is.Equal(len(r.Results["B"].Results), 0)
-// 			},
-// 		},
-// 		{
-// 			opts: []indigo.EvalOption{indigo.StopIfParentNegative(false)},
-// 			chk: func(r *indigo.Result) {
-// 				is.Equal(len(r.Results), 3)
-// 				is.Equal(len(r.Results["D"].Results), 3)
-// 				is.Equal(len(r.Results["E"].Results), 3)
-// 				is.Equal(len(r.Results["B"].Results), 4)
-// 			},
-// 		},
-// 		{
-// 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
-// 			chk: func(r *indigo.Result) {
-// 				is.Equal(len(r.Results), 2) // B is false, D is first positive child
-// 				is.True(r.Results["D"].Pass)
-// 				is.True(!r.Results["B"].Pass)
-// 			},
-// 		},
-// 		{
-// 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.SortFunc(sortRulesAlpha)},
-// 			chk: func(r *indigo.Result) {
-// 				is.Equal(len(r.Results), 1) // B is first, should stop evaluation
-// 				is.True(!r.Results["B"].Pass)
-// 			},
-// 		},
-// 		{
-// 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
-// 			chk: func(r *indigo.Result) {
-// 				is.Equal(len(r.Results), 1) // B should stop it
-// 				is.True(!r.Results["B"].Pass)
-// 			},
-// 		},
-// 		{
-// 			opts: []indigo.EvalOption{indigo.DiscardFail(true), indigo.DiscardPass(true)},
-// 			chk: func(r *indigo.Result) {
-// 				is.Equal(len(r.Results), 0)
-// 			},
-// 		},
-// 		{
-// 			opts: []indigo.EvalOption{indigo.DiscardPass(true)},
-// 			chk: func(r *indigo.Result) {
-// 				is.Equal(len(r.Results), 2) // should get B and E
-// 				is.True(!r.Results["B"].Pass)
-// 				is.True(!r.Results["E"].Pass)
-// 			},
-// 		},
-// 		{
-// 			opts: []indigo.EvalOption{indigo.DiscardFail(true)},
-// 			chk: func(r *indigo.Result) {
-// 				is.Equal(len(r.Results), 1)
-// 				is.True(r.Results["D"].Pass)
-// 			},
-// 		},
-// 	}
-
-// 	e := indigo.NewEngine(newMockEvaluator())
-// 	r := makeRule()
-
-// 	for _, c := range cases {
-// 		result, err := e.Eval(context.Background(), r, map[string]interface{}{}, c.opts...)
-// 		is.NoErr(err)
-// 		c.chk(result)
-// 	}
-// }
-
 // Test options set at the time eval is called
 // (options apply to the entire tree)
 func TestGlobalEvalOptions(t *testing.T) {
@@ -568,6 +509,31 @@ func TestGlobalEvalOptions(t *testing.T) {
 				is.Equal(len(r.Results["B"].Results), 0)
 			},
 		},
+
+		{
+			// Check global rollupchildresults (false)
+			prep: func(r *indigo.Rule) {
+			},
+			opts: []indigo.EvalOption{indigo.RollupChildResults(true)},
+			chk: func(r *indigo.Result) {
+				is.Equal(r.Pass, false)
+			},
+		},
+
+		{
+			// Check global rollupchildresults, should be true
+			prep: func(r *indigo.Rule) {
+				// only leave true rules
+				delete(r.Rules, "B")
+				delete(r.Rules, "E")
+				r.Rules["D"].Rules["d2"].Expr = `true`
+			},
+			opts: []indigo.EvalOption{indigo.RollupChildResults(true)},
+			chk: func(r *indigo.Result) {
+				is.True(r.Pass)
+			},
+		},
+
 		{
 			// Check that global (false) overrides local option (true)
 			prep: func(r *indigo.Rule) {
