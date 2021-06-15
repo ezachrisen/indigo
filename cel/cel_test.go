@@ -48,25 +48,6 @@ func makeEducationSchema() indigo.Schema {
 			{Name: "isSummer", Type: indigo.Bool{}},
 		},
 	}
-
-	// return indigo.Schema{
-	// 	Elements: []indigo.DataElement{
-	// 		{Name: "student.ID", T: string("")},
-	// 		{Name: "student.Age", T: int(0)},
-	// 		{Name: "student.GPA", T: float64(0.0)},
-	// 		{Name: "student.Adjustment", T: float64(0.0)},
-	// 		{Name: "student.Status", T: string("")},
-	// 		{Name: "student.Grades", T: []string{}},
-	// 		{Name: "student.EnrollmentDate", T: string("")},
-	// 		{Name: "gradeNames", T: map[int]string{}},
-	// 		{Name: "nested", T: [][]string{}},
-	// 		{Name: "nested2", T: map[string][]string{}},
-	// 		{Name: "now", T: string("")},
-	// 		{Name: "alsoNow", T: time.Time{}},
-	// 		{Name: "isSummer", T: bool(false)},
-	// 	},
-	// }
-
 }
 
 func makeEducationRules1() *indigo.Rule {
@@ -224,21 +205,11 @@ func makeEducationProtoSchema() indigo.Schema {
 	return indigo.Schema{
 		ID: "educationProto",
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
-			{Name: "self", Type: indigo.Proto{Protoname: "testdata.school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+			{Name: "self", Type: indigo.Proto{Message: &school.HonorsConfiguration{}}},
 		},
 	}
-
-	// return indigo.Schema{
-	// 	ID: "educationProto",
-	// 	Elements: []indigo.DataElement{
-	// 		{Name: "student", T: &school.Student{}},
-	// 		{Name: "now", T: time.Time{}},
-	// 		{Name: "self", T: &school.HonorsConfiguration{}},
-	// 	},
-	// }
-
 }
 
 func makeEducationProtoRules(id string) *indigo.Rule {
@@ -439,7 +410,7 @@ func TestRuleResultTypes(t *testing.T) {
 			indigo.Rule{
 				ID:         "shouldBeStudent",
 				Schema:     makeEducationProtoSchema(),
-				ResultType: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}},
+				ResultType: indigo.Proto{Message: &school.Student{}},
 				Expr:       `testdata.school.Student { gpa: 1.2 }`,
 			},
 			nil,
@@ -476,7 +447,7 @@ func TestRuleResultTypes(t *testing.T) {
 			indigo.Rule{
 				ID:         "NEGATIVEshouldBeStudent",
 				Schema:     makeEducationProtoSchema(),
-				ResultType: indigo.Proto{Protoname: "school.HonorsConfiguration"},
+				ResultType: indigo.Proto{Message: &school.HonorsConfiguration{}},
 				Expr:       `testdata.school.Student { gpa: 1.2 }`,
 			},
 			fmt.Errorf("Should be an error"),
@@ -643,9 +614,9 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
-			{Name: "self", Type: indigo.Proto{Protoname: "testdata.school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+			{Name: "self", Type: indigo.Proto{Message: &school.HonorsConfiguration{}}},
 		},
 	}
 
@@ -704,7 +675,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
 		},
 	}
@@ -755,16 +726,16 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 func BenchmarkProtoCreation(b *testing.B) {
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
 	r := &indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Message: &school.StudentSummary{}},
 		Expr: `
 			testdata.school.StudentSummary {
 				gpa: student.gpa,
@@ -799,9 +770,9 @@ func BenchmarkEval2000Rules(b *testing.B) {
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
-			{Name: "self", Type: indigo.Proto{Protoname: "testdata.school.HonorsConfiguration", Message: &school.HonorsConfiguration{}}},
+			{Name: "self", Type: indigo.Proto{Message: &school.HonorsConfiguration{}}},
 		},
 	}
 

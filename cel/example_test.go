@@ -96,7 +96,7 @@ func Example_protoExistsOperator() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 		},
 	}
 	data := map[string]interface{}{
@@ -133,7 +133,7 @@ func Example_protoTimestampComparison() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
 		},
 	}
@@ -185,7 +185,7 @@ func Example_protoDurationComparison() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "smry", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "smry", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
@@ -225,8 +225,8 @@ func Example_protoNestedMessages() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
 		},
 	}
 
@@ -269,9 +269,9 @@ func Example_protoConstruction() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
@@ -288,7 +288,7 @@ func Example_protoConstruction() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Message: &school.StudentSummary{}},
 		Expr: `
 			testdata.school.StudentSummary {
 				gpa: student.gpa,
@@ -324,9 +324,9 @@ func Example_protoConstructionConditional() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
@@ -344,7 +344,7 @@ func Example_protoConstructionConditional() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Message: &school.StudentSummary{}},
 		Expr: `
 			student.gpa > 3.0 ?
 				testdata.school.StudentSummary {

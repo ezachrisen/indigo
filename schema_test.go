@@ -5,7 +5,26 @@ import (
 	"testing"
 
 	"github.com/ezachrisen/indigo"
+	"github.com/ezachrisen/indigo/testdata/school"
+	"github.com/matryer/is"
 )
+
+func TestProto(t *testing.T) {
+	is := is.New(t)
+
+	// Nil message
+	a := indigo.Proto{Message: nil}
+	_, e := a.ProtoFullName()
+	is.True(e != nil)
+	is.Equal(e.Error(), "indigo.Proto.Message is nil")
+
+	// Success
+	c := indigo.Proto{Message: &school.Student{}}
+	s, e := c.ProtoFullName()
+	is.NoErr(e)
+	is.Equal(s, "testdata.school.Student")
+
+}
 
 func TestString(t *testing.T) {
 
@@ -29,12 +48,6 @@ func TestString(t *testing.T) {
 				ValueType: indigo.Duration{},
 			},
 			wantStr: "[]duration",
-		},
-		"proto": {
-			typ: indigo.Proto{
-				Protoname: "dummy",
-			},
-			wantStr: "proto(dummy)",
 		},
 	}
 
@@ -79,22 +92,9 @@ func TestParser(t *testing.T) {
 			},
 		},
 		"proto": {
-			str:       "proto(student)",
+			str:       "proto(testdata.school.Student)",
 			wantError: false,
-			wantType: indigo.Proto{
-				Protoname: "student",
-			},
-		},
-		"proto2": {
-			str:       "proto(s)",
-			wantError: false,
-			wantType: indigo.Proto{
-				Protoname: "s",
-			},
-		},
-		"proto3": {
-			str:       "proto()",
-			wantError: true,
+			wantType:  indigo.Proto{&school.Student{}},
 		},
 		"list2": {
 			str:       "[]",
