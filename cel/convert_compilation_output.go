@@ -10,7 +10,6 @@ import (
 	"fmt" // required by CEL to construct a proto from an expression
 
 	"github.com/ezachrisen/indigo"
-
 	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
@@ -51,8 +50,7 @@ func indigoType(t *gexpr.Type) (indigo.Type, error) {
 
 	switch v := t.TypeKind.(type) {
 	case *gexpr.Type_MessageType:
-		return indigo.Proto{Protoname: t.GetMessageType()}, nil
-
+		return indigo.ParseType(fmt.Sprintf("proto(%s)", v.MessageType))
 	case *gexpr.Type_WellKnown:
 		switch v.WellKnown {
 		case gexpr.Type_DURATION:

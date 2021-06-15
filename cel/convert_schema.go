@@ -24,13 +24,14 @@ func convertIndigoSchemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, erro
 	declarations := []*gexpr.Decl{}
 
 	// for protocol buffer types we also have to register the type separately
+	// we'll collect them in types
 	types := []interface{}{}
 
 	for _, d := range s.Elements {
 		typ, err := convertIndigoToExprType(d.Type)
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("converting element %s in schema %s: %v", s.Name, d.Name, err)
 		}
 		declarations = append(declarations, decls.NewVar(d.Name, typ))
 
@@ -83,7 +84,11 @@ func convertIndigoToExprType(t indigo.Type) (*gexpr.Type, error) {
 		}
 		return decls.NewListType(val), nil
 	case indigo.Proto:
-		return decls.NewObjectType(v.Protoname), nil
+		n, err := v.ProtoFullName()
+		if err != nil {
+			return nil, err
+		}
+		return decls.NewObjectType(n), nil
 	default:
 		return nil, fmt.Errorf("unknown indigo type %s", t)
 	}

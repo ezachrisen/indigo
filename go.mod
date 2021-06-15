@@ -11,6 +11,7 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.2.2
 	github.com/matryer/is v1.4.0
 	github.com/mattn/go-runewidth v0.0.12 // indirect
+	github.com/mattn/go-sqlite3 v1.14.7
 	github.com/stretchr/testify v1.6.1 // indirect
 	golang.org/x/sys v0.0.0-20201223074533-0d417f636930 // indirect
 	golang.org/x/text v0.3.5 // indirect

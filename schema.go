@@ -3,6 +3,10 @@ package indigo
 import (
 	"fmt"
 	"strings"
+
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 // Schema defines the variable names and their data types used in a
@@ -92,8 +96,28 @@ type Timestamp struct{}
 
 // Proto defines an Indigo type for a protobuf type.
 type Proto struct {
-	Protoname string      // fully qualified name of the protobuf type
-	Message   interface{} // an empty protobuf instance of the type
+	Message proto.Message // an instance of the proto message
+}
+
+// ProtoFullName uses protocol buffer reflection to obtain the full name of the
+// proto type.
+func (p *Proto) ProtoFullName() (string, error) {
+	if p == nil || p.Message == nil {
+		return "", fmt.Errorf("indigo.Proto.Message is nil")
+	}
+
+	pr := p.Message.ProtoReflect()
+	if pr == nil {
+		return "", fmt.Errorf("indigo.Proto.Message has nil proto reflect")
+	}
+
+	desc := pr.Descriptor()
+	if desc == nil {
+		return "", fmt.Errorf("indigo.Proto.Message is missing Descriptor")
+	}
+
+	return string(desc.FullName()), nil
+
 }
 
 // List defines an Indigo type representing a slice of values
@@ -115,14 +139,25 @@ func (Any) String() string       { return "any" }
 func (Duration) String() string  { return "duration" }
 func (Timestamp) String() string { return "timestamp" }
 func (Float) String() string     { return "float" }
-func (t Proto) String() string   { return "proto(" + t.Protoname + ")" }
-func (t List) String() string    { return fmt.Sprintf("[]%v", t.ValueType) }
-func (t Map) String() string     { return fmt.Sprintf("map[%s]%s", t.KeyType, t.ValueType) }
+func (p Proto) String() string {
+	s, err := p.ProtoFullName()
+	if err != nil {
+		return fmt.Sprintf("proto(missing name: %v)", err)
+	}
+	return "proto(" + s + ")"
+
+}
+func (t List) String() string { return fmt.Sprintf("[]%v", t.ValueType) }
+func (t Map) String() string  { return fmt.Sprintf("map[%s]%s", t.KeyType, t.ValueType) }
 
 // ParseType parses a string that represents an Indigo type and returns the type.
 // The primitive types are their lower-case names (string, int, duration, etc.)
 // Maps and lists look like Go maps and slices: map[string]float and []string.
 // Proto types look like this: proto(protoname)
+// Before parsing types, protocol buffer types must be available in the global
+// protocol buffer registry, either by importing at compile time or registering them
+// separately from a descriptor file at run time. ParseType returns an error if a
+// protocol buffer type is missing.
 func ParseType(t string) (Type, error) {
 
 	if strings.Contains(t, "map") {
@@ -212,18 +247,21 @@ func parseList(t string) (Type, error) {
 	}, nil
 }
 
-// parseProto parses a string and returns a partial Indigo proto type.
-// The "Message" field of the proto struct must be suppplied later.
-// The string must be in the form proto(<protoname>).
-// Example: proto("school.Student")
+// parseProto parses a string and returns an Indigo proto type.
+// The message type must be registered in the global protocol buffer registry.
+// Example: proto(school.Student)
 func parseProto(t string) (Type, error) {
 	startParen := strings.Index(t, "(")
 	endParen := strings.Index(t, ")")
 
 	if startParen == -1 || endParen == -1 || startParen > endParen || endParen > len(t) || endParen-startParen == 1 {
-		return nil, fmt.Errorf("bad proto specification")
+		return Any{}, fmt.Errorf("bad proto specification")
 	}
 
 	name := t[startParen+1 : endParen]
-	return Proto{Protoname: name}, nil
+	p, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(name))
+	if err != nil {
+		return Any{}, err
+	}
+	return Proto{p.New().Interface()}, nil
 }

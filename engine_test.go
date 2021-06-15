@@ -21,7 +21,6 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 
-	//fmt.Println(r)
 	expectedResults := map[string]bool{
 		"rule1": true,
 		"D":     true,
