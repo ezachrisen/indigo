@@ -5,6 +5,7 @@ pbfiles =  ./school/*.pb.go
 descriptor = ../examples/dynamic_schema/school.descriptor
 
 
+
 all: $(pbfiles) $(descriptor) test
 	go test -v ./...
 
@@ -20,8 +21,12 @@ $(pbfiles) $(descriptor): $(protofiles)
 clean:
 	rm -f $(pbfiles)
 
-.PHONY:	test
+.PHONY:	test docs
 
 test: $(pbfiles)
 	cd .. && go test -v ./... 
 
+
+docs:
+	cd .. && goreadme > Usage.md
+	cd ../cel && goreadme > README.md

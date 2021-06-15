@@ -1,11 +1,14 @@
 # cel
 
-Package cel provides an implementation of the Indigo evaluator and compiler interfaces backed by Google's cel-go rules engine.
+Package cel provides an implementation of the Indigo evaluator and compiler interfaces
+backed by Google's cel-go rules engine.
 
 See [https://github.com/google/cel-go](https://github.com/google/cel-go) and [https://opensource.google/projects/cel](https://opensource.google/projects/cel) for more information
 about CEL.
 
 The rule expressions you write must conform to the CEL spec: [https://github.com/google/cel-spec](https://github.com/google/cel-spec).
+
+Google has a nice tutorial here: [https://codelabs.developers.google.com/codelabs/cel-go/index.html#0](https://codelabs.developers.google.com/codelabs/cel-go/index.html#0)
 
 ## Working with Protocol Buffers
 
@@ -20,33 +23,13 @@ There a number of examples (they start with proto) that show how to use protocol
 They use the protocol buffer definitions in indigo/testdata/proto, and there's a Makefile in that directory
 that shows how to generate the Go types.
 
-## Protocol Buffer Names
-
-When declaring the protocol buffer type in the schema, the Protoname is the proto package name followed by the type.
-For example, in the indigo/testdata/proto/student.proto file, the package name is "testdata.school" and the type defined is Student.
-When using this type in the schema, the declaration looks like this:
-
-In student.proto:
-
-```go
-package testdata.school;
-option go_package = "github.com/ezachrisen/indigo/testdata/school;school";
-...
-message Student { ... }
-```
-
-In Go code when declaring an Indigo schema:
-
-```go
-{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-```
-
 ## Protocol Buffer Fields in Expressions
 
-When refererring to fields of a protocol buffer in an expression, the field names are the proto names, NOT the generated Go names.
+When refererring to fields of a protocol buffer in an expression, the field names are the proto names, NOT the
+generated Go names.
 For example, in the student.proto file, a field called "enrollment_date" is defined.
 When the Go struct is generated, this field name is now called "EnrollmentDate".
-In the CEL expression, you must use the "enrollment_date" name, as in
+In the CEL expression, you must use the "enrollment_date" name, as in the protocol buffer message definition.
 
 In student.proto:
 
@@ -60,7 +43,9 @@ In Go code:
 
 ```go
 s := school.Student{}
-s.EnrollmentDate = &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()}
+s.EnrollmentDate = &timestamp.Timestamp{
+    Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()
+}
 ```
 
 In the CEL expression:
@@ -164,7 +149,7 @@ import (
 
 func main() {
 
-	// Step 1: Create a schema
+	//Step 1: Create a schema
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
 			{Name: "message", Type: indigo.String{}},
@@ -173,9 +158,10 @@ func main() {
 
 	// Step 2: Create rules
 	rule := indigo.Rule{
-		ID:     "hello_check",
-		Schema: schema,
-		Expr:   `message == "hello world"`,
+		ID:         "hello_check",
+		Schema:     schema,
+		ResultType: indigo.Bool{},
+		Expr:       `message == "hello world"`,
 	}
 
 	// Step 3: Create an Indigo engine and give it an evaluator
@@ -195,7 +181,11 @@ func main() {
 
 	// Step 5: Evaluate and check the results
 	results, err := engine.Eval(context.Background(), &rule, data)
-	fmt.Println(results.Pass)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(results.Pass)
+	}
 }
 
 ```
@@ -281,14 +271,14 @@ func main() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
 	data := map[string]interface{}{
-		"student": school.Student{
+		"student": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
 				&school.Student_Suspension{Cause: "Cheating"},
@@ -300,7 +290,7 @@ func main() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Message: &school.StudentSummary{}},
 		Expr: `
 			testdata.school.StudentSummary {
 				gpa: student.gpa,
@@ -317,17 +307,16 @@ func main() {
 		return
 	}
 
-	results, err := engine.Eval(context.Background(), &rule, data)
+	result, err := engine.Eval(context.Background(), &rule, data)
 	if err != nil {
-		fmt.Printf("Error evaluating: %v", err)
+		//		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
 
-	// The result is a fully-formed school.StudentSummary message.
-	// There is no need to convert it.
-	fmt.Printf("%T\n", results.Value)
-	summ := results.Value.(*school.StudentSummary)
-	fmt.Println(summ.RiskFactor)
+	summary := result.Value.(*school.StudentSummary)
+
+	fmt.Printf("%T\n", summary)
+	fmt.Printf("%0.0f\n", summary.RiskFactor)
 }
 
 ```
@@ -358,15 +347,15 @@ func main() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
-			{Name: "studentSummary", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
+			{Name: "studentSummary", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
 	data := map[string]interface{}{
-		"student": school.Student{
-			Gpa:    3.6,
+		"student": &school.Student{
+			Gpa:    4.0,
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
 				&school.Student_Suspension{Cause: "Cheating"},
@@ -378,9 +367,9 @@ func main() {
 	rule := indigo.Rule{
 		ID:         "create_summary",
 		Schema:     education,
-		ResultType: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}},
+		ResultType: indigo.Proto{Message: &school.StudentSummary{}},
 		Expr: `
-			student.gpa > 3.0 ? 
+			student.gpa > 3.0 ?
 				testdata.school.StudentSummary {
 					gpa: student.gpa,
 					risk_factor: 0.0
@@ -445,14 +434,14 @@ func main() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "smry", Type: indigo.Proto{Protoname: "testdata.school.StudentSummary", Message: &school.StudentSummary{}}},
+			{Name: "smry", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
 	godur, _ := time.ParseDuration("10h")
 
 	data := map[string]interface{}{
-		"smry": school.StudentSummary{
+		"smry": &school.StudentSummary{
 			Tenure: durationpb.New(godur),
 		},
 	}
@@ -506,12 +495,11 @@ func main() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 		},
 	}
-
 	data := map[string]interface{}{
-		"student": school.Student{
+		"student": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 		},
 	}
@@ -565,13 +553,13 @@ func main() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Protoname: "testdata.school.Student.Suspension", Message: &school.Student_Suspension{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
 		},
 	}
 
 	data := map[string]interface{}{
-		"student": school.Student{
+		"student": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
 				&school.Student_Suspension{Cause: "Cheating"},
@@ -632,13 +620,13 @@ func main() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
 		},
 	}
 
 	data := map[string]interface{}{
-		"student": school.Student{
+		"student": &school.Student{
 			// Make a protobuf timestamp from a time.Time
 			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
 			Grades:         []float64{3.0, 2.9, 4.0, 2.1},
@@ -648,14 +636,15 @@ func main() {
 
 	// The rule will return the earlier of the two dates (enrollment date or now)
 	rule := indigo.Rule{
-		ID:     "grade_check",
-		Schema: education,
+		ID:         "grade_check",
+		Schema:     education,
+		ResultType: indigo.Timestamp{},
 		Expr: `student.enrollment_date < now
-?
-student.enrollment_date
-:
-now
-`,
+			  ?
+			  student.enrollment_date
+			  :
+			  now
+			  `,
 	}
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
@@ -671,10 +660,9 @@ now
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
-	if pbtime, ok := results.Value.(*timestamppb.Timestamp); ok {
-		// Convert from a protobuf timestamp to a go time.Time
-		goTime := pbtime.AsTime()
-		fmt.Printf("Gotime is %v\n", goTime)
+
+	if ts, ok := results.Value.(time.Time); ok {
+		fmt.Printf("Gotime is %v\n", ts)
 	}
 }
 

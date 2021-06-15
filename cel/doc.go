@@ -21,32 +21,13 @@
 // They use the protocol buffer definitions in indigo/testdata/proto, and there's a Makefile in that directory
 // that shows how to generate the Go types.
 //
-// Protocol Buffer Names
-//
-// When declaring the protocol buffer type in the schema, the Protoname is the proto package name
-// followed by the type.
-// For example, in the indigo/testdata/proto/student.proto file, the package name is "testdata.school"
-// and the type defined is Student.
-// When using this type in the schema, the declaration looks like this:
-//
-// In student.proto:
-//
-//     package testdata.school;
-//     option go_package = "github.com/ezachrisen/indigo/testdata/school;school";
-//     ...
-//     message Student { ... }
-//
-// In Go code when declaring an Indigo schema:
-//
-//     {Name: "student", Type: indigo.Proto{Protoname: "testdata.school.Student", Message: &school.Student{}}},
-//
 // Protocol Buffer Fields in Expressions
 //
 // When refererring to fields of a protocol buffer in an expression, the field names are the proto names, NOT the
 // generated Go names.
 // For example, in the student.proto file, a field called "enrollment_date" is defined.
 // When the Go struct is generated, this field name is now called "EnrollmentDate".
-// In the CEL expression, you must use the "enrollment_date" name, as in
+// In the CEL expression, you must use the "enrollment_date" name, as in the protocol buffer message definition.
 //
 // In student.proto:
 //
