@@ -81,6 +81,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	// count the number of failed children
 	var failCount int
 
+done: // break out of inner switch
 	for _, cr := range r.sortChildKeys(o) {
 		select {
 		case <-ctx.Done():
@@ -105,11 +106,13 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 			}
 
 			if o.StopFirstPositiveChild && result.Pass {
-				return u, nil
+				//return u, nil
+				break done
 			}
 
 			if o.StopFirstNegativeChild && !result.Pass {
-				return u, nil
+				break done
+				//	return u, nil
 			}
 		}
 	}

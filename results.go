@@ -49,7 +49,7 @@ func (u *Result) String() string {
 	tw := table.NewWriter()
 	tw.SetTitle("\nINDIGO RESULT SUMMARY\n")
 	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?",
-		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail"})
+		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail", "Roll Up\nResults"})
 	rows := u.resultsToRows(0)
 
 	for _, r := range rows {
@@ -87,6 +87,7 @@ func (u *Result) resultsToRows(n int) []table.Row {
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopFirstNegativeChild)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.DiscardPass)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.DiscardFail)),
+		trueFalse(fmt.Sprintf("%t", u.EvalOptions.RollupChildResults)),
 	}
 
 	rows = append(rows, row)
