@@ -255,14 +255,30 @@ func TestEvalOptions(t *testing.T) {
 
 		"RollupChildResults": {
 			prep: func(r *indigo.Rule) {
+				// D itself is true, but its child, d2, is false.
+				// By rolling up the child results from D's children, D will become false as well
 				r.Rules["D"].EvalOptions.RollupChildResults = true
 			},
 			want: func() map[string]bool {
 				result := copyMap(w)
-				result["D"] = false // since d2 is false
+				result["D"] = false // since d2, its child, is false
 				return result
 			},
 		},
+		"RollupChildResults and Stop at First Negative": {
+			prep: func(r *indigo.Rule) {
+				// D itself is true, but its child, d2, is false.
+				// By rolling up the child results from D's children, D will become false as well
+				r.Rules["D"].EvalOptions.RollupChildResults = true
+				r.Rules["D"].EvalOptions.StopFirstNegativeChild = true
+			},
+			want: func() map[string]bool {
+				result := deleteKeys(copyMap(w), "d3")
+				result["D"] = false // since d2, its child, is false
+				return result
+			},
+		},
+
 		"RollupChildResults and Discard Failures": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["D"].EvalOptions.RollupChildResults = true
@@ -353,8 +369,11 @@ func TestEvalOptions(t *testing.T) {
 
 		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
 		is.NoErr(err)
-		// fmt.Println(k)
-		// fmt.Println(indigo.DiagnosticsReport(u, nil))
+		// if strings.Contains(k, "Rollup") {
+		// 	fmt.Println(k)
+		// 	fmt.Println(u)
+		// }
+		//		fmt.Println(indigo.DiagnosticsReport(u, nil))
 		err = match(flattenResults(u), c.want())
 		if err != nil {
 			t.Errorf("Error in case %s: %v", k, err)
