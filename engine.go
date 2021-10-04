@@ -60,26 +60,34 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	}
 
 	u := &Result{
-		Rule:        r,
-		Pass:        true,                                   // default boolean result
-		Results:     make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
-		Value:       val,
-		Diagnostics: diagnostics,
-		EvalOptions: o,
+		Rule:           r,
+		ExpressionPass: true,                                   // default boolean result
+		Results:        make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
+		Value:          val,
+		Diagnostics:    diagnostics,
+		EvalOptions:    o,
 	}
 
 	// If the evaluation returned a boolean, set the Result's value,
 	// otherwise keep the default, true
 	if pass, ok := val.(bool); ok {
-		u.Pass = pass
+		u.ExpressionPass = pass
 	}
 
-	if o.StopIfParentNegative && !u.Pass {
+	// By default, the rule's pass/fail is determined by the pass/fail of the
+	// expression. If the rule has child rules, we'll iterate through them next
+	// and change the rule's pass/fail (but not expresion pass/fail) if any child
+	// rules are negative.
+	u.Pass = u.ExpressionPass
+
+	// We've been asked not to evaluate child rules if this rule failed.
+	if o.StopIfParentNegative && !u.ExpressionPass {
 		return u, nil
 	}
 
-	// count the number of failed children
+	// count the number of failed and passed children
 	var failCount int
+	var passCount int
 
 done: // break out of inner switch
 	for _, cr := range r.sortChildKeys(o) {
@@ -96,30 +104,40 @@ done: // break out of inner switch
 				return nil, err
 			}
 
-			if !result.Pass {
+			// If the child rule failed, either due to its own expression evaluation
+			// or its children, we have encountered a failure, and we'll count it
+			switch result.Pass {
+			case true:
+				passCount++
+			case false:
 				failCount++
 			}
 
+			// Decide if we should return the result or not.
 			if (!result.Pass && !o.DiscardFail) ||
 				(result.Pass && !o.DiscardPass) {
 				u.Results[cr.ID] = result
 			}
 
 			if o.StopFirstPositiveChild && result.Pass {
-				//return u, nil
 				break done
 			}
 
 			if o.StopFirstNegativeChild && !result.Pass {
 				break done
-				//	return u, nil
 			}
 		}
 	}
 
-	// if we're rolling up the child results, and any of them failed,
-	// we fail the parent rule as well
-	if o.RollupChildResults {
+	// Based on the results of the child rules, determine the result of the parent rule
+	switch r.EvalOptions.TrueIfAny {
+	case true:
+		// If any of the child rules passed AND the parent's expression passed, the rule passes
+		if u.ExpressionPass && passCount > 0 {
+			u.Pass = true
+		}
+	case false:
+		// If one or more of child rules failed, we will fail also, regardless of the parent rule's result
 		if failCount > 0 {
 			u.Pass = false
 		}
@@ -199,7 +217,14 @@ func applyCompilerOptions(o *compileOptions, opts ...CompilationOption) {
 // EvalOptions determines how the engine should treat the results of evaluating a rule.
 type EvalOptions struct {
 
-	// StopIfParentNegative  not evaluate child rules if the parent's expression is false.
+	// TrueIfAny makes a parent rule Pass = true if any of its child rules are true.
+	// The default behavior is that a rule is only true if all of its child rules are true, and
+	// the parent rule itself is true.
+	// Setting TrueIfAny changes this behvior so that the parent rule is true if at least one of its child rules
+	// are true, and the parent rule itself is true.
+	TrueIfAny bool `json:"true_if_any"`
+
+	// StopIfParentNegative prevents the evaluation of child rules if the parent's expression is false.
 	// Use case: apply a "global" rule to all the child rules.
 	StopIfParentNegative bool `json:"stop_if_parent_negative"`
 
@@ -227,13 +252,6 @@ type EvalOptions struct {
 	// To enable this option, you must first turn on diagnostic
 	// collection at the engine level with the CollectDiagnostics EngineOption.
 	ReturnDiagnostics bool `json:"return_diagnostics"`
-
-	// RollupChildResults indicates that the rule's Pass will
-	// be the result of this rule AND the child rules.
-	// In order for this rule to return Pass, the rule itself must be
-	// true, and its child rules must all be true.
-	// This only affects the value of result.Pass; it does not affect the result.Value.
-	RollupChildResults bool `json:"rollup_child_results"`
 
 	// Specify the function used to sort the child rules before evaluation.
 	// Useful in scenarios where you are asking the engine to stop evaluating
@@ -302,17 +320,7 @@ func StopFirstPositiveChild(b bool) EvalOption {
 	}
 }
 
-// RollupChildResults indicates that the rule's pass/fail will
-// be the result of this rule AND the child rules.
-// In order for this rule to return Pass, the rule itself must be
-// true, and its child rules must all be true.
-func RollupChildResults(b bool) EvalOption {
-	return func(f *EvalOptions) {
-		f.RollupChildResults = b
-	}
-}
-
-// // See the EvalOptions struct for documentation.
+// See the EvalOptions struct for documentation.
 func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
 	for _, opt := range opts {
 		opt(o)

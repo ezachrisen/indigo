@@ -10,15 +10,31 @@ import (
 // Functions to manipulate and compare rule evaluation results
 // and expected results
 
-// flattenResults takes a hierarchy of Result objects and flattens it
+// flattenResultsExprResult takes a hierarchy of Result objects and flattens it
 // to a map of rule ID to pass/fail. This is so that it's easy to
 // compare the results to expected.
-func flattenResults(result *indigo.Result) map[string]bool {
+func flattenResultsExprResult(result *indigo.Result) map[string]bool {
+	m := map[string]bool{}
+	m[result.Rule.ID] = result.ExpressionPass
+	for k := range result.Results {
+		r := result.Results[k]
+		mc := flattenResultsExprResult(r)
+		for k := range mc {
+			m[k] = mc[k]
+		}
+	}
+	return m
+}
+
+// flattenResultsExprResult takes a hierarchy of Result objects and flattens it
+// to a map of rule ID to pass/fail. This is so that it's easy to
+// compare the results to expected.
+func flattenResultsRuleResult(result *indigo.Result) map[string]bool {
 	m := map[string]bool{}
 	m[result.Rule.ID] = result.Pass
 	for k := range result.Results {
 		r := result.Results[k]
-		mc := flattenResults(r)
+		mc := flattenResultsRuleResult(r)
 		for k := range mc {
 			m[k] = mc[k]
 		}

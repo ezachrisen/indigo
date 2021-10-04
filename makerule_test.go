@@ -8,26 +8,33 @@ import "github.com/ezachrisen/indigo"
 //
 // Make a nested rule tree where the rules
 // do not have any evaluation options set locally
-// ---------- Result Diagnostic --------------------------
-//                                          Pass Chil-
-// Rule                                     Fail dren Value
-// --------------------------------------------------------
-// rule1                                    PASS    3 true
-//  B                                       FAIL    4 false
-//   b4                                     FAIL    2 false
-//    b4-1                                  PASS    0 true
-//    b4-2                                  FAIL    0 false
-//   b1                                     PASS    0 true
-//   b2                                     FAIL    0 false
-//   b3                                     PASS    0 true
-//  D                                       PASS    3 true
-//   d1                                     PASS    0 true
-//   d2                                     FAIL    0 false
-//   d3                                     PASS    0 true
-//  E                                       FAIL    3 false
-//   e1                                     PASS    0 true
-//   e2                                     FAIL    0 false
-//   e3                                     PASS    0 true
+
+// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+// │                                                                                                                       │
+// │ INDIGO RESULT SUMMARY                                                                                                 │
+// │                                                                                                                       │
+// ├────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+// │            │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+// │ Rule       │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+// │            │       │ Fail  │       │        │             │             │            │            │         │         │
+// ├────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+// │ rule1      │ FAIL  │ PASS  │ 3     │ true   │             │             │            │            │         │         │
+// │   B        │ FAIL  │ FAIL  │ 4     │ false  │             │             │            │            │         │         │
+// │     b1     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+// │     b2     │ FAIL  │ FAIL  │ 0     │ false  │             │             │            │            │         │         │
+// │     b3     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+// │     b4     │ FAIL  │ FAIL  │ 2     │ false  │             │             │            │            │         │         │
+// │       b4-1 │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+// │       b4-2 │ FAIL  │ FAIL  │ 0     │ false  │             │             │            │            │         │         │
+// │   E        │ FAIL  │ FAIL  │ 3     │ false  │             │             │            │            │         │         │
+// │     e1     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+// │     e2     │ FAIL  │ FAIL  │ 0     │ false  │             │             │            │            │         │         │
+// │     e3     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+// │   D        │ FAIL  │ PASS  │ 3     │ true   │             │             │            │            │         │         │
+// │     d3     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+// │     d1     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+// │     d2     │ FAIL  │ FAIL  │ 0     │ false  │             │             │            │            │         │         │
+// └────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 
 func makeRule() *indigo.Rule {
 	return &indigo.Rule{

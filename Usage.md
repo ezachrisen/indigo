@@ -158,7 +158,7 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Println(results.Pass)
+		fmt.Println(results.ExpressionPass)
 	}
 }
 

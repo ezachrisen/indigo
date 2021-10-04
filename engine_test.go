@@ -42,13 +42,12 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 
 	err := e.Compile(r)
 	is.NoErr(err)
-	//	is.True(err != nil)
 
 	result, err := e.Eval(context.Background(), r, map[string]interface{}{})
 	is.NoErr(err)
-	//fmt.Println(m.rulesTested)
-	//fmt.Println(result)
-	is.NoErr(match(flattenResults(result), expectedResults))
+	//	fmt.Println(m.rulesTested)
+	//	fmt.Println(result)
+	is.NoErr(match(flattenResultsExprResult(result), expectedResults))
 }
 
 // Ensure that rules are evaluated in the correct order when
@@ -120,7 +119,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	is.NoErr(err)
 	//	fmt.Println(m.rulesTested)
 	//fmt.Println(result)
-	is.NoErr(match(flattenResults(result), expectedResults))
+	is.NoErr(match(flattenResultsExprResult(result), expectedResults))
 	// fmt.Printf("Expected: %+v\n", expectkedOrder)
 	// fmt.Printf("Got     : %+v\n", flattenResultsEvaluated(result))
 	is.True(reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result))) // not all rules were evaluated
@@ -148,8 +147,8 @@ func TestSelf(t *testing.T) {
 
 	result, err := e.Eval(context.Background(), r, map[string]interface{}{"anything": "anything"})
 	is.NoErr(err)
-	is.Equal(result.Results["D"].Value.(int), 22)           // D should return 'self', which is 22
-	is.Equal(result.Results["D"].Results["d1"].Pass, false) // d1 should not inherit D's self
+	is.Equal(result.Results["D"].Value.(int), 22)                     // D should return 'self', which is 22
+	is.Equal(result.Results["D"].Results["d1"].ExpressionPass, false) // d1 should not inherit D's self
 }
 
 // Test that the engine checks for nil data and rule
@@ -173,13 +172,15 @@ func TestNilDataOrRule(t *testing.T) {
 
 }
 
-// Test the rule evaluation with various options set on the rules
-func TestEvalOptions(t *testing.T) {
+// Test the pass/fail of the expression evaluation with various combinations
+// of evaluation options
+// This tests the result.ExpressionPass field.
+func TestEvalOptionsExpressionPassFail(t *testing.T) {
 	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
 	d := map[string]interface{}{"a": "a"} // dummy data, not important
-	w := map[string]bool{                 // the wanted rule evaluation results with no options in effect
+	w := map[string]bool{                 // the wanted expression evaluation results with no options in effect
 		"rule1": true,
 		"D":     true,
 		"d1":    true,
@@ -252,45 +253,6 @@ func TestEvalOptions(t *testing.T) {
 				return map[string]bool{"rule1": true}
 			},
 		},
-
-		"RollupChildResults": {
-			prep: func(r *indigo.Rule) {
-				// D itself is true, but its child, d2, is false.
-				// By rolling up the child results from D's children, D will become false as well
-				r.Rules["D"].EvalOptions.RollupChildResults = true
-			},
-			want: func() map[string]bool {
-				result := copyMap(w)
-				result["D"] = false // since d2, its child, is false
-				return result
-			},
-		},
-		"RollupChildResults and Stop at First Negative": {
-			prep: func(r *indigo.Rule) {
-				// D itself is true, but its child, d2, is false.
-				// By rolling up the child results from D's children, D will become false as well
-				r.Rules["D"].EvalOptions.RollupChildResults = true
-				r.Rules["D"].EvalOptions.StopFirstNegativeChild = true
-			},
-			want: func() map[string]bool {
-				result := deleteKeys(copyMap(w), "d3")
-				result["D"] = false // since d2, its child, is false
-				return result
-			},
-		},
-
-		"RollupChildResults and Discard Failures": {
-			prep: func(r *indigo.Rule) {
-				r.Rules["D"].EvalOptions.RollupChildResults = true
-				r.Rules["D"].EvalOptions.DiscardFail = true
-			},
-			want: func() map[string]bool {
-				result := deleteKeys(copyMap(w), "d2")
-				result["D"] = false // since d2 is false
-				return result
-			},
-		},
-
 		"StopFirstPositiveChild": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
@@ -374,7 +336,400 @@ func TestEvalOptions(t *testing.T) {
 		// 	fmt.Println(u)
 		// }
 		//		fmt.Println(indigo.DiagnosticsReport(u, nil))
-		err = match(flattenResults(u), c.want())
+		err = match(flattenResultsExprResult(u), c.want())
+		if err != nil {
+			t.Errorf("Error in case %s: %v", k, err)
+			// fmt.Println(r)
+			// fmt.Println(u)
+		}
+	}
+}
+
+// Test the pass/fail of the rule  evaluation with various combinations
+// of evaluation options
+// This tests the result.Pass field
+func TestEvalOptionsRulePassFail(t *testing.T) {
+	is := is.New(t)
+
+	e := indigo.NewEngine(newMockEvaluator())
+	d := map[string]interface{}{"a": "a"} // dummy data, not important
+	// the wanted rule evaluation results with no options in effect
+	// Note that the rule produced by make_rule is manipulated in the loop before
+	// running the test cases
+	w := map[string]bool{
+		"rule1": false,
+		"D":     true,
+		"d1":    true,
+		"d2":    true,
+		"d3":    true,
+		"B":     false,
+		"b1":    true,
+		"b2":    false,
+		"b3":    true,
+		"b4":    false,
+		"b4-1":  true,
+		"b4-2":  false,
+		"E":     false,
+		"e1":    true,
+		"e2":    false,
+		"e3":    true,
+	}
+
+	cases := map[string]struct {
+		prep func(*indigo.Rule)     // a function called to prep the rule before compilation and evaluation
+		want func() map[string]bool // a function returning an edited copy of w after options are applied
+	}{
+		"Default Options": {
+			prep: func(r *indigo.Rule) {
+			},
+			want: func() map[string]bool {
+				return copyMap(w)
+			},
+		},
+
+		"StopIfParentNegative": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["E"].EvalOptions.StopIfParentNegative = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "e1", "e2", "e3")
+			},
+		},
+		"DiscardPass": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["B"].Rules["b4"].EvalOptions.DiscardPass = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b4-1")
+			},
+		},
+		"DiscardFail": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["B"].EvalOptions.DiscardFail = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b2", "b4", "b4-1", "b4-2") // b4-1 is elim. because b4 is
+			},
+		},
+		"DiscardPass & DiscardFail": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["B"].EvalOptions.DiscardFail = true
+				r.Rules["B"].EvalOptions.DiscardPass = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b1", "b2", "b3", "b4", "b4-1", "b4-2")
+			},
+		},
+		"DiscardPass & DiscardFail on Root": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.DiscardFail = true
+				r.EvalOptions.DiscardPass = true
+			},
+			want: func() map[string]bool {
+				return map[string]bool{"rule1": false}
+			},
+		},
+		"StopFirstPositiveChild": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+			},
+			want: func() map[string]bool {
+				m := deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
+				// B will be true because b1 is true, and we stopped evaluating after the first
+				// positive, so we never go to the negatives (b2, b4)
+				m["B"] = true
+				return m
+			},
+		},
+		"StopFirstNegativeChild": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b3", "b4", "b4-1", "b4-2")
+			},
+		},
+		"StopFirstNegativeChild & StopFirstPositiveChild (1)": {
+			// This will stop on the first negative child of B
+			prep: func(r *indigo.Rule) {
+				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
+				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+			},
+			want: func() map[string]bool {
+				m := deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
+				// B will be true because b1 is true, and we stopped evaluating after the first
+				// positive, so we never go to the negatives (b2, b4)
+				m["B"] = true
+				return m
+			},
+		},
+		"StopFirstNegativeChild & StopFirstPositiveChild (2)": {
+			// This will stop on the first positive child of E
+			prep: func(r *indigo.Rule) {
+				r.Rules["E"].EvalOptions.StopFirstNegativeChild = true
+				r.Rules["E"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["E"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["E"].Rules["e1"].Expr = `false` // make evaluation stop on the first rule
+			},
+			want: func() map[string]bool {
+				m := deleteKeys(copyMap(w), "e2", "e3")
+				m["e1"] = false
+				return m
+			},
+		},
+
+		"Multiple Options": {
+			prep: func(r *indigo.Rule) {
+				r.Rules["B"].EvalOptions.DiscardPass = true
+				r.Rules["B"].Rules["b4"].EvalOptions.DiscardPass = true
+				r.Rules["E"].EvalOptions.StopIfParentNegative = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b1", "b3", "b4-1", "e1", "e2", "e3")
+			},
+		},
+		"Delete Rule": {
+			prep: func(r *indigo.Rule) {
+				delete(r.Rules["B"].Rules, "b1")
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b1")
+			},
+		},
+		"Add Rule": {
+			prep: func(r *indigo.Rule) {
+				x := &indigo.Rule{
+					ID:   "x",
+					Expr: "true",
+				}
+				r.Rules[x.ID] = x
+			},
+			want: func() map[string]bool {
+				w := copyMap(w)
+				w["x"] = true
+				return w
+			},
+		},
+	}
+
+	// r := makeRule()
+	// r.Rules["D"].Rules["d2"].Expr = `true` // this will make D true
+	// r.Rules["B"].Expr = `true`             // this will not make B true, since its children are false
+	// u, _ := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
+	// fmt.Println(u)
+
+	for k, c := range cases {
+		r := makeRule()
+
+		// In the rule created by makeRule, ALL children of rule1 are
+		// false, which would make this test not very interesting.
+		// We'll manipulate a few of the rules to make them more interesting to test.
+
+		r.Rules["D"].Rules["d2"].Expr = `true` // this will make D true
+		r.Rules["B"].Expr = `true`             // this will not make B true, since its children are false
+
+		// Modified results
+		// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+		// │                                                                                                                       │
+		// │ INDIGO RESULT SUMMARY                                                                                                 │
+		// │                                                                                                                       │
+		// ├────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+		// │            │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+		// │ Rule       │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+		// │            │       │ Fail  │       │        │             │             │            │            │         │         │
+		// ├────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+		// │ rule1      │ FAIL  │ PASS  │ 3     │ true   │ yes         │             │            │            │         │         │
+		// │   D        │ PASS  │ PASS  │ 3     │ true   │ yes         │             │            │            │         │         │
+		// │     d1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+		// │     d2     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+		// │     d3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+		// │   B        │ FAIL  │ PASS  │ 4     │ true   │ yes         │             │            │            │         │         │
+		// │     b1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+		// │     b2     │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
+		// │     b3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+		// │     b4     │ FAIL  │ FAIL  │ 2     │ false  │ yes         │             │            │            │         │         │
+		// │       b4-1 │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+		// │       b4-2 │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
+		// │   E        │ FAIL  │ FAIL  │ 3     │ false  │ yes         │             │            │            │         │         │
+		// │     e3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+		// │     e1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+		// │     e2     │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
+		// └────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+
+		c.prep(r)
+
+		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
+
+		is.NoErr(err)
+		//		fmt.Println(u)
+
+		// if k == "StopFirstPositiveChild" {
+		// 	fmt.Println(indigo.DiagnosticsReport(u, nil))
+		// }
+		err = match(flattenResultsRuleResult(u), c.want())
+		if err != nil {
+			t.Errorf("Error in case %s: %v", k, err)
+			// fmt.Println(r)
+			// fmt.Println(u)
+		}
+	}
+}
+
+func TestEvalTrueIfAny(t *testing.T) {
+	is := is.New(t)
+
+	e := indigo.NewEngine(newMockEvaluator())
+	d := map[string]interface{}{"a": "a"} // dummy data, not important
+	// the wanted rule evaluation results with no options in effect
+	// Note that the rule produced by make_rule is manipulated in the loop before
+	// running the test cases
+	w := map[string]bool{
+		"rule1": true,
+		"D":     true, // D itself is true
+		"d1":    true,
+		"d2":    false, // this is false, bu D has trueifany set
+		"d3":    true,
+		"B":     false, // B itself is false
+		"b1":    true,
+		"b2":    false,
+		"b3":    true,
+		"b4":    false, // b4 itself is false
+		"b4-1":  true,
+		"b4-2":  false,
+		"E":     false,
+		"e1":    true,
+		"e2":    false,
+		"e3":    true,
+	}
+
+	cases := map[string]struct {
+		prep func(*indigo.Rule)     // a function called to prep the rule before compilation and evaluation
+		want func() map[string]bool // a function returning an edited copy of w after options are applied
+	}{
+		"Default Options": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.TrueIfAny = true
+				r.Rules["D"].EvalOptions.TrueIfAny = true
+				r.Rules["E"].EvalOptions.TrueIfAny = true
+			},
+			want: func() map[string]bool {
+				return copyMap(w)
+			},
+		},
+
+		"StopIfParentNegative": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.TrueIfAny = true
+				r.Rules["D"].EvalOptions.TrueIfAny = true
+				r.Rules["E"].EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.StopIfParentNegative = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b1", "b2", "b3", "b4", "b4-1", "b4-2")
+			},
+		},
+		"DiscardPass": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.TrueIfAny = true
+				r.Rules["D"].EvalOptions.TrueIfAny = true
+				r.Rules["E"].EvalOptions.TrueIfAny = true
+				r.Rules["B"].Rules["b4"].EvalOptions.DiscardPass = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b4-1")
+			},
+		},
+		"DiscardFail": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.TrueIfAny = true
+				r.Rules["D"].EvalOptions.TrueIfAny = true
+				r.Rules["E"].EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.DiscardFail = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b2", "b4", "b4-1", "b4-2") // b4-1 is elim. because b4 is
+			},
+		},
+		"DiscardPass & DiscardFail": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.TrueIfAny = true
+				r.Rules["D"].EvalOptions.TrueIfAny = true
+				r.Rules["E"].EvalOptions.TrueIfAny = true
+
+				r.Rules["B"].EvalOptions.DiscardFail = true
+				r.Rules["B"].EvalOptions.DiscardPass = true
+			},
+			want: func() map[string]bool {
+				return deleteKeys(copyMap(w), "b1", "b2", "b3", "b4", "b4-1", "b4-2")
+			},
+		},
+		"DiscardPass & DiscardFail on Root": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.TrueIfAny = true
+				r.Rules["D"].EvalOptions.TrueIfAny = true
+				r.Rules["E"].EvalOptions.TrueIfAny = true
+
+				r.EvalOptions.DiscardFail = true
+				r.EvalOptions.DiscardPass = true
+			},
+			want: func() map[string]bool {
+				return map[string]bool{"rule1": true}
+			},
+		},
+		"StopFirstPositiveChild": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.TrueIfAny = true
+				r.Rules["D"].EvalOptions.TrueIfAny = true
+				r.Rules["E"].EvalOptions.TrueIfAny = true
+
+				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+			},
+			want: func() map[string]bool {
+				m := deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
+				return m
+			},
+		},
+		"StopFirstNegativeChild": {
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.TrueIfAny = true
+				r.Rules["B"].EvalOptions.TrueIfAny = true
+				r.Rules["D"].EvalOptions.TrueIfAny = true
+				r.Rules["E"].EvalOptions.TrueIfAny = true
+
+				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+
+				r.Rules["B"].Rules["b1"].Expr = "false"
+
+			},
+			want: func() map[string]bool {
+				m := deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
+				m["B"] = false
+				m["b1"] = false
+				return m
+			},
+		},
+	}
+
+	for k, c := range cases {
+		r := makeRule()
+
+		c.prep(r)
+
+		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
+		is.NoErr(err)
+		err = match(flattenResultsRuleResult(u), c.want())
 		if err != nil {
 			t.Errorf("Error in case %s: %v", k, err)
 			fmt.Println(r)
@@ -528,29 +883,29 @@ func TestGlobalEvalOptions(t *testing.T) {
 			},
 		},
 
-		{
-			// Check global rollupchildresults (false)
-			prep: func(r *indigo.Rule) {
-			},
-			opts: []indigo.EvalOption{indigo.RollupChildResults(true)},
-			chk: func(r *indigo.Result) {
-				is.Equal(r.Pass, false)
-			},
-		},
+		// {
+		// 	// Check global rollupchildresults (false)
+		// 	prep: func(r *indigo.Rule) {
+		// 	},
+		// 	opts: []indigo.EvalOption{indigo.RollupChildResults(true)},
+		// 	chk: func(r *indigo.Result) {
+		// 		is.Equal(r.ExpressionPass, false)
+		// 	},
+		// },
 
-		{
-			// Check global rollupchildresults, should be true
-			prep: func(r *indigo.Rule) {
-				// only leave true rules
-				delete(r.Rules, "B")
-				delete(r.Rules, "E")
-				r.Rules["D"].Rules["d2"].Expr = `true`
-			},
-			opts: []indigo.EvalOption{indigo.RollupChildResults(true)},
-			chk: func(r *indigo.Result) {
-				is.True(r.Pass)
-			},
-		},
+		// {
+		// 	// Check global rollupchildresults, should be true
+		// 	prep: func(r *indigo.Rule) {
+		// 		// only leave true rules
+		// 		delete(r.Rules, "B")
+		// 		delete(r.Rules, "E")
+		// 		r.Rules["D"].Rules["d2"].Expr = `true`
+		// 	},
+		// 	opts: []indigo.EvalOption{indigo.RollupChildResults(true)},
+		// 	chk: func(r *indigo.Result) {
+		// 		is.True(r.ExpressionPass)
+		// 	},
+		// },
 
 		{
 			// Check that global (false) overrides local option (true)
@@ -573,8 +928,8 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 2) // B is false, D is first positive child
-				is.True(r.Results["D"].Pass)
-				is.True(!r.Results["B"].Pass)
+				is.True(r.Results["D"].ExpressionPass)
+				is.True(!r.Results["B"].ExpressionPass)
 			},
 		},
 		{
@@ -601,7 +956,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.SortFunc(sortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 1) // B is first, should stop evaluation
-				is.True(!r.Results["B"].Pass)
+				is.True(!r.Results["B"].ExpressionPass)
 			},
 		},
 		{
@@ -609,7 +964,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 1) // B should stop it
-				is.True(!r.Results["B"].Pass)
+				is.True(!r.Results["B"].ExpressionPass)
 			},
 		},
 		{
@@ -621,11 +976,16 @@ func TestGlobalEvalOptions(t *testing.T) {
 		},
 		{
 			// Check that global (true) overrides local option (false)
+			prep: func(r *indigo.Rule) {
+				r.Rules["D"].Rules["d2"].Expr = "true"
+			},
+
 			opts: []indigo.EvalOption{indigo.DiscardPass(true)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 2) // should get B and E
-				is.True(!r.Results["B"].Pass)
-				is.True(!r.Results["E"].Pass)
+
+				is.True(!r.Results["B"].ExpressionPass)
+				is.True(!r.Results["E"].ExpressionPass)
 			},
 		},
 		{
@@ -643,6 +1003,9 @@ func TestGlobalEvalOptions(t *testing.T) {
 		},
 
 		{
+			prep: func(r *indigo.Rule) {
+				r.Rules["D"].Rules["d2"].Expr = "true" // make d2 pass -> D passes
+			},
 			// Check that global (true) overrides local option (false)
 			opts: []indigo.EvalOption{indigo.DiscardFail(true)},
 			chk: func(r *indigo.Result) {
