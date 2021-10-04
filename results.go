@@ -13,17 +13,22 @@ type Result struct {
 	// The Rule that was evaluated
 	Rule *Rule
 
-	// Whether the rule yielded a TRUE logical value.
-	// The default is TRUE
-	// By default, this is the result of evaluating THIS rule only.
-	// The result will not be affected by the results of the child rules, UNLESS
-	// specify the RollupChildResults option.
-	// If no rule expression is supplied for a rule, the result will be TRUE.
+	// Whether the rule is true.
+	// The default is TRUE.
+	// Pass is the result of rolling up all child rules and evaluating the
+	// rule's own expression. All child rules and the rule's expression must be
+	// true for Pass to be true.
 	Pass bool
 
-	// The result of the evaluation. Boolean for logical expressions.
+	// Whether evaluating the rule expression yielded a TRUE logical value.
+	// The default is TRUE.
+	// The result will not be affected by the results of the child rules.
+	// If no rule expression is supplied for a rule, the result will be TRUE.
+	ExpressionPass bool
+
+	// The raw result of evaluating the expression. Boolean for logical expressions.
 	// Calculations, object constructions or string manipulations will return the appropriate Go type.
-	// This value is never affected by child rules, even if the RollupChildResults option is set.
+	// This value is never affected by child rules.
 	Value interface{}
 
 	// Results of evaluating the child rules.
@@ -48,8 +53,8 @@ func (u *Result) String() string {
 
 	tw := table.NewWriter()
 	tw.SetTitle("\nINDIGO RESULT SUMMARY\n")
-	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?",
-		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail", "Roll Up\nResults"})
+	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Expr.\nPass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?",
+		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail"})
 	rows := u.resultsToRows(0)
 
 	for _, r := range rows {
@@ -61,15 +66,20 @@ func (u *Result) String() string {
 	return tw.Render()
 }
 
+func boolString(b bool) string {
+	switch b {
+	case true:
+		return "PASS"
+	default:
+		return "FAIL"
+	}
+}
+
 // resultsToRows transforms the Results data to a list of resultsToRows
 // for inclusion in a table.Writer table.
 func (u *Result) resultsToRows(n int) []table.Row {
 	rows := []table.Row{}
 	indent := strings.Repeat("  ", n)
-	boolString := "PASS"
-	if !u.Pass {
-		boolString = "FAIL"
-	}
 
 	diag := false
 	if u.Diagnostics != nil {
@@ -78,7 +88,8 @@ func (u *Result) resultsToRows(n int) []table.Row {
 
 	row := table.Row{
 		fmt.Sprintf("%s%s", indent, u.Rule.ID),
-		boolString,
+		boolString(u.Pass),
+		boolString(u.ExpressionPass),
 		fmt.Sprintf("%d", len(u.Results)),
 		fmt.Sprintf("%v", u.Value),
 		trueFalse(fmt.Sprintf("%t", diag)),
@@ -87,7 +98,6 @@ func (u *Result) resultsToRows(n int) []table.Row {
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopFirstNegativeChild)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.DiscardPass)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.DiscardFail)),
-		trueFalse(fmt.Sprintf("%t", u.EvalOptions.RollupChildResults)),
 	}
 
 	rows = append(rows, row)

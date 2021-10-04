@@ -184,7 +184,7 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Println(results.Pass)
+		fmt.Println(results.ExpressionPass)
 	}
 }
 
@@ -241,7 +241,7 @@ func main() {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
-	fmt.Println(results.Pass)
+	fmt.Println(results.ExpressionPass)
 }
 
 ```
@@ -465,7 +465,7 @@ func main() {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
-	fmt.Println(results.Pass)
+	fmt.Println(results.ExpressionPass)
 }
 
 ```
@@ -523,7 +523,7 @@ func main() {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
-	fmt.Println(results.Pass)
+	fmt.Println(results.ExpressionPass)
 }
 
 ```

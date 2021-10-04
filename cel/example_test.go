@@ -50,7 +50,7 @@ func Example() {
 	if err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Println(results.Pass)
+		fmt.Println(results.ExpressionPass)
 	}
 	// Output: true
 }
@@ -87,7 +87,7 @@ func Example_nativeTimestampComparison() {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
-	fmt.Println(results.Pass)
+	fmt.Println(results.ExpressionPass)
 	// Output: true
 }
 
@@ -124,7 +124,7 @@ func Example_protoExistsOperator() {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
-	fmt.Println(results.Pass)
+	fmt.Println(results.ExpressionPass)
 	// Output: false
 }
 
@@ -216,7 +216,7 @@ func Example_protoDurationComparison() {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
-	fmt.Println(results.Pass)
+	fmt.Println(results.ExpressionPass)
 	// Output: true
 }
 

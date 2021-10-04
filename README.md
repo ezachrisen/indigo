@@ -52,7 +52,7 @@ func ExampleHelloWorld() {
 
 	// Step 5: Evaluate and check the results
 	results, err := engine.Evaluate(data, &rule)
-	fmt.Println(results.Pass)
+	fmt.Println(results.ExpressiongPass)
 	// Output: true
 }
 

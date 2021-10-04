@@ -47,7 +47,7 @@ func Example() {
 	if err != nil {
 		fmt.Println(err)
 	} else {
-		fmt.Println(results.Pass)
+		fmt.Println(results.ExpressionPass)
 	}
 	// Output: true
 }

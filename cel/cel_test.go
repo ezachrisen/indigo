@@ -272,9 +272,9 @@ func TestBasicRules(t *testing.T) {
 	results, err := e.Eval(context.Background(), sa, makeStudentData(), indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 	is.Equal(results.Rule, sa)
-	is.True(results.Pass)
-	is.True(!results.Results["honors_student"].Pass)
-	is.True(results.Results["at_risk"].Pass)
+	is.True(results.ExpressionPass)
+	is.True(!results.Results["honors_student"].ExpressionPass)
+	is.True(results.Results["at_risk"].ExpressionPass)
 	is.Equal(results.Results["at_risk"].Results["risk_factor"].Value.(float64), 8.0)
 
 }
@@ -308,7 +308,7 @@ func TestProtoMessage(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(len(results.Results), 3)
 	for _, v := range results.Results {
-		is.Equal(v.Rule.Meta, v.Pass)
+		is.Equal(v.Rule.Meta, v.ExpressionPass)
 	}
 }
 
