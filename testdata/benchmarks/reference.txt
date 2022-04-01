@@ -1,17 +1,49 @@
 PASS
-ok  	github.com/ezachrisen/indigo	0.006s
+ok  	github.com/ezachrisen/indigo	0.019s
 goos: linux
 goarch: amd64
 pkg: github.com/ezachrisen/indigo/cel
-cpu: Intel(R) Xeon(R) CPU
-BenchmarkSimpleRule-2                  	 1358089	       880.6 ns/op
-BenchmarkSimpleRuleWithDiagnostics-2   	   64849	     18219 ns/op
-BenchmarkRuleWithArray-2               	 1325853	       905.0 ns/op
-BenchmarkProtoWithSelfX-2              	  825386	      1390 ns/op
-BenchmarkProtoWithoutSelf-2            	  983133	      1225 ns/op
-BenchmarkProtoCreation-2               	  653889	      1830 ns/op
-BenchmarkEval2000Rules-2               	     306	   4224359 ns/op
-BenchmarkCompileRule-2                 	     100	  10947080 ns/op
+cpu: AMD EPYC 7601 32-Core Processor                
+BenchmarkSimpleRule-2                  	  558703	      2174 ns/op
+BenchmarkSimpleRule-2                  	  637680	      1915 ns/op
+BenchmarkSimpleRule-2                  	  697084	      1723 ns/op
+BenchmarkSimpleRule-2                  	  750256	      1672 ns/op
+BenchmarkSimpleRule-2                  	  650068	      1834 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   88137	     12344 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   94648	     11823 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	  100447	     11165 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	  111007	     11140 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   97753	     10690 ns/op
+BenchmarkRuleWithArray-2               	  695440	      1794 ns/op
+BenchmarkRuleWithArray-2               	  634198	      1747 ns/op
+BenchmarkRuleWithArray-2               	  625245	      1763 ns/op
+BenchmarkRuleWithArray-2               	  603806	      1889 ns/op
+BenchmarkRuleWithArray-2               	  579327	      2015 ns/op
+BenchmarkProtoWithSelfX-2              	  396008	      2993 ns/op
+BenchmarkProtoWithSelfX-2              	  415366	      2827 ns/op
+BenchmarkProtoWithSelfX-2              	  432032	      2817 ns/op
+BenchmarkProtoWithSelfX-2              	  494214	      2775 ns/op
+BenchmarkProtoWithSelfX-2              	  446590	      3071 ns/op
+BenchmarkProtoWithoutSelf-2            	  467574	      2478 ns/op
+BenchmarkProtoWithoutSelf-2            	  396376	      2527 ns/op
+BenchmarkProtoWithoutSelf-2            	  482493	      2470 ns/op
+BenchmarkProtoWithoutSelf-2            	  479103	      2471 ns/op
+BenchmarkProtoWithoutSelf-2            	  475596	      2775 ns/op
+BenchmarkProtoCreation-2               	  138368	      8846 ns/op
+BenchmarkProtoCreation-2               	  128604	      9534 ns/op
+BenchmarkProtoCreation-2               	  133912	      9135 ns/op
+BenchmarkProtoCreation-2               	  121845	     10767 ns/op
+BenchmarkProtoCreation-2               	  118674	     11272 ns/op
+BenchmarkEval2000Rules-2               	      81	  16544650 ns/op
+BenchmarkEval2000Rules-2               	     100	  15882055 ns/op
+BenchmarkEval2000Rules-2               	      80	  13556421 ns/op
+BenchmarkEval2000Rules-2               	     100	  13708787 ns/op
+BenchmarkEval2000Rules-2               	     138	  14228888 ns/op
+BenchmarkCompileRule-2                 	     100	  20785304 ns/op
+BenchmarkCompileRule-2                 	     100	  21005013 ns/op
+BenchmarkCompileRule-2                 	     100	  21801091 ns/op
+BenchmarkCompileRule-2                 	     100	  23203854 ns/op
+BenchmarkCompileRule-2                 	     100	  21105590 ns/op
 PASS
-ok  	github.com/ezachrisen/indigo/cel	46.090s
-?   	github.com/ezachrisen/indigo/schema	[no test files]
+ok  	github.com/ezachrisen/indigo/cel	220.246s
+?   	github.com/ezachrisen/indigo/examples/dynamic_schema	[no test files]
