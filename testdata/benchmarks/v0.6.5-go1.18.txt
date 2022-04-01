@@ -1,0 +1,49 @@
+PASS
+ok  	github.com/ezachrisen/indigo	0.037s
+goos: linux
+goarch: amd64
+pkg: github.com/ezachrisen/indigo/cel
+cpu: AMD EPYC 7601 32-Core Processor                
+BenchmarkSimpleRule-2                  	  686116	      1693 ns/op
+BenchmarkSimpleRule-2                  	  675972	      1760 ns/op
+BenchmarkSimpleRule-2                  	  703939	      1758 ns/op
+BenchmarkSimpleRule-2                  	  724766	      1516 ns/op
+BenchmarkSimpleRule-2                  	  694351	      1675 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   95245	     11345 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   98253	     11478 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	  102088	     11408 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	  102492	     11305 ns/op
+BenchmarkSimpleRuleWithDiagnostics-2   	   89911	     11348 ns/op
+BenchmarkRuleWithArray-2               	  685462	      1688 ns/op
+BenchmarkRuleWithArray-2               	  715675	      1615 ns/op
+BenchmarkRuleWithArray-2               	  724530	      1803 ns/op
+BenchmarkRuleWithArray-2               	  806916	      1543 ns/op
+BenchmarkRuleWithArray-2               	  777858	      1768 ns/op
+BenchmarkProtoWithSelfX-2              	  447990	      2795 ns/op
+BenchmarkProtoWithSelfX-2              	  396921	      2915 ns/op
+BenchmarkProtoWithSelfX-2              	  395241	      2536 ns/op
+BenchmarkProtoWithSelfX-2              	  473436	      2373 ns/op
+BenchmarkProtoWithSelfX-2              	  504907	      2396 ns/op
+BenchmarkProtoWithoutSelf-2            	  601178	      2294 ns/op
+BenchmarkProtoWithoutSelf-2            	  532020	      2502 ns/op
+BenchmarkProtoWithoutSelf-2            	  471997	      2433 ns/op
+BenchmarkProtoWithoutSelf-2            	  509944	      2347 ns/op
+BenchmarkProtoWithoutSelf-2            	  434738	      2369 ns/op
+BenchmarkProtoCreation-2               	  124219	     10270 ns/op
+BenchmarkProtoCreation-2               	  114033	     10234 ns/op
+BenchmarkProtoCreation-2               	  131470	      8365 ns/op
+BenchmarkProtoCreation-2               	  130394	     10304 ns/op
+BenchmarkProtoCreation-2               	  106173	     10203 ns/op
+BenchmarkEval2000Rules-2               	      92	  13928213 ns/op
+BenchmarkEval2000Rules-2               	      80	  13138517 ns/op
+BenchmarkEval2000Rules-2               	      70	  15631092 ns/op
+BenchmarkEval2000Rules-2               	      84	  13387314 ns/op
+BenchmarkEval2000Rules-2               	      91	  13944332 ns/op
+BenchmarkCompileRule-2                 	     100	  17106579 ns/op
+BenchmarkCompileRule-2                 	     100	  17230730 ns/op
+BenchmarkCompileRule-2                 	     100	  18496477 ns/op
+BenchmarkCompileRule-2                 	     100	  17263820 ns/op
+BenchmarkCompileRule-2                 	     100	  16906674 ns/op
+PASS
+ok  	github.com/ezachrisen/indigo/cel	230.294s
+?   	github.com/ezachrisen/indigo/examples/dynamic_schema	[no test files]

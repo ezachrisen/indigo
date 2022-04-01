@@ -1,0 +1,9 @@
+name                         old time/op  new time/op  delta
+SimpleRule-2                 1.71µs ± 6%  1.52µs ±11%     ~     (p=0.056 n=5+5)
+SimpleRuleWithDiagnostics-2  11.5µs ±11%  10.9µs ± 6%     ~     (p=0.095 n=5+5)
+RuleWithArray-2              1.85µs ±11%  1.79µs ± 5%     ~     (p=0.548 n=5+5)
+ProtoWithSelfX-2             2.86µs ± 3%  2.78µs ±15%     ~     (p=1.000 n=5+5)
+ProtoWithoutSelf-2           2.54µs ± 7%  2.51µs ± 2%     ~     (p=0.421 n=5+5)
+ProtoCreation-2              9.76µs ± 6%  9.63µs ± 4%     ~     (p=0.548 n=5+5)
+Eval2000Rules-2              14.1ms ±19%  10.7ms ±31%  -23.94%  (p=0.032 n=5+5)
+CompileRule-2                21.1ms ±10%   1.4ms ± 8%  -93.31%  (p=0.008 n=5+5)
