@@ -94,7 +94,27 @@ Our simple x and y rule is such an expression:
 x > 10 && y != "blue" 
 ```
 
-Expressions support && (and) and || (or), and parentheses to group conditions. 
+In some rule engine languages you specify two parts: "if" and "then", like this:
+
+```proto
+// pseudo-code for a fake rule engine language
+if 
+   x > 10 && y != "blue" 
+then 
+   set output = true 
+```
+
+CEL derives the value of the output from the value of the expression, in this case a boolean, so the "if/then" construct is not needed. (CEL does support the if/then functionality with the :? operators which we will cover later in the book.)
+
+## Operators
+
+Supported logical operators: ``&& ||``. Parentheses can be used to group expressions. 
+Supported comparison operators: `` < <= >= > == != in ``
+Supported math operators: `` + - * / % ``
+
+
+
+
 
 
 
