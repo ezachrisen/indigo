@@ -1,19 +1,25 @@
-<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-<foreignObject width="100" height="100">
 
-<style>
-.myDiv {
-  border: 5px outset red;
-  background-color: lightblue;    
-  text-align: center;
-}
-</style>
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    div {
+      background: pink;
+      font: 12px serif;
+      padding: 10px;
+    }
+    
+    .red {
+      color: red;
+    }
+    
+    .green {
+      color: green
+    }
+  </style>
 
-    <div class="myDiv">
-        <ul>
-            <li>text</li>
-        </ul>
-        <!-- Other embed HTML element/text into SVG -->
+  <foreignObject x="20" y="20" width="160" height="100">
+    <div xmlns="http://www.w3.org/1999/xhtml">
+      <p class="red">This is red color</p>
+      <p class="green">This is green color</p>
     </div>
-</foreignObject>
+  </foreignObject>
 </svg>
