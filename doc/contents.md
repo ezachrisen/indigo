@@ -36,3 +36,17 @@ Chapter 3: Indigo Rules Engine Types
    1. Runtime diagnostics 
    1. Compilation output
 
+
+<figure>
+
+```mermaid
+graph TD;
+    A-->B;
+    A-->C;
+    B-->D;
+    C-->D;
+```
+
+<figcaption align = "center"><b>Fig.1 - 4K Mountains Wallpaper</b></figcaption>
+
+</figure>
