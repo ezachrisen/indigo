@@ -55,6 +55,49 @@ func Example() {
 	// Output: true
 }
 
+func Example_basic() {
+
+	//Step 1: Create a schema
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+			{Name: "y", Type: indigo.String{}},
+		},
+	}
+
+	// Step 2: Create rules
+	rule := indigo.Rule{
+		Schema:     schema,
+		ResultType: indigo.Bool{},
+		Expr:       `x > 10 && y != "blue"`,
+	}
+
+	// Step 3: Create an Indigo engine and give it an evaluator
+	// In this case, CEL
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	// Step 4: Compile the rule
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"x": 11,
+		"y": "red",
+	}
+
+	// Step 5: Evaluate and check the results
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(results.ExpressionPass)
+	}
+	// Output: true
+}
+
 func Example_nativeTimestampComparison() {
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
