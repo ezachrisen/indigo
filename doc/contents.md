@@ -50,3 +50,9 @@ graph TD;
 <figcaption align = "center"><b>Fig.1 - 4K Mountains Wallpaper</b></figcaption>
 
 </figure>
+
+
+Blah
+
+> :warning: **If you are using mobile browser**: Be very careful here!
+
