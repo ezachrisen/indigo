@@ -58,6 +58,6 @@ Blah
 
 Blah
 
-
+<img src="./test.svg" alt="" />
 
 
