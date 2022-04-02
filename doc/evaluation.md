@@ -4,21 +4,20 @@ We start by looking at how to evaluate individual expressions. In this chapter w
 
 All of examples use [Google's Common Expression Language](https://github.com/google/cel-go), CEL for short. 
 
-{% note %}
 
 **Note:** In this guide we will touch on the basics of the language, for complete coverage you should read the [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md).
 
-{% endnote %}
+
 
 
 See the ``indigo/cel/example_test.go`` file for the code for the examples.
 
 In the code samples below we will provide the corresponding example code like this:
-```
-    // indigo/cel/example_test.go:Example_basic()
-    ... 
-    sample code
-	...
+```go
+ // indigo/cel/example_test.go:Example_basic()
+ ... 
+ sample code
+ ...
 ```
 
 This means that the sample code is taken from the function `Example_basic()` in the `indigo/cel/example_test.go` file. 
@@ -54,13 +53,13 @@ Building on our x and y example above , we have to define that in the *schema* f
 
 
 ```go
-    // indigo/cel/example_test.go:Example_basic()
-	schema := indigo.Schema{
-		Elements: []indigo.DataElement{
-			{Name: "x", Type: indigo.Int{}},
-			{Name: "y", Type: indigo.String{}},
-		},
-	}
+// indigo/cel/example_test.go:Example_basic()
+schema := indigo.Schema{
+	Elements: []indigo.DataElement{
+		{Name: "x", Type: indigo.Int{}},
+		{Name: "y", Type: indigo.String{}},
+	},
+}
 ```
 
 Every rule needs to have a schema, **but a schema can be used by many rules**. As we will see later when evaluating multiple rules, each rule must use the same or compatible schemas. 
