@@ -15,7 +15,7 @@ Useful links:
 
    1. [What is a rule?](#what-is-a-rule)
    1. [Why use rules?](#why-use-rules)
-   1. [Expressions and rules in Indigo](expressions-and-rules–in-indigo)
+   1. [Expressions and rules in Indigo](#expressions-and-rules–in-indigo)
 
 [Chapter 2: Expression Evaluation](#chapter-2-expression-evaluation)
    1. Compilation and Evaluation
@@ -50,7 +50,7 @@ Chapter 3: Indigo Rules Engine Types
 
 
 ---
-# Chapter 1 <br/> Introduction
+# Chapter 1 <br/>Introduction
 
 ## What is a rule?
 A rule is an expression that can be evaluated to produce an outcome. The outcome may be true or false, or it may be a number, or a string or any other value. The same can be said of any computer language code, but what makes rules different is that their expression language is "configurable" by end users of the software, allowing them to modify how the software works without re-compiling or re-deploying the software. 
