@@ -1,12 +1,23 @@
-# Contents
+# Indigo Handbook
+
+The purpose of this document is to describe how Indigo's rules and the evaluation engine works. We encourage you to read the Indigo source code and examples as primary material, and consider this document as a companion to guide you through the concepts. 
+
+
+
+Useful links:
+[Indigo examples](../example_test.go)
+[CEL examples](../cel/example_test.go)
+
+---
+
 
 [Chapter 1: Introduction](#chapter-1-introduction)
 
-   1. What are rules?
-   1. Why use rules?
-   1. The Indigo rules engine
+   1. [What is a rule?](#what-is-a-rule)
+   1. [Why use rules?](#why-use-rules)
+   1. [Expressions and rules in Indigo](expressions-and-rules–in-indigo)
 
-Chapter 2: Expression Evaluation 
+[Chapter 2: Expression Evaluation](#chapter-2-expression-evaluation)
    1. Compilation and Evaluation
    1. Schemas
    1. Data types 
@@ -38,9 +49,8 @@ Chapter 3: Indigo Rules Engine Types
    1. Compilation output
 
 
-
+---
 # Chapter 1 <br/> Introduction
-The purpose of this document is to 
 
 ## What is a rule?
 A rule is an expression that can be evaluated to produce an outcome. The outcome may be true or false, or it may be a number, or a string or any other value. The same can be said of any computer language code, but what makes rules different is that their expression language is "configurable" by end users of the software, allowing them to modify how the software works without re-compiling or re-deploying the software. 
@@ -78,11 +88,11 @@ So why use them? The primary reason to use rules is that they allow business log
 A side benefit of using rules in software is that it changes the way engineers think about writing the application. Instead of focusing on the specific business logic that must be implemented, engineers instead think about how to enable *configurable*, *dynamic* business logic that users control. 
 
 
-## Expressions and rules in the Indigo Rules Engine
+## Expressions and rules in Indigo
 The Indigo rules engine goes beyond evaluating individual expressions (such as the "rule expression language" example above) and provides a structure and mechanisms to evaluate *groups* of rules arranged in specific ways for specific purposes. Indigo "outsources" the actual expression evaluation to Google's Common Expression Language, though other languages can be plugged in as well. 
 
-
-# Expression Evaluation
+---
+# Chapter 2 <br/>Expression Evaluation
 
 We start by looking at how to evaluate individual expressions. In this chapter we will use the terms "expression" and "rule" interchangeably. Later in this guide we will consider ways to arrange rules in hierarchies for different purposes. 
 
