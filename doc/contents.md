@@ -9,6 +9,7 @@
    1. Schemas
    1. Data types 
    1. Simple expressions
+   1. Getting the result 
 1. Lists and Map
    1. Lists
    1. Maps
