@@ -5,7 +5,9 @@ We start by looking at how to evaluate individual expressions. In this chapter w
 All of examples use [Google's Common Expression Language](https://github.com/google/cel-go), CEL for short. 
 
 {% note %}
-In this guide we will touch on the basics of the language, for complete coverage you should read the [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md).
+
+**Note:** In this guide we will touch on the basics of the language, for complete coverage you should read the [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md).
+
 {% note %}
 
 
@@ -30,7 +32,7 @@ During compilation the rule syntax, functions and data types are checked to ensu
 ## Input Data
 In our simple rule example from the introduction, the 'x' was the input data:
 
-```
+```proto
 x > 10
 ```
 
@@ -38,7 +40,7 @@ In order to evaluate the rule, we had to provide the value of x in our "real" wo
 
 In reality, rules may have many pieces of data, such as in this expression:
 
-```
+```proto
 x > 10 && y != "blue" 
 ```
 Indigo allows you to pass a list of data elements to evaluation. 
@@ -51,7 +53,7 @@ Building on our x and y example above , we have to define that in the *schema* f
 
 
 
-```go{:copy}
+```go
     // indigo/cel/example_test.go:Example_basic()
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
@@ -89,7 +91,7 @@ Proto is the only type that can have a "nested" structure, similar to a Go struc
 The simplest type of rule compares scalar values to each other to produce a true/false outcome. 
 Our simple x and y rule is such an expression: 
 
-```
+```proto
 x > 10 && y != "blue" 
 ```
 
