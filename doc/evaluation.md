@@ -8,7 +8,7 @@ All of examples use [Google's Common Expression Language](https://github.com/goo
 
 **Note:** In this guide we will touch on the basics of the language, for complete coverage you should read the [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md).
 
-{% note %}
+{% endnote %}
 
 
 See the ``indigo/cel/example_test.go`` file for the code for the examples.
