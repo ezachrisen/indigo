@@ -35,7 +35,7 @@ func doTypesMatch(cel *gexpr.Type, igo indigo.Type) error {
 	}
 
 	if celConverted.String() != igo.String() {
-		return fmt.Errorf("tyope mismatch: CEL: %T (%v), Indigo: %T (%v)", celConverted, celConverted, igo, igo)
+		return fmt.Errorf("type mismatch: CEL: %T (%v), Indigo: %T (%v)", celConverted, celConverted, igo, igo)
 	}
 
 	return nil
