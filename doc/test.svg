@@ -7,7 +7,7 @@
     }
     
 </style>
-    <div class="div-1">
+    <div style="background-color: #EBEBEB">
         <ul>
             <li>text</li>
         </ul>
