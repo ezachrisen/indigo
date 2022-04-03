@@ -11,46 +11,52 @@ Useful links:
 ---
 
 
-[Chapter 1: Introduction](#chapter-1-introduction)
+[1. Introduction](#1-introduction)
 
    1. [What is a rule?](#what-is-a-rule)
    1. [Why use rules?](#why-use-rules)
    1. [Expressions and rules in Indigo](#expressions-and-rules–in-indigo)
 
-[Chapter 2: Expression Evaluation](#chapter-2-expression-evaluation)
+[2. Expression Evaluation](#2-expression-evaluation)
    1. Compilation and Evaluation
    1. Schemas
-   1. Data types 
+   1. Data Types 
    1. Boolean Scalar Expressions
    1. Operators
-   1. Creating a rule
+   1. Creating a Rule
    1. Compilation
    1. Input Data
    1. Evaluation 
-   1. Evaluation results 
-   1. Short circuiting 
+   1. Evaluation Results 
+   1. Short Circuit Evaluation 
 
-Chapter 3: Indigo Rules Engine Types
+[3. Indigo Rules Engine Types](#3-indigo-rules-engine-types)
    1. The Engine type 
    1. The Rule type 
 
-
-
-1. Lists and Map
+[4. Lists and Maps](#section-4-brlists-and-maps)
    1. Lists
    1. Maps
    1. Functions 
    1. Macros
-1. Using Protobufs in Rules
+
+[5. Using Protobufs in Rules](#section-5-brusing-protobufs-in-rules)
+
+
 1. Non-boolean Output
 1. Rule Hierarchies
 1. Diagnostics
    1. Runtime diagnostics 
    1. Compilation output
 
+<br/>
+
+<br/>
+
+<br/>
 
 ---
-# Chapter 1 <br/>Introduction
+# 1. Introduction
 
 ## What is a rule?
 A rule is an expression that can be evaluated to produce an outcome. The outcome may be true or false, or it may be a number, or a string or any other value. The same can be said of any computer language code, but what makes rules different is that their expression language is "configurable" by end users of the software, allowing them to modify how the software works without re-compiling or re-deploying the software. 
@@ -91,10 +97,16 @@ A side benefit of using rules in software is that it changes the way engineers t
 ## Expressions and rules in Indigo
 The Indigo rules engine goes beyond evaluating individual expressions (such as the "rule expression language" example above) and provides a structure and mechanisms to evaluate *groups* of rules arranged in specific ways for specific purposes. Indigo "outsources" the actual expression evaluation to Google's Common Expression Language, though other languages can be plugged in as well. 
 
----
-# Chapter 2 <br/>Expression Evaluation
+<br/>
 
-We start by looking at how to evaluate individual expressions. In this chapter we will use the terms "expression" and "rule" interchangeably. Later in this guide we will consider ways to arrange rules in hierarchies for different purposes. 
+<br/>
+
+<br/>
+
+---
+# 2. Expression Evaluation
+
+We start by looking at how to evaluate individual expressions. In this section we will use the terms "expression" and "rule" interchangeably. Later in this guide we will consider ways to arrange rules in hierarchies for different purposes. 
 
 All of examples use [Google's Common Expression Language](https://github.com/google/cel-go), CEL for short. 
 
@@ -247,7 +259,7 @@ Before compiling the rule, we need to create an instance of indigo.DefaultEngine
 engine := indigo.NewEngine(cel.NewEvaluator())
 ```
 
-This creates a new engine that will use CEL as its expression evaluation language. See the chapter on Indigo rules engine types for language evaluators and how the Indigo interface types work. 
+This creates a new engine that will use CEL as its expression evaluation language. See the section on Indigo rules engine types for language evaluators and how the Indigo interface types work. 
 
 With an engine, we can now compile the rule:
 
@@ -276,10 +288,10 @@ data := map[string]interface{}{
 }
 ```
 
-The data is placed in a map, where the key is the variable name you specified in the schema. If we look back at the schema definition from earlier in this chapter, you'll see that we defined an "x" and a "y" variable:
+The data is placed in a map, where the key is the variable name you specified in the schema. If we look back at the schema definition from earlier in this section, you'll see that we defined an "x" and a "y" variable:
 
 ```go
-// Flashback to the schema definition earlier in this chapter
+// Flashback to the schema definition earlier in this section
 schema := indigo.Schema{
 	Elements: []indigo.DataElement{
 		{Name: "x", Type: indigo.Int{}},
@@ -338,9 +350,16 @@ Modify the example `indigo/cel/example_test.go:Example_basic()` and run ``go tes
 
 
 
-# Indigo Rules Engine Types
+<br/>
 
-This chapter is a deeper dive into how Indigo is organized. 
+<br/>
+
+<br/>
+
+---
+# 3. Indigo Rules Engine Types
+
+This section is a deeper dive into how Indigo is organized. 
 
 ## The Engine Types
 
@@ -378,6 +397,24 @@ To illustrate how Indigo's interface types work together, here's how you could i
 
 Now, when you call indigo.DefaultEngine.Compile or .Evaluate, it will use your evaluator with your expression language. 
 
+<br/>
+
+<br/>
+
+<br/>
+
+---
+# 4. Lists and Maps
 
 
+In [section 2](#2-expression-evaluation), we saw how to use scalar values in input data and rule evaluation. Indigo also supports lists and maps in the expression language. These types function much the same as Go slices and maps. 
+<br/>
+
+<br/>
+
+<br/>
+
+---
+
+# Section 5 <br/>Using Protobufs in Rules
 
