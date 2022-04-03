@@ -98,6 +98,47 @@ func Example_basic() {
 	// Output: true
 }
 
+func Example_list() {
+
+	//Step 1: Create a schema
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "grades", Type: indigo.List{ValueType: indigo.Float{}}},
+		},
+	}
+
+	// Step 2: Create rules
+	rule := indigo.Rule{
+		Schema:     schema,
+		ResultType: indigo.Bool{},
+		Expr:       `size(grades) > 3`,
+	}
+
+	// Step 3: Create an Indigo engine and give it an evaluator
+	// In this case, CEL
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	// Step 4: Compile the rule
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"grades": []float64{3.4, 3.6, 3.8, 2.9},
+	}
+
+	// Step 5: Evaluate and check the results
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("Is size(grades) > 3? ", results.ExpressionPass)
+	}
+	// Output: Is size(grades) > 3?  true
+}
+
 func Example_nativeTimestampComparison() {
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
