@@ -87,7 +87,7 @@ Consider these two equivalent rules, one written in Go, the other in a simplifie
 
 
 ##### Rule in Go
-```
+```go
   func qualify(x int) bool {
     if x > 10 {
       return true
@@ -95,6 +95,12 @@ Consider these two equivalent rules, one written in Go, the other in a simplifie
       return false
 	}
   }
+```
+
+
+```go
+// Determine whether the request is in the permitted time window.
+request.time - resource.age < duration("24h")
 ```
 
 If the business logic changes, and instead of x > 10 we want x > 15, the Go program must be changed and recompiled. Of course, we could make the value a parameter, but what if instead of simply comparing x to a value, we also want to compare y to another value? We will have to continue changing the qualify function. 
