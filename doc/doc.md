@@ -98,15 +98,10 @@ Consider these two equivalent rules, one written in Go, the other in a simplifie
 ```
 
 
-```go
-// Determine whether the request is in the permitted time window.
-request.time - resource.age < duration("24h")
-```
-
 If the business logic changes, and instead of x > 10 we want x > 15, the Go program must be changed and recompiled. Of course, we could make the value a parameter, but what if instead of simply comparing x to a value, we also want to compare y to another value? We will have to continue changing the qualify function. 
 
 ##### Rule in Expression Language
-```
+```go
 x > 10
 ```
 
@@ -164,7 +159,7 @@ During compilation the rule syntax, functions and data types are checked to ensu
 ## Input Data
 In our simple rule example from the introduction, the 'x' was the input data:
 
-```proto
+```go
 x > 10
 ```
 
@@ -172,7 +167,7 @@ In order to evaluate the rule, we had to provide the value of x in our "real" wo
 
 In reality, rules may have many pieces of data, such as in this expression:
 
-```proto
+```go
 x > 10 && y != "blue" 
 ```
 Indigo allows you to pass a list of data elements to evaluation. 
@@ -235,13 +230,13 @@ Modify the example `indigo/cel/example_test.go:Example_basic()` and run ``go tes
 The simplest type of rule compares scalar values to each other to produce a true/false outcome. 
 Our simple x and y rule is such an expression: 
 
-```proto
+```go
 x > 10 && y != "blue" 
 ```
 
 In some rule engine languages you specify two parts: "if" and "then", like this:
 
-```proto
+```go
 // pseudo-code for a fake rule engine language
 if 
    x > 10 && y != "blue" 
@@ -487,7 +482,7 @@ Maps work like Go maps, where values are indexed by a key, such as a string.
 > All of the examples in this section are from the indigo/cel/example_test.go:Example_map()
 
 
-```
+```go
 schema := indigo.Schema{
 	Elements: []indigo.DataElement{
 		{Name: "flights", Type: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.String{}}},
@@ -510,7 +505,7 @@ For maps we have to specify the key type as well as the value type.
 
 In macros that operate on maps, the value (k) is the map **key**, and we can use that to access values in the map. This will return false, since UA 1500 is delayed:
 
-```proto
+```go
 flights["UA1500"] == "On Time" 
 
 ```
@@ -546,7 +541,7 @@ After you've defined your protocol buffers and imported the generated package in
 
 Indigo includes a sample protocol buffer [student.proto](../testdata/proto/student.proto), used in all the examples. 
 
-```
+```proto
 option go_package = "github.com/ezachrisen/indigo/testdata/school;school";
 
 import "google/protobuf/timestamp.proto";
