@@ -1,12 +1,11 @@
-# Indigo Handbook
+# Indigo Guide
 
-The purpose of this document is to describe how Indigo's rules and the evaluation engine works. We encourage you to read the Indigo source code and examples as primary material, and consider this document as a companion to guide you through the concepts.
+The purpose of the guide is to describe how Indigo's rules and the evaluation engine works. We encourage you to read the Indigo source code and examples as primary material, and consider this document as a companion to guide you through the concepts.
 
 
-
-Useful links:
-[Indigo examples](../example_test.go)
-[CEL examples](../cel/example_test.go)
+Useful links
+[Indigo examples](example_test.go)
+[CEL examples](/cel/example_test.go)
 [CEL Codelabs](https://codelabs.developers.google.com/codelabs/cel-go#0)
 
 ***
@@ -535,7 +534,7 @@ The design decisions made in CEL are congruent with those made by protocol buffe
 See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#protocol-buffer-data-conversion) for how protocol buffers are converted into CEL's internal representation. 
 
 
-To use protocol buffers in rules, follow Google's tutorial [here](https://developers.google.com/protocol-buffers/docs/gotutorial). In the rest of the handbook we'll assume you have a working knowledge of protocol buffers. 
+To use protocol buffers in rules, follow Google's tutorial [here](https://developers.google.com/protocol-buffers/docs/gotutorial). In the rest of the guide we'll assume you have a working knowledge of protocol buffers. 
 
 After you've defined your protocol buffers and imported the generated package into your Go code, you can declare an Indigo schema with a protocol buffer type.
 
