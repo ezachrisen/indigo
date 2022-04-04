@@ -1,46 +1,82 @@
-# Contents
+# Indigo Handbook
 
-[Chapter 1: Introduction](#chapter-1-introduction)
+The purpose of this document is to describe how Indigo's rules and the evaluation engine works. We encourage you to read the Indigo source code and examples as primary material, and consider this document as a companion to guide you through the concepts.
 
-   1. What are rules?
-   1. Why use rules?
-   1. The Indigo rules engine
 
-Chapter 2: Expression Evaluation 
+
+Useful links:
+[Indigo examples](../example_test.go)
+[CEL examples](../cel/example_test.go)
+[CEL Codelabs](https://codelabs.developers.google.com/codelabs/cel-go#0)
+
+***
+
+
+[1. Introduction](#1-introduction)
+
+   1. [What is a rule?](#what-is-a-rule)
+   1. [Why use rules?](#why-use-rules)
+   1. [Expressions and rules in Indigo](#expressions-and-rules–in-indigo)
+
+[2. Expression Evaluation](#2-expression-evaluation)
+
    1. Compilation and Evaluation
    1. Schemas
-   1. Data types 
+   1. Data Types 
    1. Boolean Scalar Expressions
    1. Operators
-   1. Creating a rule
+   1. Creating a Rule
    1. Compilation
    1. Input Data
    1. Evaluation 
-   1. Evaluation results 
-   1. Short circuiting 
+   1. Evaluation Results 
+   1. Short Circuit Evaluation 
 
-Chapter 3: Indigo Rules Engine Types
+[3. Indigo Rules Engine Types](#3-indigo-rules-engine-types)
+
    1. The Engine type 
    1. The Rule type 
 
+[4. Lists and Maps](#section-4-brlists-and-maps)
 
-
-1. Lists and Map
    1. Lists
    1. Maps
    1. Functions 
-   1. Macros
-1. Using Protobufs in Rules
+
+[5. Macros](#5-macros)
+
+[6. Using Protocol Buffers in Rules](#6-using-protocol-buffers-in-rules)
+
+   1. Rules on protocol buffer types 
+   1. Field names in rule expressions
+   1. Nested types
+   1. Enums 
+
+[7. Timestamps and Durations](#7-timestamps-and-durations)
+
+   1. Schema 
+   1. Comparisons
+   1. Math
+   1. Parts of time 
+
+
 1. Non-boolean Output
 1. Rule Hierarchies
 1. Diagnostics
    1. Runtime diagnostics 
    1. Compilation output
+   
+   
 
+1. Nested lists 
 
+</br>
+</br>
 
-# Chapter 1 <br/> Introduction
-The purpose of this document is to 
+***
+</br>
+
+# 1. Introduction
 
 ## What is a rule?
 A rule is an expression that can be evaluated to produce an outcome. The outcome may be true or false, or it may be a number, or a string or any other value. The same can be said of any computer language code, but what makes rules different is that their expression language is "configurable" by end users of the software, allowing them to modify how the software works without re-compiling or re-deploying the software. 
@@ -78,13 +114,20 @@ So why use them? The primary reason to use rules is that they allow business log
 A side benefit of using rules in software is that it changes the way engineers think about writing the application. Instead of focusing on the specific business logic that must be implemented, engineers instead think about how to enable *configurable*, *dynamic* business logic that users control. 
 
 
-## Expressions and rules in the Indigo Rules Engine
+## Expressions and rules in Indigo
 The Indigo rules engine goes beyond evaluating individual expressions (such as the "rule expression language" example above) and provides a structure and mechanisms to evaluate *groups* of rules arranged in specific ways for specific purposes. Indigo "outsources" the actual expression evaluation to Google's Common Expression Language, though other languages can be plugged in as well. 
 
 
-# Expression Evaluation
+</br>
+</br>
 
-We start by looking at how to evaluate individual expressions. In this chapter we will use the terms "expression" and "rule" interchangeably. Later in this guide we will consider ways to arrange rules in hierarchies for different purposes. 
+***
+</br>
+
+
+# 2. Expression Evaluation
+
+We start by looking at how to evaluate individual expressions. In this section we will use the terms "expression" and "rule" interchangeably. Later in this guide we will consider ways to arrange rules in hierarchies for different purposes. 
 
 All of examples use [Google's Common Expression Language](https://github.com/google/cel-go), CEL for short. 
 
@@ -213,7 +256,7 @@ Supported math operators: `` + - * / % ``
 
 ## Creating a rule 
 
-An Indigo rule is a Go struct:
+An Indigo rule is a Go struct, so it can be created like this: 
 
 
 ```go
@@ -227,6 +270,8 @@ rule := indigo.Rule{
 
 This initializes the rule, sets its schema, the expected output (boolean) and the expression to evaluate. Indigo defaults the result type to boolean if you don't specify one. 
 
+There is also a convenience function called indigo.NewRule, which also initializes a map of child rules. We'll get to child rules later. 
+
 ## Compilation 
 
 Before compiling the rule, we need to create an instance of indigo.DefaultEngine:
@@ -237,7 +282,7 @@ Before compiling the rule, we need to create an instance of indigo.DefaultEngine
 engine := indigo.NewEngine(cel.NewEvaluator())
 ```
 
-This creates a new engine that will use CEL as its expression evaluation language. See the chapter on Indigo rules engine types for language evaluators and how the Indigo interface types work. 
+This creates a new engine that will use CEL as its expression evaluation language. See the section on Indigo rules engine types for language evaluators and how the Indigo interface types work. 
 
 With an engine, we can now compile the rule:
 
@@ -266,10 +311,10 @@ data := map[string]interface{}{
 }
 ```
 
-The data is placed in a map, where the key is the variable name you specified in the schema. If we look back at the schema definition from earlier in this chapter, you'll see that we defined an "x" and a "y" variable:
+The data is placed in a map, where the key is the variable name you specified in the schema. If we look back at the schema definition from earlier in this section, you'll see that we defined an "x" and a "y" variable:
 
 ```go
-// Flashback to the schema definition earlier in this chapter
+// Flashback to the schema definition earlier in this section
 schema := indigo.Schema{
 	Elements: []indigo.DataElement{
 		{Name: "x", Type: indigo.Int{}},
@@ -327,10 +372,15 @@ Modify the example `indigo/cel/example_test.go:Example_basic()` and run ``go tes
    Why did this not give an error message? (Although we got false when we wanted true)
 
 
+</br>
+</br>
 
-# Indigo Rules Engine Types
+***
+</br>
 
-This chapter is a deeper dive into how Indigo is organized. 
+# 3. Indigo Rules Engine Types
+
+This section is a deeper dive into how Indigo is organized. Knowing this will make it easier to understand how to use Indigo in a larger application.
 
 ## The Engine Types
 
@@ -351,9 +401,9 @@ Users of Indigo do not need to interact directly with expression compilation or 
 
 ## Rule ownership 
 
-Rules are owned by the Go code that calls Indigo engine methods. The indigo.DefaultEngine does NOT store or maintain rules. It is the responsibility of the calling code to be goroutine-safe and to persist rule data for as long as it is needed in the life of the application. 
+Rules are owned by the Go code that calls Indigo engine methods. The indigo.DefaultEngine does **not** store or maintain rules. It is the responsibility of the calling code to be goroutine-safe and to persist rule data for as long as it is needed in the life of the application. 
 
-During compilation, an Engine may update a rule by setting the Program field to the compilation output of the rule. The Engine may require that data later during the evaluation phase. It is the responsibility of the calling code to ensure that the Program data is not tampered with. 
+During compilation, an Engine may update a rule by setting the Program field to the compilation output of the rule. The Engine may require that data later during the evaluation phase. It is the responsibility of the calling code to ensure that the Program data is not tampered with, and that if the rule expression is changed, the rule must be recompiled. 
 
 ## Using a Non-CEL Evaluator
 
@@ -370,4 +420,196 @@ Now, when you call indigo.DefaultEngine.Compile or .Evaluate, it will use your e
 
 
 
+# 4. Lists and Maps
+In [section 2](#2-expression-evaluation), we saw how to use scalar values in input data and rule evaluation. Indigo also supports lists and maps in the expression language. These types function much the same as Go slices and maps. 
 
+## Lists 
+
+Below is an example of how to define a list, pass a list in the input data, and how to use a list in a rule expression:
+
+
+> All of the examples in this section are from the indigo/cel/example_test.go:Example_list()
+
+
+```go
+
+schema := indigo.Schema{
+	Elements: []indigo.DataElement{
+		{Name: "grades", Type: indigo.List{ValueType: indigo.Float{}}},
+	},
+}
+
+rule := indigo.Rule{
+	Schema:     schema,
+	ResultType: indigo.Bool{},
+	Expr:       `size(grades) > 3`,
+}
+
+data := map[string]interface{}{
+	"grades": []float64{3.4, 3.6, 3.8, 2.9},
+}
+
+```
+
+As you can see in the example, when we declare the list variable "grades" in the schema, we need to specify the type of elements we're storing with the ``ValueType`` field. Any Indigo type can be a ``ValueType``. 
+
+In a rule we can access an individual element: 
+
+
+```go
+rule.Expr = `grades[1] == 3.6`
+```
+
+With CEL [macros](https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros), we can perform operations on the elements in the list. For example, the ``exists`` macro checks if any of the grades in the list are less than 3.0:
+
+```go
+rule.Expr = `grades.exists(g, g < 3.0)`
+```
+
+In the macro we define an arbitrary variable g, which will represent each element **value** in the list as CEL executes the macro. 
+
+This rule will evaluate to true, since one of the grades is 2.9.
+
+See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros) for more macros.
+
+
+## Maps
+Maps work like Go maps, where values are indexed by a key, such as a string. 
+
+
+
+> All of the examples in this section are from the indigo/cel/example_test.go:Example_map()
+
+
+```
+schema := indigo.Schema{
+	Elements: []indigo.DataElement{
+		{Name: "flights", Type: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.String{}}},
+	},
+}
+
+data := map[string]interface{}{
+   "flights": map[string]string{"UA1500": "On Time", "DL232": "Delayed",   "AA1622": "Delayed"},
+}
+
+rule := indigo.Rule{
+	Schema:     schema,
+	ResultType: indigo.Bool{},
+	Expr:       `flights.exists(k, flights[k] == "Delayed")`,
+}
+```
+
+
+For maps we have to specify the key type as well as the value type. 
+
+In macros that operate on maps, the value (k) is the map **key**, and we can use that to access values in the map. This will return false, since UA 1500 is delayed:
+
+```proto
+flights["UA1500"] == "On Time" 
+
+```
+
+# 5. Macros
+CEL provides a few macros that provide functionality beyond predicate logic such as == or <=. 
+
+We have already seen one macro (`exists`), but here are some of the macros CEL provides:
+
+- ``has`` checks if a field exists 
+- ``all`` will be true if all elements meet the predicate 
+- ``exists_one`` will be true if only 1 element matches the 
+- ``filter`` can be applied to a list and returns a new list with the matching elements
+
+See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros) for a complete list of macros. 
+
+There is no macro to do aggregate math on lists or maps. It is recommended to do such calculations outside rule evaluation and provide the data in the input. See [this discussion](https://groups.google.com/g/cel-go-discuss/c/1Y_1APJHk0c/m/JSsKRdGeAQAJ) in the CEL group for more information. 
+
+
+# 6. Using Protocol Buffers in Rules
+Until now all of our rules have operated on simple values, either as individual variables (numbers, strings) or as lists of such simple values. Missing from Indigo and CEL is the ability to use Go structs as input data. (An experimental implementation of struct-support exists in Indigo, but is not recommended). 
+
+Instead, CEL provides support for using Protocol Buffer types in rules. This opens more possibilities for organizing data we pass to rules. If our application serves gRPC APIs, and defines its types with protocol buffers, we can seamlessly pass protocol buffers from our Go code to Indigo rules (and the reverse, as we'll see later). 
+
+The design decisions made in CEL are congruent with those made by protocol buffers, and this is not an accident. CEL natively supports ``google.protobuf.Timestamp`` and ``google.protobuf.Duration``. We'll see more about that later. 
+
+See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#protocol-buffer-data-conversion) for how protocol buffers are converted into CEL's internal representation. 
+
+
+To use protocol buffers in rules, follow Google's tutorial [here](https://developers.google.com/protocol-buffers/docs/gotutorial). In the rest of the handbook we'll assume you have a working knowledge of protocol buffers. 
+
+After you've defined your protocol buffers and imported the generated package into your Go code, you can declare an Indigo schema with a protocol buffer type.
+
+Indigo includes a sample protocol buffer [student.proto](../testdata/proto/student.proto), used in all the examples. 
+
+```
+option go_package = "github.com/ezachrisen/indigo/testdata/school;school";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+message Student {
+  double id = 1;
+  int32 age = 2;
+  double gpa = 3;
+  status_type status = 4;
+  google.protobuf.Timestamp enrollment_date = 7; 
+  
+  enum status_type {
+	ENROLLED = 0;
+	PROBATION = 1;
+  }
+  
+  map<string, string> attrs = 6;
+  
+  repeated double grades = 5;
+
+  message Suspension {
+	string cause = 1;
+	google.protobuf.Timestamp date = 2;
+  }
+
+  repeated Suspension suspensions = 8;
+}
+```
+
+A few things to note about this protocol buffer definition:
+
+- It has timestamps (an imported type)
+- It has durations (an imported type)
+- It has enumerations
+- It has maps and lists 
+- It has an embedded message type 
+
+Generally, you should assume that any valid protocol buffer can be used in an Indigo rule. 
+
+## Rules on protocol buffer types
+Rules on protocol buffer work exactly like rules on simple types such as strings and numbers. 
+
+> The code in this section is from the indigo/cel/example_test.go:Example_protoBasic
+
+In some ways, using protocol buffers instead of native Go types is easier, because in the schema declaration we simply provide an instance of the protocol buffer type we want to use in the ``indigo.Proto`` type. We do not have to specify each field inside the protocol buffer, or the type of values in lists and maps. Nor do we need to define any nested structs or imported types. The protocol buffer definition itself takes care of this for us. 
+
+```go
+education := indigo.Schema{
+	Elements: []indigo.DataElement{
+		{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+	},
+}
+data := map[string]interface{}{
+	"student": &school.Student{
+		Age: 21,
+	},
+}
+
+rule := indigo.Rule{
+	Schema: education,
+	Expr:   `student.age > 21`,
+}
+
+// Output: false
+```
+
+
+When we declare the schema we provide the address of an instance of the protocol buffer type (``&school.Student{}``). This means that the code that declares a schema has to have access to the generated code. (Later we'll see how to dynamically load protocol buffer types). 
+
+## Field names in rule expressions
+In the Go code (where we define the data map), the field ``Age`` is capitalized. That's because protocol buffers are rendered as Go structs where all fields are exported. However, **inside** the rule expression, ``age`` is lower case. That is because **inside** rule expressions, the names are the names used in the ``.proto`` file. So, the field ``enrollment_date`` will be ``EnrollmentDate`` in Go, but ``enrollment_date`` in rule expressions. 

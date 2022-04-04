@@ -136,7 +136,59 @@ func Example_list() {
 	} else {
 		fmt.Println("Is size(grades) > 3? ", results.ExpressionPass)
 	}
+
+	// Check the value of a specific element
+	rule.Expr = `grades[1] == 3.6`
+	engine.Compile(&rule)
+	results, _ = engine.Eval(context.Background(), &rule, data)
+	fmt.Println("Is element 1 == 3.6? ", results.ExpressionPass)
+
+	// Check if the list contains a value
+	rule.Expr = `grades.exists(g, g < 3.0)`
+	engine.Compile(&rule)
+	results, _ = engine.Eval(context.Background(), &rule, data)
+	fmt.Println("Any grades below 3.0? ", results.ExpressionPass)
+
 	// Output: Is size(grades) > 3?  true
+	// Is element 1 == 3.6?  true
+	// Any grades below 3.0?  true
+}
+
+func Example_map() {
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "flights", Type: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.String{}}},
+		},
+	}
+
+	rule := indigo.Rule{
+		Schema:     schema,
+		ResultType: indigo.Bool{},
+		Expr:       `flights.exists(k, flights[k] == "Delayed")`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"flights": map[string]string{"UA1500": "On Time", "DL232": "Delayed", "AA1622": "Delayed"},
+	}
+
+	// Step 5: Evaluate and check the results
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println("Are any flights delayed?", results.ExpressionPass)
+	}
+
+	// Output: Are any flights delayed? true
 }
 
 func Example_nativeTimestampComparison() {
@@ -173,6 +225,42 @@ func Example_nativeTimestampComparison() {
 	}
 	fmt.Println(results.ExpressionPass)
 	// Output: true
+}
+
+// Demonstrates using the CEL exists function to check for a value in a slice
+func Example_protoBasic() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+	data := map[string]interface{}{
+		"student": &school.Student{
+			Age: 21,
+		},
+	}
+
+	rule := indigo.Rule{
+		Schema: education,
+		Expr:   `student.age > 21`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+	fmt.Println(results.ExpressionPass)
+	// Output: false
 }
 
 // Demonstrates using the CEL exists function to check for a value in a slice
