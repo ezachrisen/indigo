@@ -1,7 +1,6 @@
 syntax = "proto3";
 package testdata.school;
 
-
 option go_package = "github.com/ezachrisen/indigo/testdata/school;school";
 
 import "google/protobuf/timestamp.proto";
