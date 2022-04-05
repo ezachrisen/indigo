@@ -1,21 +1,24 @@
 # Indigo Guide
 
+Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules. Rules are expressions (such as ``"a > b"``) that are evaluated, and the outcomes used to direct appliation logic. Indigo does not itself provide a language for expressions, relying instead on a backend compiler (```interface ExpressionCompiler```) and evaluator (```interface ExpressionEvaluator```) to provide that. You can create your own backend evaluator, or use the default one, Google's Common Expression Language, CEL. 
+
 The purpose of the guide is to describe how Indigo's rules and the evaluation engine works. We encourage you to read the Indigo source code and examples as primary material, and consider this document as a companion to guide you through the concepts.
 
 
 Useful links
-[Indigo examples](example_test.go)
-[CEL examples](/cel/example_test.go)
-[CEL Codelabs](https://codelabs.developers.google.com/codelabs/cel-go#0)
+
+- [Indigo examples](example_test.go)
+- [CEL examples](/cel/example_test.go)
+- [CEL Codelabs](https://codelabs.developers.google.com/codelabs/cel-go#0)
 
 ***
 
 
 [1. Introduction](#1-introduction)
 
-   1. [What is a rule?](#what-is-a-rule)
-   1. [Why use rules?](#why-use-rules)
-   1. [Expressions and rules in Indigo](#expressions-and-rules–in-indigo)
+   1. What is a rule?
+   1. Why use rules?
+   1. Expressions and rules in Indigo
 
 [2. Expression Evaluation](#2-expression-evaluation)
 
@@ -48,7 +51,7 @@ Useful links
 
    1. Rules on protocol buffer types 
    1. Field names in rule expressions
-   1. Nested types
+   1. Nested fields
    1. Enums 
 
 [7. Timestamps and Durations](#7-timestamps-and-durations)
@@ -78,7 +81,7 @@ Useful links
 # 1. Introduction
 
 ## What is a rule?
-A rule is an expression that can be evaluated to produce an outcome. The outcome may be true or false, or it may be a number, or a string or any other value. The same can be said of any computer language code, but what makes rules different is that their expression language is "configurable" by end users of the software, allowing them to modify how the software works without re-compiling or re-deploying the software. 
+A rule is an expression that can be evaluated to produce an outcome. The outcome may be true or false, or it may be a number, or a string or any other value. The same can be said of any computer language code, but what makes rules different is that their expression language is "configurable" by end users of the software, allowing users (not developers) to modify how the software works without re-compiling or re-deploying the software. 
 
 Rules are data fed into the software, and the software processes the rules. 
 
@@ -109,7 +112,7 @@ In the rule language example, we have an expression entered by the user at run-t
 ## Why use rules?
 Rules are not appropriate for all situations. For one thing, rules are much slower to evaluate than compiled code. Rules are also more difficult to debug, and because users are able to enter them into the software, they are less predictable than thoroughly tested, quality software. 
 
-So why use them? The primary reason to use rules is that they allow business logic to be configured outside of the software itself. It removes business logic from the software, and makes the software into a data processing *platform*, where the rules are the data. 
+So why use them? The primary reason to use rules is that they allow business logic to be configured outside of the software itself. It removes business logic from the software, and makes the software into a data processing *platform*, where the rules are the *data*. 
 
 A side benefit of using rules in software is that it changes the way engineers think about writing the application. Instead of focusing on the specific business logic that must be implemented, engineers instead think about how to enable *configurable*, *dynamic* business logic that users control. 
 
@@ -117,6 +120,9 @@ A side benefit of using rules in software is that it changes the way engineers t
 ## Expressions and rules in Indigo
 The Indigo rules engine goes beyond evaluating individual expressions (such as the "rule expression language" example above) and provides a structure and mechanisms to evaluate *groups* of rules arranged in specific ways for specific purposes. Indigo "outsources" the actual expression evaluation to Google's Common Expression Language, though other languages can be plugged in as well. 
 
+
+## General approach to using rules
+You can think of Indigo as a "filter" or a "true/false" checker. You prepare a record with data you want to check, send the record to Indigo, and Indigo will tell you if the record meets the requirements of the rule. Let's say you have 100 students, and you want to determine which students need to take at least 1 language course to graduate. You would set up your rule, then call Indigo for **each** of the 100 students, one by one. As we go through this guide, it's important to understand that it is a very simple process: send the 1 record to Indigo, get the answer, proceed. There is no magic here!
 
 </br>
 </br>
@@ -135,19 +141,8 @@ All of examples use [Google's Common Expression Language](https://github.com/goo
 **Note:** In this guide we will touch on the basics of the language, for complete coverage you should read the [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md).
 
 
+> See the ``indigo/cel/example_test.go`` file's ``Example_basic()`` function for the code used in the examples. 
 
-
-See the ``indigo/cel/example_test.go`` file for the code for the examples.
-
-In the code samples below we will provide the corresponding example code like this:
-```go
- // indigo/cel/example_test.go:Example_basic()
- ... 
- sample code
- ...
-```
-
-This means that the sample code is taken from the function `Example_basic()` in the `indigo/cel/example_test.go` file. 
 
 
 ## Compilation and Evaluation
@@ -297,6 +292,20 @@ if err != nil {
 
 If there are any compilation errors, the returned error message will tell you what the error is, and where in your expression the error occurred. 
 
+For example, here's an invalid rule and the corresponding compilation error message:
+
+```go
+
+
+x > 10 && z != "blue"`,
+
+
+rule : checking rule:
+ERROR: <input>:1:11: undeclared reference to 'z' (in container '')
+ | x > 10 && z != "blue"
+ | ..........^
+```
+
 ## Input Data
 
 Now that we have a compiled rule, we can start to evaluate data against it. Let's assume we are serving an API that receives data, and it's our job to check the data against the rule and report the results. 
@@ -311,7 +320,7 @@ data := map[string]interface{}{
 }
 ```
 
-The data is placed in a map, where the key is the variable name you specified in the schema. If we look back at the schema definition from earlier in this section, you'll see that we defined an "x" and a "y" variable:
+The data is placed in a map, where the **key** is the variable **name** you specified in the schema. The variables names are arbitrary, they have no connection to types or other structures. If we look back at the schema definition from earlier in this section, you'll see that we defined an "x" and a "y" variable:
 
 ```go
 // Flashback to the schema definition earlier in this section
@@ -330,7 +339,6 @@ A data map does not need to define values for all variables in a schema, but if 
 We are finally ready to evaluate the input data (x=11, y=red) against the rule to determine if the rule is true or false:
 
 ```go
-// indigo/cel/example_test.go:Example_basic()
 results, err := engine.Eval(context.Background(), &rule, data)
 ```
 
@@ -340,7 +348,7 @@ Eval accepts a context.Context, and will stop evaluation if the context's deadli
 
 ## Evaluation Results 
 
-The indigo.Result struct contains the output of the expression evaluation, and additional information to help calling code process the results. For now, we'll focus on the boolean Result.ExpressionPass field. This field will tell you if the output of the expression is true or false, which is what we are interested in our example. 
+The indigo.Result struct contains the output of the expression evaluation, and additional information to help calling code process the results. For now, we'll focus on the boolean Result.ExpressionPass field. This field will tell you if the output of the expression is true or false, which is what we are interested in our example. Later we will look more in depth at the Results type. 
 
 ## Short Circuiting 
 
@@ -541,6 +549,9 @@ After you've defined your protocol buffers and imported the generated package in
 Indigo includes a sample protocol buffer [student.proto](../testdata/proto/student.proto), used in all the examples. 
 
 ```proto
+syntax = "proto3";
+package testdata.school;
+
 option go_package = "github.com/ezachrisen/indigo/testdata/school;school";
 
 import "google/protobuf/timestamp.proto";
@@ -613,3 +624,88 @@ When we declare the schema we provide the address of an instance of the protocol
 
 ## Field names in rule expressions
 In the Go code (where we define the data map), the field ``Age`` is capitalized. That's because protocol buffers are rendered as Go structs where all fields are exported. However, **inside** the rule expression, ``age`` is lower case. That is because **inside** rule expressions, the names are the names used in the ``.proto`` file. So, the field ``enrollment_date`` will be ``EnrollmentDate`` in Go, but ``enrollment_date`` in rule expressions. 
+
+## Nested fields
+The Student protocol buffer includes a nested field, ``suspensions``, which is a list of objects of the ``Suspension`` protocol buffer type. To access these elements, we don't need to do anything special:
+
+> The sample code is from ``indigo/cel/example_test.go:Example_protoNestedMessages()
+
+```go
+education := indigo.Schema{
+  Elements: []indigo.DataElement{
+	  {Name: "x", Type: indigo.Proto{Message: &school.Student{}}}},
+}
+
+data := map[string]interface{}{
+  "x": &school.Student{
+	  Grades: []float64{3.0, 2.9, 4.0, 2.1},
+	  Suspensions: []*school.Student_Suspension{
+		  &school.Student_Suspension{Cause: "Cheating"},
+		  &school.Student_Suspension{Cause: "Fighting"},
+	  },
+  },
+}
+
+// Check if the student was ever suspended for fighting
+rule := indigo.Rule{
+  ID:     "fighting_check",
+  Schema: education,
+  Expr:   `x.suspensions.exists(s, s.cause == "Fighting")`,
+}
+
+```
+
+In this example, we've chosen the variable name ``x``, to illustrate that the variable name can be anything, and that it should not be confused with the protocol buffer type ``Student``. 
+
+In the rule, we access the list of suspensions, then iterate through them and check if the cause for the suspension was fighting. Again, note that inside the rule, the names used are the **protocol buffer field names**. 
+
+## Enums
+Referring to protocol buffer enums in rule expressions is simple and convenient. The definition of ``Student`` included an enum (```status_type``) and a field on the ``Student`` called ``status`` of type ``status_type``. The relevant parts of the protocol buffer definition are repeated here:
+
+```proto 
+package testdata.school;
+...
+
+message Student {
+  ...
+  status_type status = 4;
+  ...
+  enum status_type {
+	ENROLLED = 0;
+	PROBATION = 1;
+  }
+  ...
+}
+```
+
+We can use the name of the enum value directly in the expression. So instead of using 0 for the ENROLLED state, we can use the enum constant name: 
+
+> The sample code is from ``indigo/cel/example_test.go:Example_protoEnum()
+
+```go
+	rule := indigo.Rule{
+		Schema: education,
+		Expr:   `student.status == testdata.school.Student.status_type.PROBATION`,
+	}
+
+
+```
+
+To refer to the constant name, we need to use the full name, which includes the protocol buffer **package** name ``testdata``:
+```go
+      testdata.school.Student.status_type.PROBATION
+      |--------------|   ^          ^        ^
+             ^           |          |      Enum 
+             |           |          |      value 
+           Proto         |          |      constant
+        Package name     |          |      name 
+                         |          |      (value = 1)
+                    The student     |
+                    message         |
+                    type            |
+                                The enum 
+                                type name 
+                        
+ ```
+
+

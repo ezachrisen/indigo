@@ -227,7 +227,7 @@ func Example_nativeTimestampComparison() {
 	// Output: true
 }
 
-// Demonstrates using the CEL exists function to check for a value in a slice
+// Demonstrates basic protocol buffer usage in a rule
 func Example_protoBasic() {
 
 	education := indigo.Schema{
@@ -244,6 +244,42 @@ func Example_protoBasic() {
 	rule := indigo.Rule{
 		Schema: education,
 		Expr:   `student.age > 21`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+	fmt.Println(results.ExpressionPass)
+	// Output: false
+}
+
+// Demonstrates using a protocol buffer enum value in a rule
+func Example_protoEnum() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+	data := map[string]interface{}{
+		"student": &school.Student{
+			Status: school.Student_ENROLLED,
+		},
+	}
+
+	rule := indigo.Rule{
+		Schema: education,
+		Expr:   `student.status == testdata.school.Student.status_type.PROBATION`,
 	}
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
@@ -397,13 +433,11 @@ func Example_protoNestedMessages() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
-			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
-		},
+			{Name: "x", Type: indigo.Proto{Message: &school.Student{}}}},
 	}
 
 	data := map[string]interface{}{
-		"student": &school.Student{
+		"x": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
 				&school.Student_Suspension{Cause: "Cheating"},
@@ -416,7 +450,7 @@ func Example_protoNestedMessages() {
 	rule := indigo.Rule{
 		ID:     "fighting_check",
 		Schema: education,
-		Expr:   `student.suspensions.exists(s, s.cause == "Fighting")`,
+		Expr:   `x.suspensions.exists(s, s.cause == "Fighting")`,
 	}
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
