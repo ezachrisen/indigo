@@ -9,6 +9,7 @@ import "google/protobuf/duration.proto";
 message Student {
   double id = 1;
   int32 age = 2;
+  int32 credits = 9;
   double gpa = 3;
   status_type status = 4;
   google.protobuf.Timestamp enrollment_date = 7; 
@@ -17,6 +18,7 @@ message Student {
 	ENROLLED = 0;
 	PROBATION = 1;
   }
+
   
   map<string, string> attrs = 6;
   
