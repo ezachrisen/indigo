@@ -69,7 +69,7 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, 
 	}
 
 	if err = doTypesMatch(c.ResultType(), resultType); err != nil {
-		return nil, fmt.Errorf("compiling: %w", err)
+		return nil, fmt.Errorf("result type mismatch: %w", err)
 	}
 
 	if collectDiagnostics {

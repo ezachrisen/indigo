@@ -698,7 +698,7 @@ To refer to the constant name, we need to use the full name, which includes the 
              ^           |          |      Enum 
              |           |          |      value 
            Proto         |          |      constant
-        Package name     |          |      name 
+        package name     |          |      name 
                          |          |      (value = 1)
                     The student     |
                     message         |
@@ -707,5 +707,168 @@ To refer to the constant name, we need to use the full name, which includes the 
                                 type name 
                         
  ```
+
+
+# 7. Timestamps and Durations
+
+CEL uses protocol buffer types for timestamps and durations, and they closely mirror the corresponding Go types (``time.Time`` and ``time.Duration``). There are also CEL functions to convert timestamp and duration strings to their protocol buffer types. 
+
+## Rules with timestamps and durations
+
+The sample ``Student`` protocol buffer type has a timestamp field, and the ``StudentSummary`` field has a duration field:
+
+```proto
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+message Student {
+...
+  google.protobuf.Timestamp enrollment_date = 7; 
+...
+}
+
+message StudentSummary {
+...
+   google.protobuf.Duration tenure = 3;
+...
+}
+
+```
+
+
+> The code for this example is in [Example_protoTimestampAndDurationComparison()](cel/example_test.go#432)
+
+Our schema:
+
+```go
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "ssum", Type: indigo.Proto{Message: &school.StudentSummary{}}},
+		},
+	}
+```
+
+Here we have references to the two student protocol buffer types as well as "now", which is a timestamp type. In CEL, the ``indigo.Timestamp`` type will be converted to a ``google.protobuf.Timestamp``.
+
+The (silly) rule, which determines if the student enrolled prior to today, and has been enrolled for more than 500 days:
+
+```proto
+s.enrollment_date < now
+&& 
+// 12,000h = 500 days * 24 hours
+ssum.tenure > duration("12000h")
+```
+
+A couple of things to point out:
+
+1. You can add comments in rules with ``//``
+1. CEL includes a function ``duration`` which is equivalent to the ``time.ParseDuration`` function. 
+
+The data we will pass to the rule:
+
+```go
+data := map[string]interface{}{
+	"s": &school.Student{
+		EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
+	},
+	"ssum": &school.StudentSummary{
+		Tenure: durationpb.New(time.Duration(time.Hour * 24 * 451)),
+	},
+	"now": timestamppb.Now(),
+}
+```
+
+
+In the ``Student`` and ``StudentSummary`` Go structs, we initialize the timestamp and duration fields with functions from the [``timestamppb``](https://pkg.go.dev/google.golang.org/protobuf/types/known/timestamppb) and [``durationpb``](https://pkg.go.dev/google.golang.org/protobuf/types/known/durationpb) packages. 
+
+Evaluating the rule returns ``false``. 
+
+
+## Calculations on timestamps and durations 
+
+In CEL rules we can do calculations on timestamps and durations. See (the CEL spec)[https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions] for the operations allowed. 
+
+We can write the following rule to determine if the student has been enrolled more than 100 days:
+
+``proto
+// 2,400h = 100 days * 24 hours
+now - s.enrollment_date > duration("2400h")
+``
+
+The calculation ``timestamp - timestamp`` produces a duration, which is then compared with another duration. 
+
+Similarly, we could add a duration to a timestamp or two durations.
+
+
+## Summary of timestamp operations in Go
+
+This package has generated types for google/protobuf/timestamp.proto:
+
+```go
+import "google.golang.org/protobuf/types/known/timestamppb"
+```
+
+To create a new timestamp:
+
+```go
+now := timestamppb.Now()
+```
+
+To convert a Go time.Time to a proto timestamp:
+
+```go
+prototime := timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC))
+```
+
+To convert from a proto time to Go time:
+
+```go
+goTime := pbtime.AsTime()
+```
+
+## Timestamp conversion in a CEL rule
+
+Convert from a string to a timestamp 
+
+``proto
+timestamp("1972-01-01T10:00:20.021-05:00")
+``
+
+## Summary of duration operations in Go
+
+
+This package has generated types for google/protobuf/duration.proto:
+
+```go
+import	"google.golang.org/protobuf/types/known/durationpb"
+```
+
+To convert a Go duration to a proto duration:
+
+```go
+protodur := durationpb.New(godur)
+```
+
+To convert back from a protocol buffer duration to a Go duration:
+
+```go
+goDur := protodur.AsDuration()
+```
+
+## Duration conversion in a CEL rule 
+
+``proto
+duration("2400h")
+``
+
+
+
+
+
+
+
+
 
 

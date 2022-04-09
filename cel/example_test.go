@@ -428,6 +428,99 @@ func Example_protoDurationComparison() {
 	// Output: true
 }
 
+// Demonstrates writing rules on timestamps and durations
+func Example_protoTimestampAndDurationComparison() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "ssum", Type: indigo.Proto{Message: &school.StudentSummary{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
+		},
+		"ssum": &school.StudentSummary{
+			Tenure: durationpb.New(time.Duration(time.Hour * 24 * 451)),
+		},
+		"now": timestamppb.Now(),
+	}
+
+	rule := indigo.Rule{
+		ID:     "",
+		Schema: education,
+		Expr: `s.enrollment_date < now
+               && 
+               // 12,000h = 500 days * 24 hours
+               ssum.tenure > duration("12000h")
+			  `,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	fmt.Println(results.ExpressionPass)
+	// Output: false
+}
+
+// Demonstrates writing rules on timestamps and durations
+func Example_protoDurationCalculation() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "ssum", Type: indigo.Proto{Message: &school.StudentSummary{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
+		},
+		"now": timestamppb.Now(),
+	}
+
+	rule := indigo.Rule{
+		ID:     "",
+		Schema: education,
+		Expr: `// 2,400h = 100 days * 24 hours
+               now - s.enrollment_date  > duration("2400h")
+			  `,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	fmt.Println(results.ExpressionPass)
+	// Output: true
+}
+
 // Demonstrates using the exists macro to inspect the value of nested messages in the list
 func Example_protoNestedMessages() {
 
