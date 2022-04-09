@@ -9,7 +9,9 @@ Useful links
 
 - [Indigo examples](example_test.go)
 - [CEL examples](/cel/example_test.go)
+
 - [CEL Codelabs](https://codelabs.developers.google.com/codelabs/cel-go#0)
+
 
 ***
 
@@ -56,21 +58,21 @@ Useful links
 
 [7. Timestamps and Durations](#7-timestamps-and-durations)
 
-   1. Schema 
-   1. Comparisons
-   1. Math
+   1. Rules with timestamps and durations
+   1. Calculations on timestamps and durations
+   1. Summary of timestamp operations in Go
+   1. Timestamp conversion in a CEL rule
+   1. Summary of duration operations in Go
+   1. Duration conversion in a CEL rule
    1. Parts of time 
 
+[8. Object construction](#8-object-construction)
 
-1. Non-boolean Output
-1. Rule Hierarchies
-1. Diagnostics
-   1. Runtime diagnostics 
-   1. Compilation output
-   
-   
+   1. Conditional object construction 
 
-1. Nested lists 
+
+[Appendix: More CEL Resources](#appendix-more-cel-resources)
+
 
 </br>
 </br>
@@ -428,6 +430,12 @@ Now, when you call indigo.DefaultEngine.Compile or .Evaluate, it will use your e
 
 
 
+</br>
+</br>
+
+***
+</br>
+
 # 4. Lists and Maps
 In [section 2](#2-expression-evaluation), we saw how to use scalar values in input data and rule evaluation. Indigo also supports lists and maps in the expression language. These types function much the same as Go slices and maps. 
 
@@ -517,6 +525,13 @@ flights["UA1500"] == "On Time"
 
 ```
 
+
+</br>
+</br>
+
+***
+</br>
+
 # 5. Macros
 CEL provides a few macros that provide functionality beyond predicate logic such as == or <=. 
 
@@ -532,6 +547,12 @@ See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/l
 There is no macro to do aggregate math on lists or maps. It is recommended to do such calculations outside rule evaluation and provide the data in the input. See [this discussion](https://groups.google.com/g/cel-go-discuss/c/1Y_1APJHk0c/m/JSsKRdGeAQAJ) in the CEL group for more information. 
 
 
+</br>
+</br>
+
+***
+</br>
+
 # 6. Using Protocol Buffers in Rules
 Until now all of our rules have operated on simple values, either as individual variables (numbers, strings) or as lists of such simple values. Missing from Indigo and CEL is the ability to use Go structs as input data. (An experimental implementation of struct-support exists in Indigo, but is not recommended). 
 
@@ -542,7 +563,7 @@ The design decisions made in CEL are congruent with those made by protocol buffe
 See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#protocol-buffer-data-conversion) for how protocol buffers are converted into CEL's internal representation. 
 
 
-To use protocol buffers in rules, follow Google's tutorial [here](https://developers.google.com/protocol-buffers/docs/gotutorial). In the rest of the guide we'll assume you have a working knowledge of protocol buffers. 
+To use create protocol buffer definitions and generate the code for them, follow Google's tutorial [here](https://developers.google.com/protocol-buffers/docs/gotutorial). In the rest of the guide we'll assume you have a working knowledge of protocol buffers. 
 
 After you've defined your protocol buffers and imported the generated package into your Go code, you can declare an Indigo schema with a protocol buffer type.
 
@@ -580,6 +601,13 @@ message Student {
 
   repeated Suspension suspensions = 8;
 }
+
+message StudentSummary {
+  double gpa = 1;
+  double risk_factor = 2;
+  google.protobuf.Duration tenure = 3;
+}
+
 ```
 
 A few things to note about this protocol buffer definition:
@@ -590,30 +618,30 @@ A few things to note about this protocol buffer definition:
 - It has maps and lists 
 - It has an embedded message type 
 
-Generally, you should assume that any valid protocol buffer can be used in an Indigo rule. 
+Generally, you can assume that any valid protocol buffer can be used in an Indigo rule. 
 
-## Rules on protocol buffer types
-Rules on protocol buffer work exactly like rules on simple types such as strings and numbers. 
+## Rules using protocol buffer types
+Rules using protocol buffer types work exactly like rules with simple types such as strings and numbers. 
 
 > The code in this section is from the indigo/cel/example_test.go:Example_protoBasic
 
-In some ways, using protocol buffers instead of native Go types is easier, because in the schema declaration we simply provide an instance of the protocol buffer type we want to use in the ``indigo.Proto`` type. We do not have to specify each field inside the protocol buffer, or the type of values in lists and maps. Nor do we need to define any nested structs or imported types. The protocol buffer definition itself takes care of this for us. 
+In some ways, using protocol buffers instead of native Go types is easier, because in the schema declaration we simply provide an instance of the protocol buffer type we want to use in the ``indigo.Proto`` type. We do not have to specify each field inside the protocol buffer, or the type of values in lists and maps. Nor do we need to define any nested structs or imported types. The protocol buffer definition itself takes care of this for us:
 
 ```go
 education := indigo.Schema{
-	Elements: []indigo.DataElement{
-		{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
-	},
+  Elements: []indigo.DataElement{
+	  {Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+  },
 }
 data := map[string]interface{}{
-	"student": &school.Student{
-		Age: 21,
-	},
+  "student": &school.Student{
+	  Age: 21,
+  },
 }
 
 rule := indigo.Rule{
-	Schema: education,
-	Expr:   `student.age > 21`,
+  Schema: education,
+  Expr:   `student.age > 21`,
 }
 
 // Output: false
@@ -660,7 +688,7 @@ In this example, we've chosen the variable name ``x``, to illustrate that the va
 In the rule, we access the list of suspensions, then iterate through them and check if the cause for the suspension was fighting. Again, note that inside the rule, the names used are the **protocol buffer field names**. 
 
 ## Enums
-Referring to protocol buffer enums in rule expressions is simple and convenient. The definition of ``Student`` included an enum (```status_type``) and a field on the ``Student`` called ``status`` of type ``status_type``. The relevant parts of the protocol buffer definition are repeated here:
+Referring to protocol buffer enums in rule expressions is simple and convenient. The definition of ``Student`` included an enum (``status_type``) and a field on the ``Student`` called ``status`` of type ``status_type``. The relevant parts of the protocol buffer definition are repeated here:
 
 ```proto 
 package testdata.school;
@@ -680,7 +708,7 @@ message Student {
 
 We can use the name of the enum value directly in the expression. So instead of using 0 for the ENROLLED state, we can use the enum constant name: 
 
-> The sample code is from ``indigo/cel/example_test.go:Example_protoEnum()
+> The sample code is from [Example_protoEnum()](/cel/example_test.go)
 
 ```go
 	rule := indigo.Rule{
@@ -708,10 +736,17 @@ To refer to the constant name, we need to use the full name, which includes the 
                         
  ```
 
+This is the way to refer to all protocol buffer types within rules. 
+
+</br>
+</br>
+
+***
+</br>
 
 # 7. Timestamps and Durations
 
-CEL uses protocol buffer types for timestamps and durations, and they closely mirror the corresponding Go types (``time.Time`` and ``time.Duration``). There are also CEL functions to convert timestamp and duration strings to their protocol buffer types. 
+CEL uses protocol buffer types for timestamps and durations, and they closely mirror the corresponding Go types (``time.Time`` and ``time.Duration``). There are also CEL functions to convert timestamp and duration strings to their protocol buffer types. Even if we don't use any protocol buffer types of our own, CEL uses proto versions of timestamps and durations. This illustrates the close relationship between CEL and protocol buffers. 
 
 ## Rules with timestamps and durations
 
@@ -752,7 +787,7 @@ Our schema:
 
 Here we have references to the two student protocol buffer types as well as "now", which is a timestamp type. In CEL, the ``indigo.Timestamp`` type will be converted to a ``google.protobuf.Timestamp``.
 
-The (silly) rule, which determines if the student enrolled prior to today, and has been enrolled for more than 500 days:
+The (silly) rule, which determines if the student enrolled prior to today and has been enrolled for more than 500 days:
 
 ```proto
 s.enrollment_date < now
@@ -764,7 +799,7 @@ ssum.tenure > duration("12000h")
 A couple of things to point out:
 
 1. You can add comments in rules with ``//``
-1. CEL includes a function ``duration`` which is equivalent to the ``time.ParseDuration`` function. 
+1. CEL includes a function ``duration`` which is equivalent to the ``time.ParseDuration`` function. There's also a ``timestamp`` function. 
 
 The data we will pass to the rule:
 
@@ -788,18 +823,18 @@ Evaluating the rule returns ``false``.
 
 ## Calculations on timestamps and durations 
 
-In CEL rules we can do calculations on timestamps and durations. See (the CEL spec)[https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions] for the operations allowed. 
+In CEL rules we can do calculations on timestamps and durations. See [the CEL spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) for the operations allowed. 
 
 We can write the following rule to determine if the student has been enrolled more than 100 days:
 
-``proto
+```proto
 // 2,400h = 100 days * 24 hours
 now - s.enrollment_date > duration("2400h")
-``
+```
 
 The calculation ``timestamp - timestamp`` produces a duration, which is then compared with another duration. 
 
-Similarly, we could add a duration to a timestamp or two durations.
+Similarly, we could add a duration to a timestamp or add two durations.
 
 
 ## Summary of timestamp operations in Go
@@ -810,7 +845,7 @@ This package has generated types for google/protobuf/timestamp.proto:
 import "google.golang.org/protobuf/types/known/timestamppb"
 ```
 
-To create a new timestamp:
+To create a new proto timestamp:
 
 ```go
 now := timestamppb.Now()
@@ -830,7 +865,7 @@ goTime := pbtime.AsTime()
 
 ## Timestamp conversion in a CEL rule
 
-Convert from a string to a timestamp 
+Convert from a string to a timestamp:
 
 ``proto
 timestamp("1972-01-01T10:00:20.021-05:00")
@@ -862,6 +897,169 @@ goDur := protodur.AsDuration()
 ``proto
 duration("2400h")
 ``
+
+## Parts of time
+
+CEL provides [functions](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) to access parts of a timestamp. 
+
+
+> The code for this example is in [Example_protoTimestampPart()](cel/example_test.go) 
+
+The data we want to test:
+
+```go
+data := map[string]interface{}{
+  "s": &school.Student{
+	  EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
+  },
+}
+```
+
+The rule to check if the date given is on a Friday in UTC:
+
+```proto
+s.enrollment_date.getDayOfWeek() == 5 // Friday
+// Output: true 
+```
+
+``getDayOfWeek`` is zero-based (Sunday == 0). 
+
+
+CEL also lets us check the day of the week in whatever timezone we want:
+
+
+> > The code for this example is in [Example_protoTimestampPartTZ()](cel/example_test.go) 
+
+With the same input time ...
+
+```go
+data := map[string]interface{}{
+  "s": &school.Student{
+	  EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
+  },
+}
+```
+
+... it is now Saturday is India:
+
+```proto
+s.enrollment_date.getDayOfWeek("Asia/Kolkata") == 6 // Saturday
+// Output: true
+```
+
+See the [reference](https://github.com/google/cel-spec/blob/master/doc/langdef.md#timezones). 
+
+We can also get parts of durations with the ``getHours()``, ``getMinutes()``, ``getSeconds()``, etc. functions. 
+
+
+
+
+</br>
+</br>
+
+***
+</br>
+
+
+# 8. Object Construction 
+
+Rather than return ``true`` or ``false`` from a rule, we can use Indigo to return any valid value, including creating a new protocol buffer object. 
+
+> The sample code for this section is in [Example_protoConstruction()](cel/example_test.go)
+
+With our familiar education schema, our rule can now return a new object:
+
+```go
+rule := indigo.Rule{
+	ID:         "create_summary",
+	Schema:     education,
+	ResultType: indigo.Proto{Message: &school.StudentSummary{}},
+	Expr: `
+		testdata.school.StudentSummary {
+			gpa: s.gpa,
+			risk_factor: 2.0 + 3.0,
+			tenure: duration("12h")
+		}`,
+}
+```
+
+Here, the result of the expression is **not** a boolean, but rather a Go protocol buffer struct of with the type ``StudentSummary``. 
+
+Two important things to point out:
+
+1. The rule's ``ResultType`` has been set to the protocol buffer type we want as the output. (What happens if we set it to boolean?)
+1. To refer to the protocol buffer type in the rule expression we are using the full name, including the package name (``testdata.school.StudentSummary``)
+
+We compile and evaluate the rule as usual, but to inspect the output we need to access the **``Value``** field of the result, not the **``ExpressionPass``** field we normally check. In the section on using the ``Result`` type we'll go into more detail, but ``Value`` holds the raw output of the rule, and ``ExpressionPass`` is always ``true``, unless the rule explicitly returns ``false``.
+
+
+``Value`` is an empty interface, so we get the struct we want from it:
+
+```go
+summary := result.Value.(*school.StudentSummary)
+```
+
+(Since this is test code, we confidently perform the type assertion without checking it. Do not do this in real code.)
+
+Once we have the summary object, we can examine it
+
+```go
+fmt.Printf("%T\n", summary)
+fmt.Printf("%0.0f\n", summary.RiskFactor)
+
+// Output: *school.StudentSummary
+// 5
+```
+
+This example illustrates that we can get just about anything out of a rule expression. We could use it to perform a calculation (``2 + 2``), filter a list (``mylist.filter(e, e > 10)``) or get today's day in the year (``timestamp(now).getDayOfYear())``). 
+
+
+## Conditional object construction 
+
+Rather than simply returning an object, we could apply some condition to determine how to construct the object:
+
+
+```proto
+student.gpa > 3.0 ?
+	testdata.school.StudentSummary {
+		gpa: student.gpa,
+		risk_factor: 0.0
+	}
+:
+   testdata.school.StudentSummary {
+		gpa: student.gpa,
+		risk_factor: 2.0 + 3.0,
+		tenure: duration("12h")
+	}
+```
+
+In this rule, we use the ``? : `` [operators](https://github.com/google/cel-spec/blob/master/doc/langdef.md#logical-operators).
+
+
+# Appendix: More CEL Resources
+
+Here are more resources with examples of using CEL:
+
+1. [Google IAM Conditions Attribute Reference](https://cloud.google.com/iam/docs/conditions-attribute-reference)
+
+1. [Google Cloud Armor custom rules language reference](https://cloud.google.com/armor/docs/rules-language-reference)
+
+1. [Google Certificate Authority Service - Using Common Expression Language](https://cloud.google.com/certificate-authority-service/docs/using-cel)
+
+1. [Google CEL-Go Codelab](https://codelabs.developers.google.com/codelabs/cel-go#0)
+
+1. [KrakenD Conditional Requests and Responses with CEL](https://www.krakend.io/docs/endpoints/common-expression-language-cel/)
+
+
+
+
+
+
+
+
+
+
+
 
 
 

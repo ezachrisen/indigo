@@ -478,6 +478,86 @@ func Example_protoTimestampAndDurationComparison() {
 }
 
 // Demonstrates writing rules on timestamps and durations
+func Example_protoTimestampPart() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:         "",
+		ResultType: indigo.Bool{},
+		Schema:     education,
+		Expr:       `s.enrollment_date.getDayOfWeek() == 5 // Friday`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	fmt.Println(results.Value)
+	// Output: true
+}
+
+// Demonstrates writing rules on timestamps and durations
+func Example_protoTimestampPartTZ() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:         "",
+		ResultType: indigo.Bool{},
+		Schema:     education,
+		Expr:       `s.enrollment_date.getDayOfWeek("Asia/Kolkata") == 6 // Saturday`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	fmt.Println(results.Value)
+	// Output: true
+}
+
+// Demonstrates writing rules on timestamps and durations
 func Example_protoDurationCalculation() {
 
 	education := indigo.Schema{
@@ -568,14 +648,14 @@ func Example_protoConstruction() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
 			{Name: "studentSummary", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
 	data := map[string]interface{}{
-		"student": &school.Student{
+		"s": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
 				&school.Student_Suspension{Cause: "Cheating"},
@@ -590,7 +670,7 @@ func Example_protoConstruction() {
 		ResultType: indigo.Proto{Message: &school.StudentSummary{}},
 		Expr: `
 			testdata.school.StudentSummary {
-				gpa: student.gpa,
+				gpa: s.gpa,
 				risk_factor: 2.0 + 3.0,
 				tenure: duration("12h")
 			}`,
@@ -614,6 +694,7 @@ func Example_protoConstruction() {
 
 	fmt.Printf("%T\n", summary)
 	fmt.Printf("%0.0f\n", summary.RiskFactor)
+
 	// Output: *school.StudentSummary
 	// 5
 }
@@ -651,7 +732,7 @@ func Example_protoConstructionConditional() {
 					risk_factor: 0.0
 				}
 			:
-				testdata.school.StudentSummary {
+	           testdata.school.StudentSummary {
 					gpa: student.gpa,
 					risk_factor: 2.0 + 3.0,
 					tenure: duration("12h")
