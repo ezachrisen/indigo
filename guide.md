@@ -1133,7 +1133,7 @@ fmt.Println("last_3_grades_above_3?", results.ExpressionPass)
 // last_3_grades_above_3? true
 ```
 
-The manual processing of individual rules works fine, but imagine that each academic department wants to set their own rules for awarding honors. We'll have 20 or 30 rules (``math_honors``, ``history_honors``, etc.). 
+The manual processing of individual rules works fine, but imagine that each academic department wants to set their own rules for awarding honors. We'll have 20 or 30 rules (``math_honors``, ``history_honors``, etc.), which will become difficult to manage. And if you're managing individual rules in code, you may be better off just writing the rules as Go code to begin with...
 
 
 ## Processing multiple rules with Indigo 
@@ -1242,11 +1242,33 @@ root --> arts_honors;
 root --> last_3_grades_above_3;
 ```
 
-
-
 ## The Results struct 
 
-In most of the examples we've looked at so far, we've inspected the ``ExpressionPass`` field of the ``results`` to determine if a rule passed or failed. In the pr
+Just like we can print a rule to see its structure, we can also print ``results``:
+
+```go
+
+fmt.Println(results)
+
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                    │
+│ INDIGO RESULT SUMMARY                                                                                                              │
+│                                                                                                                                    │
+├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+│                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+│ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+│                         │       │ Fail  │       │        │             │             │            │            │         │         │
+├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+│ root                    │ FAIL  │ PASS  │ 3     │ true   │ yes         │             │            │            │         │         │
+│   accounting_honors     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+│   arts_honors           │ FAIL  │ FAIL  │ 0     │ false  │             │             │            │            │         │         │
+│   last_3_grades_above_3 │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
+└─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+
+```
+
+This view 
+
 
 
 </br>

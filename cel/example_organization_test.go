@@ -138,8 +138,6 @@ func Example_indigo() {
          && s.grades[size(s.grades)-2] >= 3.0 
          && s.grades[size(s.grades)-3] >= 3.0 `))
 
-	fmt.Println(root)
-
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	err := engine.Compile(root)
@@ -157,6 +155,8 @@ func Example_indigo() {
 	for k, v := range results.Results {
 		fmt.Printf("%s? %t\n", k, v.ExpressionPass)
 	}
+
+	fmt.Println(results)
 
 	// Output: accounting_honors? true
 	// arts_honors? false
