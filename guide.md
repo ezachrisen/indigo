@@ -1237,9 +1237,9 @@ The above is equivalent to this diagram:
 ```mermaid
 graph TD;
 
-root -> accounting_honors;
-root -> arts_honors;
-root -> last_3_grades_above_3;
+root --> accounting_honors;
+root --> arts_honors;
+root --> last_3_grades_above_3;
 ```
 
 
