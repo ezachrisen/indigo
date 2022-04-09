@@ -66,10 +66,11 @@ Useful links
    1. Duration conversion in a CEL rule
    1. Parts of time 
 
-[8. Object construction](#8-object-construction)
+[8. Object Construction](#8-object-construction)
 
    1. Conditional object construction 
 
+[9. Organizing Rules with Indigo](#9-organizing-rules-with-indigo)
 
 [Appendix: More CEL Resources](#appendix-more-cel-resources)
 
@@ -1034,6 +1035,226 @@ student.gpa > 3.0 ?
 ```
 
 In this rule, we use the ``? : `` [operators](https://github.com/google/cel-spec/blob/master/doc/langdef.md#logical-operators).
+
+
+</br>
+</br>
+
+***
+</br>
+
+# 9. Organizing Rules with Indigo
+
+The CEL package is a fantastic open-source project supported by Google. It is used extensively in their own products, which means we get performance, quality and security for free. The language offers rich features to express most evaluation needs, and it can be extended to handle cases that aren't covered (see upcoming section on custom functions). CEL does one thing, and it does it extremely well: evaluate an expression. 
+
+However, evaluating a single expression is rarely the goal. When we use rules in an application, we want to answer questions that require us to evaluate more than 1 rule. That's where Indigo comes in. 
+
+We'll start this section by looking at what it would be like to evaluate multiple CEL expressions and handling the result manually. Then we'll use Indigo to do the same operation. 
+
+## Manually processing multiple rules
+
+Obviously, you can manually process multiple rules and interpret the results one by one.
+
+> The sample code for this section is in [Example_manual()](cel/example_organization_test.go)
+
+
+In the example, we want to determine which communications to send to a student:
+
+* "Congratulations, you're an accounting honors student"
+* "Congratulations, you're an arts honors student"
+* "Congratulations, your last three grades were 3 or above" 
+
+We'll use the same education schema as before, and create one rule for each of the possible communications:
+
+```go
+accounting_honors := indigo.Rule{
+	Schema: education,
+	Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") && s.gpa > 3`,
+}
+
+arts_honors := indigo.Rule{
+	Schema: education,
+	Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") && s.gpa > 3`,
+}
+
+last_3_grades_3_or_above := indigo.Rule{
+	Schema: education,
+	Expr: `size(s.grades) >=3 
+			 && s.grades[size(s.grades)-1] >= 3.0 
+			 && s.grades[size(s.grades)-2] >= 3.0 
+			 && s.grades[size(s.grades)-3] >= 3.0 `,
+}
+```
+
+Then, we'll compile, evaluate and inspect the results of each rule:
+
+```go
+err := engine.Compile(&accounting_honors)
+if err != nil {
+	fmt.Printf("Error adding rule %v", err)
+	return
+}
+
+results, err := engine.Eval(context.Background(), &accounting_honors, data)
+if err != nil {
+	fmt.Printf("Error evaluating: %v", err)
+	return
+}
+fmt.Println("accounting_honors?", results.ExpressionPass)
+
+err = engine.Compile(&arts_honors)
+if err != nil {
+	fmt.Printf("Error adding rule %v", err)
+	return
+}
+
+results, err = engine.Eval(context.Background(), &arts_honors, data)
+if err != nil {
+	fmt.Printf("Error evaluating: %v", err)
+	return
+}
+fmt.Println("arts_honors?", results.ExpressionPass)
+
+err = engine.Compile(&last_3_grades_3_or_above)
+if err != nil {
+	fmt.Printf("Error adding rule %v", err)
+	return
+}
+
+results, err = engine.Eval(context.Background(), &last_3_grades_3_or_above, data)
+if err != nil {
+	fmt.Printf("Error evaluating: %v", err)
+	return
+}
+fmt.Println("last_3_grades_above_3?", results.ExpressionPass)
+
+// Output: accounting_honors? true
+// arts_honors? false
+// last_3_grades_above_3? true
+```
+
+The manual processing of individual rules works fine, but imagine that each academic department wants to set their own rules for awarding honors. We'll have 20 or 30 rules (``math_honors``, ``history_honors``, etc.). 
+
+
+## Processing multiple rules with Indigo 
+
+Now, let's use Indigo to organize the rules in a list:
+
+> The sample code for this section is in [Example_indigo()](cel/example_organization_test.go)
+
+```go
+root := indigo.NewRule("root", "")
+root.Schema = education
+
+root.Add(indigo.NewRule("accounting_honors",
+	`s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") 
+	 && s.gpa > 3`))
+
+root.Add(indigo.NewRule("arts_honors",
+	`s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") 
+	 && s.gpa > 3`))
+
+root.Add(indigo.NewRule("last_3_grades_above_3",
+	`size(s.grades) >=3 
+	 && s.grades[size(s.grades)-1] >= 3.0 
+	 && s.grades[size(s.grades)-2] >= 3.0 
+	 && s.grades[size(s.grades)-3] >= 3.0 `))
+
+engine := indigo.NewEngine(cel.NewEvaluator())
+
+err := engine.Compile(root)
+if err != nil {
+	fmt.Printf("Error adding rule %v", err)
+	return
+}
+
+results, err := engine.Eval(context.Background(), root, data)
+if err != nil {
+	fmt.Printf("Error evaluating: %v", err)
+	return
+}
+
+for k, v := range results.Results {
+	fmt.Printf("%s? %t\n", k, v.ExpressionPass)
+}
+
+// Output: accounting_honors? true
+// arts_honors? false
+// last_3_grades_above_3? true
+```
+
+With Indigo, we create a "root" rule, with a schema but no rule expression. Then we used the ``Add`` method to add each child rule to the root rule's list of child rules. 
+
+We then evaluated the *root* rule, not each individual rule. ``Eval`` automatically evaluates the child rules for us. 
+
+Finally, we iterated through the list of results to determine the action for each type of communications. 
+
+Now, if each department wants to have their own honors rule, it's easy: read a list of rules from a database, add them to the root rule and evaluate. 
+
+In the next few sections we'll dig deeper into the ``Results`` struct and look at ways to visualize rules and results. 
+
+
+## Visualizing the root rule
+
+As you build more complex rules with child rules (each of which can have its own child rules, and so on), it can be difficult to visualize how rules are organized. We can print the rule with ``fmt`` to see it:
+
+```go
+fmt.Println(root)
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                 │
+│ INDIGO RULES                                                                                    │
+│                                                                                                 │
+├─────────────────────────┬───────────┬──────────────────────────────────────────┬────────┬───────┤
+│                         │           │                                          │ Result │       │
+│ Rule                    │ Schema    │ Expression                               │ Type   │ Meta  │
+├─────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│ root                    │ education │                                          │ <nil>  │ <nil> │
+├─────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│   accounting_honors     │ education │ s.attrs.exists(k, k == "major" && s.attr │ <nil>  │ <nil> │
+│                         │           │ s[k] == "Accounting")                    │        │       │
+│                         │           │          && s.gpa > 3                    │        │       │
+├─────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│   arts_honors           │ education │ s.attrs.exists(k, k == "major" && s.attr │ <nil>  │ <nil> │
+│                         │           │ s[k] == "Arts")                          │        │       │
+│                         │           │          && s.gpa > 3                    │        │       │
+├─────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│   last_3_grades_above_3 │ education │ size(s.grades) >=3                       │ <nil>  │ <nil> │
+│                         │           │          && s.grades[size(s.grades)-1] > │        │       │
+│                         │           │ = 3.0                                    │        │       │
+│                         │           │          && s.grades[size(s.grades)-2] > │        │       │
+│                         │           │ = 3.0                                    │        │       │
+│                         │           │          && s.grades[size(s.grades)-3] > │        │       │
+│                         │           │ = 3.0                                    │        │       │
+└─────────────────────────┴───────────┴──────────────────────────────────────────┴────────┴───────┘
+```
+
+This view is very useful for visualizing small numbers of rules. 
+
+The above is equivalent to this diagram:
+
+
+```mermaid
+graph TD;
+
+root -> accounting_honors;
+root -> arts_honors;
+root -> last_3_grades_above_3;
+```
+
+
+
+## The Results struct 
+
+In most of the examples we've looked at so far, we've inspected the ``ExpressionPass`` field of the ``results`` to determine if a rule passed or failed. In the pr
+
+
+</br>
+</br>
+
+***
+</br>
+
 
 
 # Appendix: More CEL Resources

@@ -84,12 +84,46 @@ const (
 	selfKey = "self"
 )
 
-// NewRule initializes a rule with the given ID
-func NewRule(id string) *Rule {
+// NewRule initializes a rule with the ID and rule expression.
+// The ID and expression can be empty.
+func NewRule(id string, expr string) *Rule {
 	return &Rule{
 		ID:    id,
 		Rules: map[string]*Rule{},
+		Expr:  expr,
 	}
+}
+
+// Add adds a child rule to a parent rule.
+// The child rule cannot be nil and must have an ID.
+// If the child rule's schema has 0 elements, it will
+// inherit the parent's schema.
+// If a rule with the same ID already exists, it will be
+// replaced.
+func (r *Rule) Add(c *Rule) error {
+	if r == nil {
+		return fmt.Errorf("parent rule is nil")
+	}
+
+	if c == nil {
+		return fmt.Errorf("child rule is nil")
+	}
+
+	if c.ID == "" {
+		return fmt.Errorf("child rule is missing ID")
+	}
+
+	if r.Rules == nil {
+		r.Rules = map[string]*Rule{}
+	}
+
+	if len(c.Schema.Elements) == 0 {
+		c.Schema = r.Schema
+	}
+
+	r.Rules[c.ID] = c
+
+	return nil
 }
 
 // ApplyToRule applies the function f to the rule r and its children recursively.

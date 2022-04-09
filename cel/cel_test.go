@@ -176,7 +176,7 @@ func makeEducationRules1() *indigo.Rule {
 		},
 	}
 
-	root := indigo.NewRule("root")
+	root := indigo.NewRule("root", "")
 
 	root.Rules[rule1.ID] = rule1
 	root.Rules[rule2.ID] = rule2
