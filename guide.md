@@ -1242,6 +1242,33 @@ root --> arts_honors;
 root --> last_3_grades_above_3;
 ```
 
+## The Rule struct 
+
+Let's look at the actual ``indigo.Rule`` struct:
+
+```go
+type Rule struct {
+	ID string 
+	Expr string 
+	ResultType Type
+	Schema Schema 
+	Self interface{} 
+	Rules map[string]*Rule
+	Program interface{} 
+	Meta interface{} 
+	EvalOptions EvalOptions 
+}
+```
+
+In addition to the fields we've already seen (``ID``, ``Schema``, ``ResultType`` and ``Expr``), we have a few new fields:
+
+- ``Rules`` is a map of child rules, where the key is the ID of the child rule. Child rules can themselves have child rules. 
+- ``Meta`` is a reference to any object you like, it is not used by Indigo, but allows you to attach custom objects to rules so you can retrieve them later in the results. 
+- ``Self`` is a reference to an object whose value can be used in rule expressions. By attaching a custom object here and referring to it in the rule expression, you can "parameterize" rules that vary only by the content of an external object. 
+- ``EvalOptions`` is a set of options that determine how we should perform the evaluation (more on that later)
+- `` Program`` stores the compiled CEL program that CEL evaluates. 
+
+
 ## The Results struct 
 
 Just like we can print a rule to see its structure, we can also print ``results``:
@@ -1259,7 +1286,7 @@ fmt.Println(results)
 │ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
 │                         │       │ Fail  │       │        │             │             │            │            │         │         │
 ├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
-│ root                    │ FAIL  │ PASS  │ 3     │ true   │ yes         │             │            │            │         │         │
+│ root                    │ FAIL  │ PASS  │ 3     │ true   │             │             │            │            │         │         │
 │   accounting_honors     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
 │   arts_honors           │ FAIL  │ FAIL  │ 0     │ false  │             │             │            │            │         │         │
 │   last_3_grades_above_3 │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
@@ -1267,7 +1294,53 @@ fmt.Println(results)
 
 ```
 
-This view 
+As we can see, the structure of results mirrors the structure of the rules that were evaluated: there's a root rule with 3 child values. 
+
+
+The ``indigo.Results`` struct looks like this:
+
+```go
+// Result of evaluating a rule.
+type Result struct {
+	// The Rule that was evaluated
+	Rule *Rule
+
+	// Whether the rule is true.
+	// The default is TRUE.
+	// Pass is the result of rolling up all child rules and evaluating the
+	// rule's own expression. All child rules and the rule's expression must be
+	// true for Pass to be true.
+	Pass bool
+
+	// Whether evaluating the rule expression yielded a TRUE logical value.
+	// The default is TRUE.
+	// The result will not be affected by the results of the child rules.
+	// If no rule expression is supplied for a rule, the result will be TRUE.
+	ExpressionPass bool
+
+	// The raw result of evaluating the expression. Boolean for logical expressions.
+	// Calculations, object constructions or string manipulations will return the appropriate Go type.
+	// This value is never affected by child rules.
+	Value interface{}
+
+	// Results of evaluating the child rules.
+	Results map[string]*Result
+
+	// Diagnostic data; only available if you turn on diagnostics for the evaluation
+	Diagnostics *Diagnostics
+
+	// The evaluation options used
+	EvalOptions EvalOptions
+
+	// A list of the rules evaluated, in the order they were evaluated
+	// Only available if you turn on diagnostics for the evaluation
+	// This may be different from the rules represented in Results, if
+	// If we're discarding failed/passed rules, they will not be in the results,
+	// and will not show up in diagnostics, but they will be in this list.
+	RulesEvaluated []*Rule
+}
+```
+
 
 
 
