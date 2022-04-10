@@ -1520,7 +1520,7 @@ The structure is like this:
 graph TD;
 
 root --> accounting_majors_only;
-accounting_majors_only --> at_risk;
+accounting_majors_only -- StopIfParentNegative --> at_risk;
 accounting_majors_only --> honors;
 accounting_majors_only --> rookie;
 
