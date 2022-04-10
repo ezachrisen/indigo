@@ -110,6 +110,8 @@ done: // break out of inner switch
 
 			// If the child rule failed, either due to its own expression evaluation
 			// or its children, we have encountered a failure, and we'll count it
+			// The reason to keep this count, rather than look at the child results,
+			// is that we may be discarding passes or failures.
 			switch result.Pass {
 			case true:
 				passCount++
@@ -234,13 +236,11 @@ type EvalOptions struct {
 
 	// Stops the evaluation of child rules when the first positive child is encountered.
 	// Results will be partial. Only the child rules that were evaluated will be in the results.
-	// By default rules are evaluated in alphabetical order.
 	// Use case: role-based access; allow action if any child rule (permission rule) allows it.
 	StopFirstPositiveChild bool `json:"stop_first_positive_child"`
 
 	// Stops the evaluation of child rules when the first negative child is encountered.
 	// Results will be partial. Only the child rules that were evaluated will be in the results.
-	// By default rules are evaluated in alphabetical order.
 	// Use case: you require ALL child rules to be satisfied.
 	StopFirstNegativeChild bool `json:"stop_first_negative_child"`
 
@@ -260,7 +260,8 @@ type EvalOptions struct {
 	// Specify the function used to sort the child rules before evaluation.
 	// Useful in scenarios where you are asking the engine to stop evaluating
 	// after either the first negative or first positive child.
-	// See the provided SortAlpha function as an example.
+	// See the ExampleSortFunc() for an example.
+	// The function returns whether rules[i] < rules[j] for some attribute.
 	// Default: No sort
 	SortFunc func(rules []*Rule, i, j int) bool `json:"-"`
 }
