@@ -74,12 +74,18 @@ Useful links
 
    1. Manually processing multiple rules
    1. The Indigo way 
-   1. Visualizing the root rule
+   1. Parent and child rules 
+   1. Visualizing rules
    1. The Rule struct
    1. The Results struct 
    1. Evaluation options
 
 [10. Evaluation Options](#10-evaluation-options)
+
+   1. TrueIfAny
+   1. StopIfParentNegative
+   1. StopFirstNegativeChild, StopFirstPositiveChild 
+   1. SortFunc 
 
 [Appendix: More CEL Resources](#appendix-more-cel-resources)
 
@@ -1203,9 +1209,22 @@ With Indigo, if each department wants to have their own honors rule, it's easy: 
 In the next few sections we'll dig deeper into the ``Rule`` and ``Results`` structs and how to visualize parent/child relationships. 
 
 
-## Visualizing the root rule
+## Parent and child rules 
 
-As you build more complex rules with child rules (each of which can have its own child rules, and so on), it can be difficult to visualize how rules are organized. We can print the rule with ``fmt`` to see it:
+To create common ground for discussing rule structure, here are some facts about parent and child rules:
+
+   1. A parent rule is any rule that has 1 or more children. 
+   1. A child rule is a rule that has a parent. 
+   1. A parent can be both a parent and a child.
+   1. Rules can be nested to any level. 
+   1. Child rules are by default unsorted (but see [SortFunc](#sortfunc)).
+   1. All child rules are created equal. 
+   1. A rule may or may not have a rule expression. 
+   1. Rules at any level may have options set (see [evaluation options](#10-evaluation-options)).
+
+## Visualizing rules
+
+As you build more complex rules with child rules, it can be difficult to visualize how rules are organized. We can print the rule with ``fmt`` to see it:
 
 ```go
 fmt.Println(root)
@@ -1411,6 +1430,9 @@ TrueIfAny bool `json:"true_if_any"`
 ```
 The effect of setting this on a parent rule is to turn it into an "OR" rule. If we look back at our example with the 3 communications options (honors accounting, honors arts, etc.), we'll see that the root rule is marked as ``FAIL``. That's because although its ``ExpressionPass`` is ``PASS``, one of the child rules (``arts_honors``) is ``FAIL``. This failed rule also makes the parent (root) rule ``FAIL``. 
 
+When using the ``TrueIfAny`` option you may want to set the [``StopFirstPositiveChild``](#stopfirstnegativechild-stopfirstpositivechild) option as well. 
+
+
 ```go
    ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
    │                                                                                                                                              │
@@ -1463,7 +1485,7 @@ There are many other uses for this, such as in security rules, put a list of rea
 
 ## StopIfParentNegative 
 
-This option prevents the evaluation of child rules if the parent's expression is false. This is used to save evaluation time by "lifting" common exclusionary rules up to a parent level, so that we can skip evaluating the child rules if there is zero chance they will pass. 
+This option prevents the evaluation of child rules if the parent's expression is false. This is used to save evaluation time by "lifting" common exclusionary rules up to a parent level, so that we can skip evaluating the child rules if there is zero chance they will pass. This is particularly useful if the common rule clause is expensive to evaluate. 
 
 > The sample code for this section is in [Example_stopIfParentNegative()](cel/example_organization_test.go)
 
@@ -1489,7 +1511,9 @@ accounting.Add(indigo.NewRule("rookie", "s.credits < 5"))
 accounting.EvalOptions.StopIfParentNegative = true
 ```
 
-The structure is like this:
+The ``accounting_majors_only`` rule is expensive to evaluate: it needs to iterate over all keys in the ``attrs`` map. By only evaluating it once, we'll save some time. It also makes the child rules simpler: they do not need to incorporate a major check, instead they focus on their specific rule expression. 
+
+The rule structure is like this:
 
 ```go
 
@@ -1525,8 +1549,6 @@ accounting_majors_only --> honors;
 accounting_majors_only --> rookie;
 
 ```
-
-
 
 
 
@@ -1574,7 +1596,60 @@ If we evaluate the rules for a Computer Science major, we get this:
 
 ```
 
-Note that the ``ExpressionPass`` is false for the ``accounting_majors_only`` rule, hence none of the child rules were evaluated (they do not appear in the list of rules in the results). 
+``ExpressionPass`` is false for the ``accounting_majors_only`` rule, hence none of the child rules were evaluated (they do not appear in the list of rules in the results). 
+
+
+## StopFirstNegativeChild, StopFirstPositiveChild 
+
+The ``StopFirstNegativeChild`` option stops evaluating child rules when we encounter the first rule that evaluates to false. The option considers the ``indigo.Result.Pass`` field, not the ``indigo.Result.ExpressionPass`` field, so child results are used recursively.  Recall that the ``Pass`` field takes into account the results of a rule's children, whereas ``ExpressionPass`` does not. 
+
+The ``StopFirstPositiveChild`` works the same way, except for stopping when a true result is found. 
+
+We haven't discussed *evaluation order* until now, because it hasn't yet mattered. In all of our evaluation examples so far we have evaluated all child rules. By default the order in which child rules are evaluated is undefined and will vary from execution to execution. (Remember that child rules are stored in a map, and map keys in Go are unordered.) To determine the order in which rules are evaluated, you specify the [SortFunc](#sortfunc) option on the parent rule. More on that option later. 
+
+If you require all child rules to be true, it may be a good idea to use the ``StopFirstNegativeChild`` option, since the moment you find a false there's no reason to continue evaluating rules. This is efficient for making a decision. 
+
+However, since the rest of the rules are not evaluated after the first false, you won't know how many of them were true or false. If the users need to know which rules passed and failed, it's not a good idea to stop evaluation. 
+
+Example uses of the ``StopFirstNegativeChild`` option:
+
+* An API server needs to quickly decide to allow or disallow an action (child rules with all required conditions)
+* A self-driving car should apply emergency braking immediately if one of the emergency braking conditions is met 
+
+Any negative rule can be turned into a positive rule, so the ``StopFirstPositiveChild`` option would have similar use case examples. 
+
+## SortFunc
+When the ``StopFirstNegativeChild`` or ``StopFirstPositiveChild`` options are set, the order in which rules are evaluated **may** be important. If you only care that a rule passed or failed, and so you take an action because of that, the order may not matter. 
+
+Let's say we have 1,000 child rules, each rule has a different probability of being false. For example, rule X is false for 1 in 20 records, but rule Y is false for only 1 in 1,000 records. If we require all 1,000 rules to be true for an action to take place, finding the first false rule as quickly as possible could give us a good performance boost. 
+
+We can do this by sorting rules by probability of failing, high to low. You could further imagine that the probabilities of failing are constantly adjusted as new data becomes available. In this way, we can dynamically adjust the evaluation of rules. 
+
+Instead of implementing a machine learning algorithm, we'll look at a simpler example to illustrate the use of ``SortFunc``: evaluating rules in alphabetical order. 
+
+> The sample code for this section is in [ExampleSortFunc()](example_test.go)
+
+```go
+
+// r is a rule 
+
+r.EvalOptions.SortFunc = func(rules []*indigo.Rule, i, j int) bool {
+  return rules[i].ID < rules[j].ID
+}
+
+```
+
+## DiscardPass, DiscardFail 
+
+By default, results are returned for all rules, whether they pass or not. In our toy examples, this doesn't matter so much, but if you have thousands of rules, and you only care about the true ones, there's no reason to return the false rules, and vice versa. 
+
+You set this option on the parent rule in ``indigo.Rule.EvalOptions``. 
+
+Setting these options has **no effect** on the parent rule's ``Pass`` value. Recall that the ``Pass`` field takes into account the results of a rule's children. So if a rule has 3 children, 1 of them (A) is false and 2 are true (B,C), the parent (X) will be false as well. 
+
+If we set the ``DiscardFail`` on X,we will only get B and C (both positive) in the results, but not A. X.Pass will be false, even if there are no false results returned. 
+
+
 
 
 
