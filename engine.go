@@ -54,10 +54,14 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	applyEvaluatorOptions(&o, opts...)
 	setSelfKey(r, d)
 
+	//	fmt.Println("Rule ID", r.ID, "return diags?", o.ReturnDiagnostics)
+
 	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, defaultResultType(r), o.ReturnDiagnostics)
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
 	}
+
+	//	fmt.Println("Rule ID", r.ID, "diagnostics: ", diagnostics)
 
 	u := &Result{
 		Rule:           r,

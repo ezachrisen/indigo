@@ -336,6 +336,25 @@ func TestDiagnosticOptions(t *testing.T) {
 
 }
 
+func TestDiagnosticsWithEmptyRule(t *testing.T) {
+
+	is := is.New(t)
+	e := indigo.NewEngine(cel.NewEvaluator())
+	d := map[string]interface{}{"a": "a"} // dummy data, not important
+
+	r := &indigo.Rule{
+		ID: "root",
+	}
+
+	err := e.Compile(r)
+	is.NoErr(err)
+
+	u, err := e.Eval(context.Background(), r, d)
+	is.NoErr(err)
+	is.Equal(u.Diagnostics, nil)
+
+}
+
 func TestRuleResultTypes(t *testing.T) {
 
 	cases := []struct {
@@ -496,9 +515,8 @@ func TestDiagnosticGeneration(t *testing.T) {
 	is.NoErr(err)
 	u, err = e.Eval(context.Background(), red2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
-	is.True(u.Diagnostics != nil)
 	_ = u.Diagnostics.String()
-	indigo.DiagnosticsReport(u, makeStudentData())
+	_ = indigo.DiagnosticsReport(u, makeStudentData())
 
 }
 

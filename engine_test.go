@@ -749,7 +749,7 @@ func TestDiagnosticOptions(t *testing.T) {
 		engineDiagnosticCompileRequired bool // whether engine should require compile-time diagnostics
 		compileDiagnostics              bool // whether to request diagnostics at compile time
 		evalDiagnostics                 bool // whether to request diagnostics at eval time
-		wantDiagnostics                 bool // whether we expect to received diagnostic information
+		wantDiagnostics                 bool // whether we expect to receive diagnostic information
 	}{
 		"No diagnostics requested at compile or eval time": {
 			engineDiagnosticCompileRequired: true,
@@ -802,6 +802,7 @@ func TestDiagnosticOptions(t *testing.T) {
 			indigo.DiagnosticsReport(nil, nil)
 
 		default:
+			//fmt.Println(u)
 			err = anyNotEmpty(flattenResultsDiagnostics(u))
 			if err != nil {
 				t.Errorf("In case '%s', wanted no diagnostics, got: %v", k, err)
@@ -809,7 +810,6 @@ func TestDiagnosticOptions(t *testing.T) {
 		}
 
 	}
-
 }
 
 // Test compiling some rules with compile-time collection of diagnostics and some without
