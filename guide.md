@@ -70,7 +70,16 @@ Useful links
 
    1. Conditional object construction 
 
-[9. Organizing Rules with Indigo](#9-organizing-rules-with-indigo)
+[9. Processing Multiple Rules with Indigo](#9-processing-multiple-rules-with-indigo)
+
+   1. Manually processing multiple rules
+   1. The Indigo way 
+   1. Visualizing the root rule
+   1. The Rule struct
+   1. The Results struct 
+   1. Evaluation options
+
+[10. Evaluation Options](#10-evaluation-options)
 
 [Appendix: More CEL Resources](#appendix-more-cel-resources)
 
@@ -1043,7 +1052,7 @@ In this rule, we use the ``? : `` [operators](https://github.com/google/cel-spec
 ***
 </br>
 
-# 9. Organizing Rules with Indigo
+# 9. Processing Multiple Rules with Indigo 
 
 The CEL package is a fantastic open-source project supported by Google. It is used extensively in their own products, which means we get performance, quality and security for free. The language offers rich features to express most evaluation needs, and it can be extended to handle cases that aren't covered (see upcoming section on custom functions). CEL does one thing, and it does it extremely well: evaluate an expression. 
 
@@ -1136,7 +1145,7 @@ fmt.Println("last_3_grades_above_3?", results.ExpressionPass)
 The manual processing of individual rules works fine, but imagine that each academic department wants to set their own rules for awarding honors. We'll have 20 or 30 rules (``math_honors``, ``history_honors``, etc.), which will become difficult to manage. And if you're managing individual rules in code, you may be better off just writing the rules as Go code to begin with...
 
 
-## Processing multiple rules with Indigo 
+## The Indigo way 
 
 Now, let's use Indigo to organize the rules in a list:
 
@@ -1178,7 +1187,7 @@ for k, v := range results.Results {
 	fmt.Printf("%s? %t\n", k, v.ExpressionPass)
 }
 
-// Output: accounting_honors? true
+// Unordered output: accounting_honors? true
 // arts_honors? false
 // last_3_grades_above_3? true
 ```
@@ -1189,9 +1198,9 @@ We then evaluated the *root* rule, not each individual rule. ``Eval`` automatica
 
 Finally, we iterated through the list of results to determine the action for each type of communications. 
 
-Now, if each department wants to have their own honors rule, it's easy: read a list of rules from a database, add them to the root rule and evaluate. 
+With Indigo, if each department wants to have their own honors rule, it's easy: read a list of rules from a database, add them to the root rule and evaluate. 
 
-In the next few sections we'll dig deeper into the ``Results`` struct and look at ways to visualize rules and results. 
+In the next few sections we'll dig deeper into the ``Rule`` and ``Results`` structs and how to visualize parent/child relationships. 
 
 
 ## Visualizing the root rule
@@ -1248,26 +1257,48 @@ Let's look at the actual ``indigo.Rule`` struct:
 
 ```go
 type Rule struct {
-	ID string 
+	// A rule identifer. (required)
+	ID string `json:"id"`
+
+	// The expression to evaluate (optional)
+	// The expression can return a boolean (true or false), or any
+	// other value the underlying expression engine can produce.
+	// All values are returned in the Results.Value field.
+	// Boolean values are also returned in the results as Pass = true  / false
+	// If the expression is blank, the result will be true.
 	Expr string 
-	ResultType Type
+
+	// The output type of the expression. Evaluators with the ability to check
+	// whether an expression produces the desired output should return an error
+	// if the expression does not.
+	// If no type is provided, evaluation and compilation will default to Bool
+	ResultType Type 
+
+	// The schema describing the data provided in the Evaluate input. (optional)
+	// Some implementations of Evaluator require a schema.
 	Schema Schema 
+
+	// A reference to an object whose values can be used in the rule expression.
+	// Add the corresponding object in the data with the reserved key name selfKey
+	// (see constants).
+	// Child rules do not inherit the self value.
+	// See example for usage. TODO: example
 	Self interface{} 
-	Rules map[string]*Rule
+
+	// A set of child rules.
+	Rules map[string]*Rule 
+
+	// Reference to intermediate compilation / evaluation data.
 	Program interface{} 
+
+	// A reference to any object.
+	// Not used by the rules engine.
 	Meta interface{} 
+
+	// Options determining how the child rules should be handled.
 	EvalOptions EvalOptions 
 }
 ```
-
-In addition to the fields we've already seen (``ID``, ``Schema``, ``ResultType`` and ``Expr``), we have a few new fields:
-
-- ``Rules`` is a map of child rules, where the key is the ID of the child rule. Child rules can themselves have child rules. 
-- ``Meta`` is a reference to any object you like, it is not used by Indigo, but allows you to attach custom objects to rules so you can retrieve them later in the results. 
-- ``Self`` is a reference to an object whose value can be used in rule expressions. By attaching a custom object here and referring to it in the rule expression, you can "parameterize" rules that vary only by the content of an external object. 
-- ``EvalOptions`` is a set of options that determine how we should perform the evaluation (more on that later)
-- `` Program`` stores the compiled CEL program that CEL evaluates. 
-
 
 ## The Results struct 
 
@@ -1277,21 +1308,20 @@ Just like we can print a rule to see its structure, we can also print ``results`
 
 fmt.Println(results)
 
-┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                                                                    │
-│ INDIGO RESULT SUMMARY                                                                                                              │
-│                                                                                                                                    │
-├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
-│                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
-│ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
-│                         │       │ Fail  │       │        │             │             │            │            │         │         │
-├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
-│ root                    │ FAIL  │ PASS  │ 3     │ true   │             │             │            │            │         │         │
-│   accounting_honors     │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
-│   arts_honors           │ FAIL  │ FAIL  │ 0     │ false  │             │             │            │            │         │         │
-│   last_3_grades_above_3 │ PASS  │ PASS  │ 0     │ true   │             │             │            │            │         │         │
-└─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
-
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                              │
+│ INDIGO RESULT SUMMARY                                                                                                                        │
+│                                                                                                                                              │
+├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+│                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+│ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+│                         │       │ Fail  │       │        │             │         │             │            │            │         │         │
+├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+│ root                    │ FAIL  │ PASS  │ 3     │ true   │             │         │             │            │            │         │         │
+│   accounting_honors     │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+│   arts_honors           │ FAIL  │ FAIL  │ 0     │ false  │             │         │             │            │            │         │         │
+│   last_3_grades_above_3 │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+└─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 ```
 
 As we can see, the structure of results mirrors the structure of the rules that were evaluated: there's a root rule with 3 child values. 
@@ -1341,6 +1371,202 @@ type Result struct {
 }
 ```
 
+Three fields warrant more discussion at this point: ``Pass``, ``ExpressionPass`` and ``Value``. 
+
+The simplest is ``Value``: it is always the raw output of the expression, regardless of any [evaluation options](#10-evaluation-options). 
+
+From the ``Value`` we derive ``ExpressionPass``. The value is ``true``, unless the rule explicitly returns a boolean ``false``. Again, this value is never affected by any [evaluation options](#10-evaluation-options). 
+
+The last value, ``Pass`` is more complex, because it is the result of all of the child rules *and* the parent rule's own ``ExpressionPass``, *and* it is affected by setting the [``TrueIfAny``](#true-if-any) option. It is also most valuable, because it allows you to take advantage of all of the flexibility of Indigo rules. Generally, (for boolean outcomes) you should not need to inspect ``Value`` or ``ExpressionPass`` directly, but instead use ``Pass``. 
+
+
+
+# 10. Evaluation Options 
+
+In the ``indigo.Rule`` struct, the ``indigo.EvalOptions`` field allows us to specify how to interpret the result of the root rule and child rules. 
+
+In this section we'll explain what the options are, their usage, and provide an example. 
+
+## Setting Options
+
+Options are turned off by default. To turn them on, set them in the ``EvalOptions`` field on the rule, for example: 
+
+```go
+r.EvalOptions.TrueIfAny = true 
+```
+
+
+
+## TrueIfAny
+
+From the ``indigo.EvalOptions`` struct documentation: 
+
+```go
+// TrueIfAny makes a parent rule Pass = true if any of its child rules are true.
+// The default behavior is that a rule is only true if all of its child rules are true, and
+// the parent rule itself is true.
+// Setting TrueIfAny changes this behvior so that the parent rule is true if at least one of its child rules
+// are true, and the parent rule itself is true.
+TrueIfAny bool `json:"true_if_any"`
+```
+The effect of setting this on a parent rule is to turn it into an "OR" rule. If we look back at our example with the 3 communications options (honors accounting, honors arts, etc.), we'll see that the root rule is marked as ``FAIL``. That's because although its ``ExpressionPass`` is ``PASS``, one of the child rules (``arts_honors``) is ``FAIL``. This failed rule also makes the parent (root) rule ``FAIL``. 
+
+```go
+   ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+   │                                                                                                                                              │
+   │ INDIGO RESULT SUMMARY                                                                                                                        │
+   │                                                                                                                                              │
+   ├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+   │                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+   │ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+   │                         │       │ Fail  │       │        │             │         │             │            │            │         │         │
+   ├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+-->│ root                    │>FAIL  │ PASS  │ 3     │ true   │             │         │             │            │            │         │         │
+   │   accounting_honors     │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+   │   arts_honors           │ FAIL  │ FAIL  │ 0     │ false  │             │         │             │            │            │         │         │
+   │   last_3_grades_above_3 │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+   └─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+```
+
+
+Let's change the root rule to ``TrueIfAny``:
+
+```go
+
+root.EvalOptions.TrueIfAny = true
+
+``` 
+
+The root now passes:
+
+```go 
+	┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+	│                                                                                                                                              │
+	│ INDIGO RESULT SUMMARY                                                                                                                        │
+	│                                                                                                                                              │
+	├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+	│                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+	│ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+	│                         │       │ Fail  │       │        │             │         │             │            │            │         │         │
+	├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+ -->│ root                    │>PASS  │ PASS  │ 3     │ true   │             │ yes     │             │            │            │         │         │
+	│   accounting_honors     │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+	│   arts_honors           │ FAIL  │ FAIL  │ 0     │ false  │             │         │             │            │            │         │         │
+	│   last_3_grades_above_3 │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+	└─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+```
+
+This is useful because we now have a simple way of determining if we have to send out any communications: check the root rule's ``Pass`` field. 
+
+There are many other uses for this, such as in security rules, put a list of reasons to **allow** a user action in the child rules; allow the action if root passes. 
+
+
+## StopIfParentNegative 
+
+This option prevents the evaluation of child rules if the parent's expression is false. This is used to save evaluation time by "lifting" common exclusionary rules up to a parent level, so that we can skip evaluating the child rules if there is zero chance they will pass. 
+
+> The sample code for this section is in [Example_stopIfParentNegative()](cel/example_organization_test.go)
+
+In this example, we're going to evaluate 3 rules, (honors, at_risk and rookie), but we only want to do that for Accounting majors. Imagine that the university as 30,000 students and 10 of them are accounting majors. Obviously, evaluating all 3 rules for every student would be silly. 
+
+Instead we make a parent rule, called ``accounting``, where we put the major requirement. We then put the 3 rules as child rules of the accounting rule. 
+
+Finally, we set the ``StopIfParentNegative`` flag on the accounting parent rule: 
+
+```go
+
+root := indigo.NewRule("root", "")
+root.Schema = education
+accounting := indigo.NewRule("accounting_majors_only", 
+              `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting")`)
+accounting.Schema = education
+root.Rules[accounting.ID] = accounting
+
+accounting.Add(indigo.NewRule("honors", "s.gpa > 3.0"))
+accounting.Add(indigo.NewRule("at_risk", "s.gpa < 2.0"))
+accounting.Add(indigo.NewRule("rookie", "s.credits < 5"))
+
+accounting.EvalOptions.StopIfParentNegative = true
+```
+
+The structure is like this:
+
+```go
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                  │
+│ INDIGO RULES                                                                                     │
+│                                                                                                  │
+├──────────────────────────┬───────────┬──────────────────────────────────────────┬────────┬───────┤
+│                          │           │                                          │ Result │       │
+│ Rule                     │ Schema    │ Expression                               │ Type   │ Meta  │
+├──────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│ root                     │ education │                                          │ <nil>  │ <nil> │
+├──────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│   accounting_majors_only │ education │ s.attrs.exists(k, k == "major" && s.attr │ <nil>  │ <nil> │
+│                          │           │ s[k] == "Accounting")                    │        │       │
+├──────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│     at_risk              │ education │ s.gpa < 2.0                              │ <nil>  │ <nil> │
+├──────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│     rookie               │ education │ s.credits < 5                            │ <nil>  │ <nil> │
+├──────────────────────────┼───────────┼──────────────────────────────────────────┼────────┼───────┤
+│     honors               │ education │ s.gpa > 3.0                              │ <nil>  │ <nil> │
+└──────────────────────────┴───────────┴──────────────────────────────────────────┴────────┴───────┘
+
+```
+
+When we evaluate it for an Accouning major, we get this result:
+
+```
+
+┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                               │
+│ INDIGO RESULTS                                                                                                                                │
+│                                                                                                                                               │
+├──────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+│                          │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+│ Rule                     │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+│                          │       │ Fail  │       │        │             │         │             │            │            │         │         │
+├──────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+│ root                     │ FAIL  │ PASS  │ 1     │ true   │             │         │             │            │            │         │         │
+│   accounting_majors_only │ FAIL  │ PASS  │ 3     │ true   │             │         │ yes         │            │            │         │         │
+│     at_risk              │ FAIL  │ FAIL  │ 0     │ false  │             │         │             │            │            │         │         │
+│     rookie               │ FAIL  │ FAIL  │ 0     │ false  │             │         │             │            │            │         │         │
+│     honors               │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+└──────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+
+```
+
+The ``accounting_majors_only`` expression passed, and so the three child rules are also evaluated. 
+
+If we evaluate the rules for a Computer Science major, we get this:
+
+```
+
+┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                               │
+│ INDIGO RESULTS                                                                                                                                │
+│                                                                                                                                               │
+├──────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+│                          │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+│ Rule                     │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+│                          │       │ Fail  │       │        │             │         │             │            │            │         │         │
+├──────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+│ root                     │ FAIL  │ PASS  │ 1     │ true   │             │         │             │            │            │         │         │
+│   accounting_majors_only │ FAIL  │ FAIL  │ 0     │ false  │             │         │ yes         │            │            │         │         │
+└──────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+
+
+```
+
+Note that the ``ExpressionPass`` is false for the ``accounting_majors_only`` rule, hence none of the child rules were evaluated (they do not appear in the list of rules in the results). 
+
+
+
+
+
+
+
 
 
 
@@ -1365,24 +1591,4 @@ Here are more resources with examples of using CEL:
 1. [Google CEL-Go Codelab](https://codelabs.developers.google.com/codelabs/cel-go#0)
 
 1. [KrakenD Conditional Requests and Responses with CEL](https://www.krakend.io/docs/endpoints/common-expression-language-cel/)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

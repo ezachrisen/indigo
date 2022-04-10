@@ -123,7 +123,6 @@ func Example_indigo() {
 
 	root := indigo.NewRule("root", "")
 	root.Schema = education
-
 	root.Add(indigo.NewRule("accounting_honors",
 		`s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") 
          && s.gpa > 3`))
@@ -156,9 +155,65 @@ func Example_indigo() {
 		fmt.Printf("%s? %t\n", k, v.ExpressionPass)
 	}
 
-	fmt.Println(results)
-
-	// Output: accounting_honors? true
+	// Unordered output: accounting_honors? true
 	// arts_honors? false
 	// last_3_grades_above_3? true
+}
+
+func Example_stopIfParentNegative() {
+
+	education := indigo.Schema{
+		ID: "education",
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			Id:      927312,
+			Age:     21,
+			Credits: 16,
+			Gpa:     3.1,
+			Attrs:   map[string]string{"major": "Accountings", "home_town": "Chicago"},
+			Status:  school.Student_ENROLLED,
+			Grades:  []float64{3, 3, 4, 2, 3, 3.5, 4},
+		},
+	}
+
+	root := indigo.NewRule("root", "")
+	root.Schema = education
+	accounting := indigo.NewRule("accounting_majors_only", `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting")`)
+	accounting.Schema = education
+	accounting.EvalOptions.StopIfParentNegative = true
+
+	root.Rules[accounting.ID] = accounting
+
+	accounting.Add(indigo.NewRule("honors", "s.gpa > 3.0"))
+	accounting.Add(indigo.NewRule("at_risk", "s.gpa < 2.0"))
+	accounting.Add(indigo.NewRule("rookie", "s.credits < 5"))
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(root)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+	fmt.Println(root)
+	results, err := engine.Eval(context.Background(), root, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	for k, v := range results.Results["accounting_majors_only"].Results {
+		fmt.Printf("%s? %t\n", k, v.ExpressionPass)
+	}
+	fmt.Println(results)
+	//	fmt.Println(results.Summary())
+
+	// Unordered output: honors? true
+	// at_risk? false
+	// rookie? false
 }
