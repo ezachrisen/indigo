@@ -1440,20 +1440,20 @@ root.EvalOptions.TrueIfAny = true
 The root now passes:
 
 ```go 
-	┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-	│                                                                                                                                              │
-	│ INDIGO RESULT SUMMARY                                                                                                                        │
-	│                                                                                                                                              │
-	├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
-	│                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
-	│ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
-	│                         │       │ Fail  │       │        │             │         │             │            │            │         │         │
-	├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
- -->│ root                    │>PASS  │ PASS  │ 3     │ true   │             │ yes     │             │            │            │         │         │
-	│   accounting_honors     │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
-	│   arts_honors           │ FAIL  │ FAIL  │ 0     │ false  │             │         │             │            │            │         │         │
-	│   last_3_grades_above_3 │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
-	└─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+   ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+   │                                                                                                                                              │
+   │ INDIGO RESULT SUMMARY                                                                                                                        │
+   │                                                                                                                                              │
+   ├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+   │                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+   │ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+   │                         │       │ Fail  │       │        │             │         │             │            │            │         │         │
+   ├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+-->│ root                    │>PASS  │ PASS  │ 3     │ true   │             │ yes     │             │            │            │         │         │
+   │   accounting_honors     │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+   │   arts_honors           │ FAIL  │ FAIL  │ 0     │ false  │             │         │             │            │            │         │         │
+   │   last_3_grades_above_3 │ PASS  │ PASS  │ 0     │ true   │             │         │             │            │            │         │         │
+   └─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 ```
 
 This is useful because we now have a simple way of determining if we have to send out any communications: check the root rule's ``Pass`` field. 
@@ -1515,7 +1515,22 @@ The structure is like this:
 
 ```
 
-When we evaluate it for an Accouning major, we get this result:
+
+```mermaid
+graph TD;
+
+root --> accounting_majors_only;
+accounting_majors_only --> at_risk;
+accounting_majors_only --> honors;
+accounting_majors_only --> rookie;
+
+```
+
+
+
+
+
+When we evaluate it for an Accounting major, we get this result:
 
 ```
 
@@ -1537,7 +1552,7 @@ When we evaluate it for an Accouning major, we get this result:
 
 ```
 
-The ``accounting_majors_only`` expression passed, and so the three child rules are also evaluated. 
+The ``accounting_majors_only`` expression is true, and so the three child rules are also evaluated. 
 
 If we evaluate the rules for a Computer Science major, we get this:
 
