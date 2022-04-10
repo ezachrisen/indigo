@@ -1519,7 +1519,7 @@ The structure is like this:
 ```mermaid
 graph TD;
 
-root --> accounting_majors_only{accounting_majors_only<br>(StopIfParentNegative)}; 
+root --> accounting_majors_only[accounting_majors_only<br>StopIfParentNegative]; 
 accounting_majors_only --> at_risk;
 accounting_majors_only --> honors;
 accounting_majors_only --> rookie;
