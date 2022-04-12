@@ -299,6 +299,48 @@ func Example_protoEnum() {
 	// Output: false
 }
 
+// Demonstrates using a protocol buffer oneof value in a rule
+func Example_protoOneof() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+	data := map[string]interface{}{
+		"student": &school.Student{
+			Status: school.Student_ENROLLED,
+			HousingAddress: &school.Student_OnCampus{
+				&school.Student_CampusAddress{
+					Building: "Hershey",
+					Room:     "308",
+				},
+			},
+		},
+	}
+
+	rule := indigo.Rule{
+		Schema: education,
+		Expr:   `has(student.on_campus) && student.on_campus.building == "Hershey"`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+	fmt.Println(results.ExpressionPass)
+	// Output: true
+}
+
 // Demonstrates using the CEL exists function to check for a value in a slice
 func Example_protoExistsOperator() {
 

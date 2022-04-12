@@ -94,38 +94,6 @@ func NewRule(id string, expr string) *Rule {
 	}
 }
 
-// Add adds a child rule to a parent rule.
-// The child rule cannot be nil and must have an ID.
-// If the child rule's schema has 0 elements, it will
-// inherit the parent's schema.
-// If a rule with the same ID already exists, it will be
-// replaced.
-func (r *Rule) Add(c *Rule) error {
-	if r == nil {
-		return fmt.Errorf("parent rule is nil")
-	}
-
-	if c == nil {
-		return fmt.Errorf("child rule is nil")
-	}
-
-	if c.ID == "" {
-		return fmt.Errorf("child rule is missing ID")
-	}
-
-	if r.Rules == nil {
-		r.Rules = map[string]*Rule{}
-	}
-
-	if len(c.Schema.Elements) == 0 {
-		c.Schema = r.Schema
-	}
-
-	r.Rules[c.ID] = c
-
-	return nil
-}
-
 // ApplyToRule applies the function f to the rule r and its children recursively.
 func ApplyToRule(r *Rule, f func(r *Rule) error) error {
 	err := f(r)
@@ -200,6 +168,9 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 // sortChildKeys sorts the IDs of the child rules according to the
 // SortFunc set in evaluation options. If no SortFunc is set, the evaluation
 // order is not specified.
+// TODO: allow this function to be canceled
+// TODO: cache sorting
+// TODO: add sorting benchmark
 func (r *Rule) sortChildKeys(o EvalOptions) []*Rule {
 	keys := make([]*Rule, 0, len(r.Rules))
 	for k := range r.Rules {

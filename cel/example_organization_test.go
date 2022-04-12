@@ -123,19 +123,26 @@ func Example_indigo() {
 
 	root := indigo.NewRule("root", "")
 	root.Schema = education
-	root.Add(indigo.NewRule("accounting_honors",
-		`s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") 
-         && s.gpa > 3`))
+	root.Rules["accounting_honors"] = &indigo.Rule{
+		ID:     "accounting_honors",
+		Schema: education,
+		Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") && s.gpa > 3`,
+	}
 
-	root.Add(indigo.NewRule("arts_honors",
-		`s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") 
-         && s.gpa > 3`))
+	root.Rules["arts_honors"] = &indigo.Rule{
+		ID:     "arts_honors",
+		Schema: education,
+		Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") && s.gpa > 3`,
+	}
 
-	root.Add(indigo.NewRule("last_3_grades_above_3",
-		`size(s.grades) >=3 
+	root.Rules["last_3_grades_above_3"] = &indigo.Rule{
+		ID:     "last_3_grades_above_3",
+		Schema: education,
+		Expr: `size(s.grades) >=3 
          && s.grades[size(s.grades)-1] >= 3.0 
          && s.grades[size(s.grades)-2] >= 3.0 
-         && s.grades[size(s.grades)-3] >= 3.0 `))
+         && s.grades[size(s.grades)-3] >= 3.0 `,
+	}
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
@@ -175,7 +182,7 @@ func Example_stopIfParentNegative() {
 			Age:     21,
 			Credits: 16,
 			Gpa:     3.1,
-			Attrs:   map[string]string{"major": "Accountings", "home_town": "Chicago"},
+			Attrs:   map[string]string{"major": "Computer Science", "home_town": "Chicago"},
 			Status:  school.Student_ENROLLED,
 			Grades:  []float64{3, 3, 4, 2, 3, 3.5, 4},
 		},
@@ -189,9 +196,23 @@ func Example_stopIfParentNegative() {
 
 	root.Rules[accounting.ID] = accounting
 
-	accounting.Add(indigo.NewRule("honors", "s.gpa > 3.0"))
-	accounting.Add(indigo.NewRule("at_risk", "s.gpa < 2.0"))
-	accounting.Add(indigo.NewRule("rookie", "s.credits < 5"))
+	accounting.Rules["honors"] = &indigo.Rule{
+		ID:     "honors",
+		Schema: education,
+		Expr:   "s.gpa > 3.0",
+	}
+
+	accounting.Rules["at_risk"] = &indigo.Rule{
+		ID:     "at_risk",
+		Schema: education,
+		Expr:   "s.gpa < 2.0",
+	}
+
+	accounting.Rules["rookie"] = &indigo.Rule{
+		ID:     "rookie",
+		Schema: education,
+		Expr:   "s.credits < 5",
+	}
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
@@ -200,20 +221,20 @@ func Example_stopIfParentNegative() {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
-	fmt.Println(root)
+	//	fmt.Println(root)
 	results, err := engine.Eval(context.Background(), root, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
 
+	fmt.Println(results.Pass)
+
 	for k, v := range results.Results["accounting_majors_only"].Results {
 		fmt.Printf("%s? %t\n", k, v.ExpressionPass)
 	}
-	fmt.Println(results)
+	//	fmt.Println(results)
 	//	fmt.Println(results.Summary())
 
-	// Unordered output: honors? true
-	// at_risk? false
-	// rookie? false
+	// Output: false
 }

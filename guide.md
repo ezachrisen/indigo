@@ -41,7 +41,7 @@ Useful links
    1. The Engine type 
    1. The Rule type 
 
-[4. Lists and Maps](#section-4-brlists-and-maps)
+[4. Lists and Maps](#section-4-lists-and-maps)
 
    1. Lists
    1. Maps
@@ -55,6 +55,8 @@ Useful links
    1. Field names in rule expressions
    1. Nested fields
    1. Enums 
+   1. Referring to protocol buffer types in rule expressions
+   1. Oneofs
 
 [7. Timestamps and Durations](#7-timestamps-and-durations)
 
@@ -75,6 +77,8 @@ Useful links
    1. Manually processing multiple rules
    1. The Indigo way 
    1. Parent and child rules 
+   1. Modifying rules 
+   1. Structuring rule hierarchies for updates
    1. Visualizing rules
    1. The Rule struct
    1. The Results struct 
@@ -429,7 +433,7 @@ Users of Indigo do not need to interact directly with expression compilation or 
 
 Rules are owned by the Go code that calls Indigo engine methods. The indigo.DefaultEngine does **not** store or maintain rules. It is the responsibility of the calling code to be goroutine-safe and to persist rule data for as long as it is needed in the life of the application. 
 
-During compilation, an Engine may update a rule by setting the Program field to the compilation output of the rule. The Engine may require that data later during the evaluation phase. It is the responsibility of the calling code to ensure that the Program data is not tampered with, and that if the rule expression is changed, the rule must be recompiled. 
+During compilation, an Engine may update a rule by setting the Program field to the compilation output of the rule. The Engine may require that data later during the evaluation phase. It is the responsibility of the calling code to ensure that the Program data is not modified, and that if the rule expression is changed, the rule must be recompiled. 
 
 ## Using a Non-CEL Evaluator
 
@@ -735,6 +739,8 @@ We can use the name of the enum value directly in the expression. So instead of 
 
 ```
 
+## Referring to protocol buffer types in rule expressions
+
 To refer to the constant name, we need to use the full name, which includes the protocol buffer **package** name ``testdata``:
 ```go
       testdata.school.Student.status_type.PROBATION
@@ -753,6 +759,59 @@ To refer to the constant name, we need to use the full name, which includes the 
  ```
 
 This is the way to refer to all protocol buffer types within rules. 
+
+## Oneofs 
+
+We have extended our Student definition with housing information, which can be either on or off campus: 
+
+```proto
+
+  oneof housing_address {
+	Address off_campus = 10;
+	CampusAddress on_campus = 11;
+  }
+
+
+  message Address {
+	string street = 1;
+	string city = 2;
+	string state = 3;
+	string zip = 4;
+  }
+
+
+  message CampusAddress {
+	string building = 1;
+	string room = 2;
+  }
+
+```
+
+We then set the oneof field in the data, and a rule that checks if the student lives in a particular building: 
+
+```go
+data := map[string]interface{}{
+	"student": &school.Student{
+		Status: school.Student_ENROLLED,
+		HousingAddress: &school.Student_OnCampus{
+			&school.Student_CampusAddress{
+				Building: "Hershey",
+				Room:     "308",
+			},
+		},
+	},
+}
+
+rule := indigo.Rule{
+	Schema: education,
+	Expr:   `has(student.on_campus) && student.on_campus.building == "Hershey"`,
+}
+
+// Output: true
+```
+
+
+
 
 </br>
 </br>
@@ -1161,19 +1220,26 @@ Now, let's use Indigo to organize the rules in a list:
 root := indigo.NewRule("root", "")
 root.Schema = education
 
-root.Add(indigo.NewRule("accounting_honors",
-	`s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") 
-	 && s.gpa > 3`))
+root.Rules["accounting_honors"] = &indigo.Rule{
+	ID:     "accounting_honors",
+	Schema: education,
+	Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") && s.gpa > 3`,
+}
 
-root.Add(indigo.NewRule("arts_honors",
-	`s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") 
-	 && s.gpa > 3`))
+root.Rules["arts_honors"] = &indigo.Rule{
+	ID:     "arts_honors",
+	Schema: education,
+	Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") && s.gpa > 3`,
+}
 
-root.Add(indigo.NewRule("last_3_grades_above_3",
-	`size(s.grades) >=3 
+root.Rules["last_3_grades_above_3"] = &indigo.Rule{
+	ID:     "last_3_grades_above_3",
+	Schema: education,
+	Expr: `size(s.grades) >=3 
 	 && s.grades[size(s.grades)-1] >= 3.0 
 	 && s.grades[size(s.grades)-2] >= 3.0 
-	 && s.grades[size(s.grades)-3] >= 3.0 `))
+	 && s.grades[size(s.grades)-3] >= 3.0 `,
+}
 
 engine := indigo.NewEngine(cel.NewEvaluator())
 
@@ -1198,7 +1264,7 @@ for k, v := range results.Results {
 // last_3_grades_above_3? true
 ```
 
-With Indigo, we create a "root" rule, with a schema but no rule expression. Then we used the ``Add`` method to add each child rule to the root rule's list of child rules. 
+With Indigo, we create a "root" rule, with a schema but no rule expression. Then we added each child rule to the root rule's list of child rules. 
 
 We then evaluated the *root* rule, not each individual rule. ``Eval`` automatically evaluates the child rules for us. 
 
@@ -1221,6 +1287,71 @@ To create common ground for discussing rule structure, here are some facts about
    1. All child rules are created equal. 
    1. A rule may or may not have a rule expression. 
    1. Rules at any level may have options set (see [evaluation options](#10-evaluation-options)).
+
+
+## Modifying rules
+
+The calling application is responsible for managing the lifecycle of rules, including ensuring concurrency safety. 
+
+To add or remove rules, you do so by modifying the parent rule's map of Rules:
+
+```go
+delete(parent.Rules, "child-id-to-delete")
+```
+
+and
+
+```go
+myNewRule.Compile(myCompiler)
+parent.Rules["my-new-rule"] = myNewRule
+```
+
+You must **not** modify a rule:
+
+1. During compilation
+1. After compilation and before evaluation
+1. During evaluation
+1. After evaluation and before results have been consumed
+
+"Modification" includes updates to any field on a rule struct, including the map of child rules.
+
+
+## Structuring rule hierarchies for updates
+
+The ability to organize rules in a hierarchy is useful to ensure that rule updates are atomic and consistent.
+
+You should structure the hierarchy so that a rule and its children can be seen as a
+"transaction" as far as updates are concerned.
+
+In this example, where Indigo is being used to enforce firewall rules, being able
+to update ALL firewall rules as a group, rather than one by one (where one update may fail)
+is important.
+
+```go
+Firewall Rules (parent)
+  "Deny all traffic" (child 1)
+  "Allow traffic from known_IPs" (child 2)
+```
+
+If the user changes child 1 to be "Allow all traffic" and changes child 2 to "Deny all traffic,
+except for known_IPs", there's a risk that child 1 is changed first, without the child 2 change
+happening. This would leave us with this:
+
+```go
+Firewall Rules (parent)
+  "Allow all traffic" (child 1)       <-- OOPS!
+  "Allow traffic from known_IPs" (child 2)
+```
+
+This is clearly bad!
+
+Instead of accepting a change to child 1 and child 2 separately, ONLY accept a change to your rule hierarchy for the
+Firewall Rules parent. That way the update succeeds or fails as a "transaction".
+
+If Firewall Rules is itself a child of a larger set of parent rules, it's recommended to compile the
+Firewall Rules parent and children BEFORE adding it to its eventual parent. That way you ensure that
+if compilation of Firewall Rules fails, the "production" firewall rules are still intact.
+
 
 ## Visualizing rules
 
@@ -1497,18 +1628,32 @@ Finally, we set the ``StopIfParentNegative`` flag on the accounting parent rule:
 
 ```go
 
-root := indigo.NewRule("root", "")
-root.Schema = education
-accounting := indigo.NewRule("accounting_majors_only", 
-              `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting")`)
-accounting.Schema = education
-root.Rules[accounting.ID] = accounting
 
-accounting.Add(indigo.NewRule("honors", "s.gpa > 3.0"))
-accounting.Add(indigo.NewRule("at_risk", "s.gpa < 2.0"))
-accounting.Add(indigo.NewRule("rookie", "s.credits < 5"))
+	root := indigo.NewRule("root", "")
+	root.Schema = education
+	accounting := indigo.NewRule("accounting_majors_only", `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting")`)
+	accounting.Schema = education
+	accounting.EvalOptions.StopIfParentNegative = true
 
-accounting.EvalOptions.StopIfParentNegative = true
+	root.Rules[accounting.ID] = accounting
+
+	accounting.Rules["honors"] = &indigo.Rule{
+		ID:     "honors",
+		Schema: education,
+		Expr:   "s.gpa > 3.0",
+	}
+
+	accounting.Rules["at_risk"] = &indigo.Rule{
+		ID:     "at_risk",
+		Schema: education,
+		Expr:   "s.gpa < 2.0",
+	}
+
+	accounting.Rules["rookie"] = &indigo.Rule{
+		ID:     "rookie",
+		Schema: education,
+		Expr:   "s.credits < 5",
+	}
 ```
 
 The ``accounting_majors_only`` rule is expensive to evaluate: it needs to iterate over all keys in the ``attrs`` map. By only evaluating it once, we'll save some time. It also makes the child rules simpler: they do not need to incorporate a major check, instead they focus on their specific rule expression. 
@@ -1639,6 +1784,10 @@ r.EvalOptions.SortFunc = func(rules []*indigo.Rule, i, j int) bool {
 
 ```
 
+Indigo will use this function to sort the rules during the ``Eval`` function. Child rules are sorted every time a a rule is evaluated. (This is an area where improvements can be made.) 
+
+
+
 ## DiscardPass, DiscardFail 
 
 By default, results are returned for all rules, whether they pass or not. In our toy examples, this doesn't matter so much, but if you have thousands of rules, and you only care about the true ones, there's no reason to return the false rules, and vice versa. 
@@ -1647,7 +1796,7 @@ You set this option on the parent rule in ``indigo.Rule.EvalOptions``.
 
 Setting these options has **no effect** on the parent rule's ``Pass`` value. Recall that the ``Pass`` field takes into account the results of a rule's children. So if a rule has 3 children, 1 of them (A) is false and 2 are true (B,C), the parent (X) will be false as well. 
 
-If we set the ``DiscardFail`` on X,we will only get B and C (both positive) in the results, but not A. X.Pass will be false, even if there are no false results returned. 
+If we set the ``DiscardFail`` on X, we will only get B and C (both positive) in the results, but not A. X.Pass will be false, even if there are no false results returned. 
 
 
 
