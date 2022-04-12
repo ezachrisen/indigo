@@ -331,16 +331,9 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 
 		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
 		is.NoErr(err)
-		// if strings.Contains(k, "Rollup") {
-		// 	fmt.Println(k)
-		// 	fmt.Println(u)
-		// }
-		//		fmt.Println(indigo.DiagnosticsReport(u, nil))
 		err = match(flattenResultsExprResult(u), c.want())
 		if err != nil {
 			t.Errorf("Error in case %s: %v", k, err)
-			// fmt.Println(r)
-			// fmt.Println(u)
 		}
 	}
 }
