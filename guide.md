@@ -41,7 +41,7 @@ Useful links
    1. The Engine type 
    1. The Rule type 
 
-[4. Lists and Maps](#section-4-lists-and-maps)
+[4. Lists and Maps](#4-lists-and-maps)
 
    1. Lists
    1. Maps
