@@ -17,6 +17,26 @@ message Student {
   enum status_type {
 	ENROLLED = 0;
 	PROBATION = 1;
+	GRADUATED = 2;
+  }
+
+  oneof housing_address {
+	Address off_campus = 10;
+	CampusAddress on_campus = 11;
+  }
+
+
+  message Address {
+	string street = 1;
+	string city = 2;
+	string state = 3;
+	string zip = 4;
+  }
+
+
+  message CampusAddress {
+	string building = 1;
+	string room = 2;
   }
 
   
