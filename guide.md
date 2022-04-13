@@ -45,7 +45,7 @@ Useful links
 
    1. Lists
    1. Maps
-   1. Functions 
+   1. Using the 'in' operator 
 
 [5. Macros and Functions](#5-macros-and-functions)
 
