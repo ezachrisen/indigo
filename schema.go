@@ -131,6 +131,12 @@ type Map struct {
 	ValueType Type // the type of the value stored in the map
 }
 
+type Func struct {
+	Name            string
+	Args            []Type
+	ReturnValueType Type
+}
+
 // String Methods
 func (Int) String() string       { return "int" }
 func (Bool) String() string      { return "bool" }
