@@ -634,7 +634,11 @@ There are also functions related to types, such as:
 - ``type`` returns the type of the value
 - ``string`` converts an int or a timestamp to a string
 
+CEL comes with [extension functions](https://github.com/google/cel-go/tree/master/ext) that can be enabled as well, adding more string functions, for example.
+
 We'll cover functions related to timestamps and durations later. 
+
+
 
 </br>
 </br>
