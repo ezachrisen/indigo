@@ -52,8 +52,8 @@ type Result struct {
 func (u *Result) String() string {
 
 	tw := table.NewWriter()
-	tw.SetTitle("\nINDIGO RESULT SUMMARY\n")
-	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Expr.\nPass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?",
+	tw.SetTitle("\nINDIGO RESULTS\n")
+	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Expr.\nPass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?", "True\nIf Any?",
 		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail"})
 	rows := u.resultsToRows(0)
 
@@ -93,6 +93,7 @@ func (u *Result) resultsToRows(n int) []table.Row {
 		fmt.Sprintf("%d", len(u.Results)),
 		fmt.Sprintf("%v", u.Value),
 		trueFalse(fmt.Sprintf("%t", diag)),
+		trueFalse(fmt.Sprintf("%t", u.EvalOptions.TrueIfAny)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopIfParentNegative)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopFirstPositiveChild)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopFirstNegativeChild)),
@@ -116,4 +117,41 @@ func trueFalse(t string) string {
 	default:
 		return t
 	}
+}
+
+// String produces a list of rules (including child rules) executed and the result of the evaluation.
+func (u *Result) Summary() string {
+
+	tw := table.NewWriter()
+	tw.SetTitle("\nINDIGO RESULT SUMMARY\n")
+	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Expr.\nPass/\nFail", "Output\nValue"})
+	rows := u.summaryResultsToRows(0)
+
+	for _, r := range rows {
+		tw.AppendRow(r)
+	}
+	style := table.StyleLight
+	style.Format.Header = text.FormatDefault
+	tw.SetStyle(style)
+	return tw.Render()
+}
+
+// summaryResultsToRows transforms the Results data to a list of resultsToRows
+// for inclusion in a table.Writer table.
+func (u *Result) summaryResultsToRows(n int) []table.Row {
+	rows := []table.Row{}
+	indent := strings.Repeat("  ", n)
+
+	row := table.Row{
+		fmt.Sprintf("%s%s", indent, u.Rule.ID),
+		boolString(u.Pass),
+		boolString(u.ExpressionPass),
+		fmt.Sprintf("%v", u.Value),
+	}
+
+	rows = append(rows, row)
+	for _, cd := range u.Results {
+		rows = append(rows, cd.summaryResultsToRows(n+1)...)
+	}
+	return rows
 }

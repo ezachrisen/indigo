@@ -9,6 +9,7 @@ import "google/protobuf/duration.proto";
 message Student {
   double id = 1;
   int32 age = 2;
+  int32 credits = 9;
   double gpa = 3;
   status_type status = 4;
   google.protobuf.Timestamp enrollment_date = 7; 
@@ -16,7 +17,28 @@ message Student {
   enum status_type {
 	ENROLLED = 0;
 	PROBATION = 1;
+	GRADUATED = 2;
   }
+
+  oneof housing_address {
+	Address off_campus = 10;
+	CampusAddress on_campus = 11;
+  }
+
+
+  message Address {
+	string street = 1;
+	string city = 2;
+	string state = 3;
+	string zip = 4;
+  }
+
+
+  message CampusAddress {
+	string building = 1;
+	string room = 2;
+  }
+
   
   map<string, string> attrs = 6;
   

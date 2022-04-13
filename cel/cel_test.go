@@ -176,7 +176,7 @@ func makeEducationRules1() *indigo.Rule {
 		},
 	}
 
-	root := indigo.NewRule("root")
+	root := indigo.NewRule("root", "")
 
 	root.Rules[rule1.ID] = rule1
 	root.Rules[rule2.ID] = rule2
@@ -333,6 +333,25 @@ func TestDiagnosticOptions(t *testing.T) {
 		// 	fmt.Println(c.Diagnostics)
 		// }
 	}
+
+}
+
+func TestDiagnosticsWithEmptyRule(t *testing.T) {
+
+	is := is.New(t)
+	e := indigo.NewEngine(cel.NewEvaluator())
+	d := map[string]interface{}{"a": "a"} // dummy data, not important
+
+	r := &indigo.Rule{
+		ID: "root",
+	}
+
+	err := e.Compile(r)
+	is.NoErr(err)
+
+	u, err := e.Eval(context.Background(), r, d)
+	is.NoErr(err)
+	is.Equal(u.Diagnostics, nil)
 
 }
 
@@ -496,9 +515,8 @@ func TestDiagnosticGeneration(t *testing.T) {
 	is.NoErr(err)
 	u, err = e.Eval(context.Background(), red2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
-	is.True(u.Diagnostics != nil)
 	_ = u.Diagnostics.String()
-	indigo.DiagnosticsReport(u, makeStudentData())
+	_ = indigo.DiagnosticsReport(u, makeStudentData())
 
 }
 

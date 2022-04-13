@@ -84,11 +84,13 @@ const (
 	selfKey = "self"
 )
 
-// NewRule initializes a rule with the given ID
-func NewRule(id string) *Rule {
+// NewRule initializes a rule with the ID and rule expression.
+// The ID and expression can be empty.
+func NewRule(id string, expr string) *Rule {
 	return &Rule{
 		ID:    id,
 		Rules: map[string]*Rule{},
+		Expr:  expr,
 	}
 }
 
@@ -166,6 +168,9 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 // sortChildKeys sorts the IDs of the child rules according to the
 // SortFunc set in evaluation options. If no SortFunc is set, the evaluation
 // order is not specified.
+// TODO: allow this function to be canceled
+// TODO: cache sorting
+// TODO: add sorting benchmark
 func (r *Rule) sortChildKeys(o EvalOptions) []*Rule {
 	keys := make([]*Rule, 0, len(r.Rules))
 	for k := range r.Rules {

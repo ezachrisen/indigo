@@ -69,7 +69,7 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, 
 	}
 
 	if err = doTypesMatch(c.ResultType(), resultType); err != nil {
-		return nil, fmt.Errorf("compiling: %w", err)
+		return nil, fmt.Errorf("result type mismatch: %w", err)
 	}
 
 	if collectDiagnostics {
@@ -102,7 +102,7 @@ func (*Evaluator) Evaluate(data map[string]interface{}, expr string, _ indigo.Sc
 		// No program is ok if there's no expression to evauate, otherwise
 		// it is an error
 		if expr == "" {
-			return true, &indigo.Diagnostics{}, nil
+			return true, nil, nil
 		}
 		return nil, nil, fmt.Errorf("missing program")
 	}
@@ -112,6 +112,7 @@ func (*Evaluator) Evaluate(data map[string]interface{}, expr string, _ indigo.Sc
 	// Do not check the error yet. Grab the diagnostics first
 	var diagnostics *indigo.Diagnostics
 	if returnDiagnostics {
+		//		fmt.Println("collecting diagnostics")
 		diagnostics, err = collectDiagnostics(program.ast, details, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("collecting diagnostics: %w", err)
@@ -125,7 +126,7 @@ func (*Evaluator) Evaluate(data map[string]interface{}, expr string, _ indigo.Sc
 	if rawValue == nil {
 		return nil, diagnostics, nil
 	}
-
+	//	fmt.Println("Before returning", expr, "diagnostics = ", diagnostics)
 	// The output from CEL evaluation is a ref.Val.
 	// The underlying Go value is returned by .Value()
 	// One type requires special handling: protocol buffers dynamically constructed

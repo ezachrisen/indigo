@@ -44,6 +44,9 @@ type Diagnostics struct {
 
 // String produces an ASCII table with human-readable diagnostics.
 func (d *Diagnostics) String() string {
+	if d == nil {
+		return ""
+	}
 	fd := flattenDiagnostics(*d)
 	sortListByPosition(fd)
 

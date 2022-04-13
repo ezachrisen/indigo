@@ -92,9 +92,10 @@ func Example_basic() {
 	results, err := engine.Eval(context.Background(), &rule, data)
 	if err != nil {
 		fmt.Println(err)
-	} else {
-		fmt.Println(results.ExpressionPass)
+		return
 	}
+	fmt.Println(results.ExpressionPass)
+
 	// Output: true
 }
 
@@ -189,6 +190,47 @@ func Example_map() {
 	}
 
 	// Output: Are any flights delayed? true
+}
+
+// Demonstrates using the in operator on lists and maps
+func ExampleIn() {
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "flights", Type: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.String{}}},
+			{Name: "holding", Type: indigo.List{ValueType: indigo.String{}}},
+		},
+	}
+
+	rule := indigo.Rule{
+		Schema:     schema,
+		ResultType: indigo.Bool{},
+		Expr:       `"UA1500" in flights && "SW123" in holding`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"flights": map[string]string{"UA1500": "On Time", "DL232": "Delayed", "AA1622": "Delayed"},
+		"holding": []string{"SW123", "BA355", "UA91"},
+	}
+
+	// Step 5: Evaluate and check the results
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(results.Pass)
+
+	// Output: true
 }
 
 func Example_nativeTimestampComparison() {
@@ -297,6 +339,48 @@ func Example_protoEnum() {
 	}
 	fmt.Println(results.ExpressionPass)
 	// Output: false
+}
+
+// Demonstrates using a protocol buffer oneof value in a rule
+func Example_protoOneof() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+	data := map[string]interface{}{
+		"student": &school.Student{
+			Status: school.Student_ENROLLED,
+			HousingAddress: &school.Student_OnCampus{
+				&school.Student_CampusAddress{
+					Building: "Hershey",
+					Room:     "308",
+				},
+			},
+		},
+	}
+
+	rule := indigo.Rule{
+		Schema: education,
+		Expr:   `has(student.on_campus) && student.on_campus.building == "Hershey"`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+	fmt.Println(results.ExpressionPass)
+	// Output: true
 }
 
 // Demonstrates using the CEL exists function to check for a value in a slice
@@ -428,6 +512,179 @@ func Example_protoDurationComparison() {
 	// Output: true
 }
 
+// Demonstrates writing rules on timestamps and durations
+func Example_protoTimestampAndDurationComparison() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "ssum", Type: indigo.Proto{Message: &school.StudentSummary{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
+		},
+		"ssum": &school.StudentSummary{
+			Tenure: durationpb.New(time.Duration(time.Hour * 24 * 451)),
+		},
+		"now": timestamppb.Now(),
+	}
+
+	rule := indigo.Rule{
+		ID:     "",
+		Schema: education,
+		Expr: `s.enrollment_date < now
+               && 
+               // 12,000h = 500 days * 24 hours
+               ssum.tenure > duration("12000h")
+			  `,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	fmt.Println(results.ExpressionPass)
+	// Output: false
+}
+
+// Demonstrates writing rules on timestamps and durations
+func Example_protoTimestampPart() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:         "",
+		ResultType: indigo.Bool{},
+		Schema:     education,
+		Expr:       `s.enrollment_date.getDayOfWeek() == 5 // Friday`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	fmt.Println(results.Value)
+	// Output: true
+}
+
+// Demonstrates writing rules on timestamps and durations
+func Example_protoTimestampPartTZ() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:         "",
+		ResultType: indigo.Bool{},
+		Schema:     education,
+		Expr:       `s.enrollment_date.getDayOfWeek("Asia/Kolkata") == 6 // Saturday`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	fmt.Println(results.Value)
+	// Output: true
+}
+
+// Demonstrates writing rules on timestamps and durations
+func Example_protoDurationCalculation() {
+
+	education := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "ssum", Type: indigo.Proto{Message: &school.StudentSummary{}}},
+		},
+	}
+
+	data := map[string]interface{}{
+		"s": &school.Student{
+			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
+		},
+		"now": timestamppb.Now(),
+	}
+
+	rule := indigo.Rule{
+		ID:     "",
+		Schema: education,
+		Expr: `// 2,400h = 100 days * 24 hours
+               now - s.enrollment_date  > duration("2400h")
+			  `,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Printf("Error adding rule %v", err)
+		return
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Printf("Error evaluating: %v", err)
+		return
+	}
+
+	fmt.Println(results.ExpressionPass)
+	// Output: true
+}
+
 // Demonstrates using the exists macro to inspect the value of nested messages in the list
 func Example_protoNestedMessages() {
 
@@ -475,14 +732,14 @@ func Example_protoConstruction() {
 
 	education := indigo.Schema{
 		Elements: []indigo.DataElement{
-			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "student_suspension", Type: indigo.Proto{Message: &school.Student_Suspension{}}},
 			{Name: "studentSummary", Type: indigo.Proto{Message: &school.StudentSummary{}}},
 		},
 	}
 
 	data := map[string]interface{}{
-		"student": &school.Student{
+		"s": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
 				&school.Student_Suspension{Cause: "Cheating"},
@@ -497,7 +754,7 @@ func Example_protoConstruction() {
 		ResultType: indigo.Proto{Message: &school.StudentSummary{}},
 		Expr: `
 			testdata.school.StudentSummary {
-				gpa: student.gpa,
+				gpa: s.gpa,
 				risk_factor: 2.0 + 3.0,
 				tenure: duration("12h")
 			}`,
@@ -521,6 +778,7 @@ func Example_protoConstruction() {
 
 	fmt.Printf("%T\n", summary)
 	fmt.Printf("%0.0f\n", summary.RiskFactor)
+
 	// Output: *school.StudentSummary
 	// 5
 }
@@ -558,7 +816,7 @@ func Example_protoConstructionConditional() {
 					risk_factor: 0.0
 				}
 			:
-				testdata.school.StudentSummary {
+	           testdata.school.StudentSummary {
 					gpa: student.gpa,
 					risk_factor: 2.0 + 3.0,
 					tenure: duration("12h")
@@ -587,4 +845,69 @@ func Example_protoConstructionConditional() {
 	fmt.Println(summ.RiskFactor)
 	// Output: *school.StudentSummary
 	// 0
+}
+
+// Example_alarms illustrates using the DiscardFail option to only return
+// true rules from evaluation
+func Example_alarms() {
+
+	sysmetrics := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "cpu_utilization", Type: indigo.Int{}},
+			{Name: "disk_free_space", Type: indigo.Int{}},
+			{Name: "memory_utilization", Type: indigo.Int{}},
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:    "alarm_check",
+		Rules: map[string]*indigo.Rule{},
+	}
+
+	// Setting this option so we only get back
+	// rules that evaluate to 'true'
+	rule.EvalOptions.DiscardFail = true
+
+	rule.Rules["cpu_alarm"] = &indigo.Rule{
+		ID:     "cpu_alarm",
+		Schema: sysmetrics,
+		Expr:   "cpu_utilization > 90",
+	}
+
+	rule.Rules["disk_alarm"] = &indigo.Rule{
+		ID:     "disk_alarm",
+		Schema: sysmetrics,
+		Expr:   "disk_free_space < 70",
+	}
+
+	rule.Rules["memory_alarm"] = &indigo.Rule{
+		ID:     "memory_alarm",
+		Schema: sysmetrics,
+		Expr:   "memory_utilization > 90",
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"cpu_utilization":    99,
+		"disk_free_space":    85,
+		"memory_utilization": 89,
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for k := range results.Results {
+		fmt.Println(k)
+	}
+
+	// Unordered output: cpu_alarm
 }
