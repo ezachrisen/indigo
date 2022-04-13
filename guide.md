@@ -49,6 +49,9 @@ Useful links
 
 [5. Macros and Functions](#5-macros-and-functions)
 
+   1. Macros
+   1. Functions 
+
 [6. Using Protocol Buffers in Rules](#6-using-protocol-buffers-in-rules)
 
    1. Rules on protocol buffer types 
