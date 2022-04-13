@@ -11,8 +11,11 @@ import (
 	"fmt"
 
 	"github.com/ezachrisen/indigo"
+	"github.com/google/cel-go/cel"
 	celgo "github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/types/ref"
+	"github.com/google/cel-go/interpreter/functions"
 	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
@@ -27,16 +30,32 @@ func convertIndigoSchemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, erro
 	// we'll collect them in types
 	types := []interface{}{}
 
+	// convert all variables from Indigo schema to CEL Types, then to decls
 	for _, d := range s.Elements {
 		typ, err := convertIndigoToExprType(d.Type)
 
 		if err != nil {
 			return nil, fmt.Errorf("converting element %s in schema %s: %v", s.Name, d.Name, err)
 		}
-		declarations = append(declarations, decls.NewVar(d.Name, typ))
+		if typ != nil {
+			declarations = append(declarations, decls.NewVar(d.Name, typ))
 
-		if v, ok := d.Type.(indigo.Proto); ok {
-			types = append(types, v.Message)
+			if v, ok := d.Type.(indigo.Proto); ok {
+				types = append(types, v.Message)
+			}
+		}
+	}
+
+	// then, convert custom functions from Indigo to CEL decls
+	for _, d := range s.Elements {
+
+		f, err := convertIndigoFuncToCELFunc(d.Type)
+
+		if err != nil {
+			return nil, fmt.Errorf("converting function %s in schema %s: %v", s.Name, d.Name, err)
+		}
+		if f != nil {
+			declarations = append(declarations, f)
 		}
 	}
 
@@ -89,7 +108,66 @@ func convertIndigoToExprType(t indigo.Type) (*gexpr.Type, error) {
 			return nil, err
 		}
 		return decls.NewObjectType(n), nil
+	case indigo.Func:
+		// skip; functions are handled separately
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("unknown indigo type %s", t)
 	}
+}
+
+func convertIndigoFuncToCELFunc(t indigo.Type) (*gexpr.Decl, error) {
+
+	switch v := t.(type) {
+	case indigo.Func:
+		returnType, err := convertIndigoToExprType(v.ReturnValueType)
+		if err != nil {
+			return nil, err
+		}
+
+		definedOn, err := convertIndigoToExprType(v.DefinedOn)
+		if err != nil {
+			return nil, err
+		}
+
+		args := []*gexpr.Type{}
+		args = append(args, definedOn)
+		for _, a := range v.Args {
+			aType, err := convertIndigoToExprType(a)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, aType)
+		}
+
+		return decls.NewFunction(v.Name,
+			decls.NewParameterizedInstanceOverload(v.Name, args, returnType, []string{"A", "B"}),
+		), nil
+
+	default:
+		return nil, nil
+	}
+}
+
+func indigoFunctionOverloads(s indigo.Schema) cel.ProgramOption {
+
+	funcs := []*functions.Overload{}
+
+	for _, e := range s.Elements {
+		switch v := e.Type.(type) {
+		case indigo.Func:
+			funcs = append(funcs, &functions.Overload{
+				Operator: v.Name,
+				Function: func(values ...ref.Val) ref.Val {
+					r := v.Func(values)
+					rv, ok := r.(ref.Val)
+					if !ok {
+						return nil
+					}
+					return rv
+				},
+			})
+		}
+	}
+	return cel.Functions(funcs...)
 }

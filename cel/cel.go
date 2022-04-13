@@ -76,12 +76,17 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, 
 		prog.ast = ast
 	}
 
-	options := celgo.EvalOptions()
-	if collectDiagnostics {
-		options = celgo.EvalOptions(celgo.OptTrackState)
-	}
+	// options := celgo.EvalOptions()
+	// if collectDiagnostics {
+	// 	options = celgo.EvalOptions(celgo.OptTrackState)
+	// }
+	funcs := indigoFunctionOverloads(s)
 
-	prog.program, err = env.Program(c, options)
+	// xopts := []celgo.ProgramOption{}
+	// xopts = append(xopts, options)
+	// xopts = append(xopts, funcs)
+	// fmt.Println(xopts)
+	prog.program, err = env.Program(c, funcs)
 	if err != nil {
 		return nil, fmt.Errorf("generating program: %w", err)
 	}

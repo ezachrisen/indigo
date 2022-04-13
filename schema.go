@@ -133,6 +133,8 @@ type Map struct {
 
 type Func struct {
 	Name            string
+	Func            func(args interface{}) interface{}
+	DefinedOn       Type
 	Args            []Type
 	ReturnValueType Type
 }
@@ -155,6 +157,10 @@ func (p Proto) String() string {
 }
 func (t List) String() string { return fmt.Sprintf("[]%v", t.ValueType) }
 func (t Map) String() string  { return fmt.Sprintf("map[%s]%s", t.KeyType, t.ValueType) }
+
+func (t Func) String() string {
+	return fmt.Sprintf("(%s) %s(%+s) %s", t.DefinedOn, t.Name, t.Args, t.ReturnValueType)
+}
 
 // ParseType parses a string that represents an Indigo type and returns the type.
 // The primitive types are their lower-case names (string, int, duration, etc.)
