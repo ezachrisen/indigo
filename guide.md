@@ -554,6 +554,16 @@ We have already seen one macro (`exists`), but here are some of the macros CEL p
 - ``exists_one`` will be true if only 1 element matches the 
 - ``filter`` can be applied to a list and returns a new list with the matching elements
 
+Macros can be chained, as in this example from the [CEL Codelabs tutorial](https://codelabs.developers.google.com/codelabs/cel-go#10):
+
+```proto
+jwt.extra_claims.exists(c, c.startsWith('group'))
+    && jwt.extra_claims
+       .filter(c, c.startsWith('group'))
+       .all(c, jwt.extra_claims[c]
+              .all(g, g.endsWith('@acme.co')))
+```
+
 See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros) for a complete list of macros. 
 
 There is no macro to do aggregate math on lists or maps. It is recommended to do such calculations outside rule evaluation and provide the data in the input. See [this discussion](https://groups.google.com/g/cel-go-discuss/c/1Y_1APJHk0c/m/JSsKRdGeAQAJ) in the CEL group for more information. 
