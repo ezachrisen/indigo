@@ -804,3 +804,68 @@ func Example_protoConstructionConditional() {
 	// Output: *school.StudentSummary
 	// 0
 }
+
+// Example_alarms illustrates using the DiscardFail option to only return
+// true rules from evaluation
+func Example_alarms() {
+
+	sysmetrics := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "cpu_utilization", Type: indigo.Int{}},
+			{Name: "disk_free_space", Type: indigo.Int{}},
+			{Name: "memory_utilization", Type: indigo.Int{}},
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:    "alarm_check",
+		Rules: map[string]*indigo.Rule{},
+	}
+
+	// Setting this option so we only get back
+	// rules that evaluate to 'true'
+	rule.EvalOptions.DiscardFail = true
+
+	rule.Rules["cpu_alarm"] = &indigo.Rule{
+		ID:     "cpu_alarm",
+		Schema: sysmetrics,
+		Expr:   "cpu_utilization > 90",
+	}
+
+	rule.Rules["disk_alarm"] = &indigo.Rule{
+		ID:     "disk_alarm",
+		Schema: sysmetrics,
+		Expr:   "disk_free_space < 70",
+	}
+
+	rule.Rules["memory_alarm"] = &indigo.Rule{
+		ID:     "memory_alarm",
+		Schema: sysmetrics,
+		Expr:   "memory_utilization > 90",
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"cpu_utilization":    99,
+		"disk_free_space":    85,
+		"memory_utilization": 89,
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for k := range results.Results {
+		fmt.Println(k)
+	}
+
+	// Unordered output: cpu_alarm
+}
