@@ -47,7 +47,7 @@ Useful links
    1. Maps
    1. Functions 
 
-[5. Macros](#5-macros)
+[5. Macros and Functions](#5-macros-and-functions)
 
 [6. Using Protocol Buffers in Rules](#6-using-protocol-buffers-in-rules)
 
@@ -366,15 +366,24 @@ We are finally ready to evaluate the input data (x=11, y=red) against the rule t
 
 ```go
 results, err := engine.Eval(context.Background(), &rule, data)
+if err != nil {
+	fmt.Println(err)
+	return
+}
+fmt.Println(results.ExpressionPass)
+
+// Output: true
 ```
 
-The evaluation returns an indigo.Result struct, and an error. It is not an error if the rule returns false; an error is an unexpected issue, such as incorrect data passed. 
+The evaluation returns an ``indigo.Result struct``, and an error. It is not an error if the rule returns false; an error is an unexpected issue, such as incorrect data passed. 
 
 Eval accepts a context.Context, and will stop evaluation if the context's deadline expires or is canceled, returning no results and the context's error. 
 
+
+
 ## Evaluation Results 
 
-The indigo.Result struct contains the output of the expression evaluation, and additional information to help calling code process the results. For now, we'll focus on the boolean Result.ExpressionPass field. This field will tell you if the output of the expression is true or false, which is what we are interested in our example. Later we will look more in depth at the Results type. 
+The ``indigo.Result`` struct contains the output of the expression evaluation, and additional information to help calling code process the results. For now, we'll focus on the boolean ``Result.ExpressionPass`` field. This field will tell you if the output of the expression is true or false, which is what we are interested in our example. Later we will look more in depth at the Results type. 
 
 ## Short Circuiting 
 
@@ -549,6 +558,31 @@ flights["UA1500"] == "On Time"
 
 ```
 
+## Using the 'in' operator 
+
+In addition to the ``exists`` macro, we can use the operator ``in`` to determine if a value is in a list, or a key is in a map.
+
+> The sample code for this section is in [ExampleIn()](example_test.go)
+
+In the data we have a map and a list:
+
+```go
+data := map[string]interface{}{
+	"flights": map[string]string{"UA1500": "On Time", 
+               "DL232": "Delayed", "AA1622": "Delayed"},
+	"holding": []string{"SW123", "BA355", "UA91"},
+}
+
+rule := indigo.Rule{
+	Schema:     schema,
+	ResultType: indigo.Bool{},
+	Expr:       `"UA1500" in flights && "SW123" in holding`,
+}
+
+```
+
+The rule checks if the **key** "UA1500" is in the ``flights`` map, and if the **value** "SW123" is in the ``holding`` list. 
+
 
 </br>
 </br>
@@ -556,9 +590,10 @@ flights["UA1500"] == "On Time"
 ***
 </br>
 
-# 5. Macros
-CEL provides a few macros that provide functionality beyond predicate logic such as == or <=. 
+# 5. Macros and Functions
+CEL provides macros and functions that to help us evaluate conditions other than ``==`` or ``>``. 
 
+## Macros
 We have already seen one macro (`exists`), but here are some of the macros CEL provides:
 
 - ``has`` checks if a field exists 
@@ -570,6 +605,23 @@ See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/l
 
 There is no macro to do aggregate math on lists or maps. It is recommended to do such calculations outside rule evaluation and provide the data in the input. See [this discussion](https://groups.google.com/g/cel-go-discuss/c/1Y_1APJHk0c/m/JSsKRdGeAQAJ) in the CEL group for more information. 
 
+## Functions
+Functions allow us to manipulate input values to assist in evaluation. See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) for a complete list. 
+
+Here are a few favorites:
+
+- ``size`` gets the length of a string, list or map 
+- ``contains`` checks if a string contains another string
+- ``startsWith`` checks if a string begins with a prefix
+- ``endsWith`` checks if a string ends with a suffix 
+- ``matches`` matches a string against a regular expression 
+
+There are also functions related to types, such as:
+
+- ``type`` returns the type of the value
+- ``string`` converts an int or a timestamp to a string
+
+We'll cover functions related to timestamps and durations later. 
 
 </br>
 </br>
@@ -1867,16 +1919,6 @@ for k := range results.Results {
 ```
 
 Rather than setting the ``DiscardFail`` option, we could have iterated through all the results and checked the ``Pass`` flag, but here we don't have to. 
-
-
-
-
-
-
-
-
-
-
 
 </br>
 </br>

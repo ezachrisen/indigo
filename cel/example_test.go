@@ -92,9 +92,10 @@ func Example_basic() {
 	results, err := engine.Eval(context.Background(), &rule, data)
 	if err != nil {
 		fmt.Println(err)
-	} else {
-		fmt.Println(results.ExpressionPass)
+		return
 	}
+	fmt.Println(results.ExpressionPass)
+
 	// Output: true
 }
 
@@ -189,6 +190,47 @@ func Example_map() {
 	}
 
 	// Output: Are any flights delayed? true
+}
+
+// Demonstrates using the in operator on lists and maps
+func ExampleIn() {
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "flights", Type: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.String{}}},
+			{Name: "holding", Type: indigo.List{ValueType: indigo.String{}}},
+		},
+	}
+
+	rule := indigo.Rule{
+		Schema:     schema,
+		ResultType: indigo.Bool{},
+		Expr:       `"UA1500" in flights && "SW123" in holding`,
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"flights": map[string]string{"UA1500": "On Time", "DL232": "Delayed", "AA1622": "Delayed"},
+		"holding": []string{"SW123", "BA355", "UA91"},
+	}
+
+	// Step 5: Evaluate and check the results
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(results.Pass)
+
+	// Output: true
 }
 
 func Example_nativeTimestampComparison() {
