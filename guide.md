@@ -91,6 +91,10 @@ Useful links
    1. StopFirstNegativeChild, StopFirstPositiveChild 
    1. SortFunc 
 
+[11. Rule Structures and Use Cases](#11-rule-structures-and-use-cases)
+
+   1. Which alarms should we trigger?
+
 [Appendix: More CEL Resources](#appendix-more-cel-resources)
 
 
@@ -731,17 +735,17 @@ We can use the name of the enum value directly in the expression. So instead of 
 > The sample code is from [Example_protoEnum()](/cel/example_test.go)
 
 ```go
-	rule := indigo.Rule{
-		Schema: education,
-		Expr:   `student.status == testdata.school.Student.status_type.PROBATION`,
-	}
 
+rule := indigo.Rule{
+	Schema: education,
+	Expr:   `student.status == testdata.school.Student.status_type.PROBATION`,
+}
 
 ```
 
 ## Referring to protocol buffer types in rule expressions
 
-To refer to the constant name, we need to use the full name, which includes the protocol buffer **package** name ``testdata``:
+To refer to the constant name, we needed to use the full name, which includes the protocol buffer **package** name ``testdata``:
 ```go
       testdata.school.Student.status_type.PROBATION
       |--------------|   ^          ^        ^
@@ -810,7 +814,7 @@ rule := indigo.Rule{
 // Output: true
 ```
 
-
+This also demonstrates using the ``has`` macro: it checks if a field is set (exists). 
 
 
 </br>
@@ -1003,7 +1007,7 @@ s.enrollment_date.getDayOfWeek() == 5 // Friday
 CEL also lets us check the day of the week in whatever timezone we want:
 
 
-> > The code for this example is in [Example_protoTimestampPartTZ()](cel/example_test.go) 
+> The code for this example is in [Example_protoTimestampPartTZ()](cel/example_test.go) 
 
 With the same input time ...
 
@@ -1085,7 +1089,7 @@ fmt.Printf("%0.0f\n", summary.RiskFactor)
 // Output: *school.StudentSummary
 // 5
 ```
-
+>
 This example illustrates that we can get just about anything out of a rule expression. We could use it to perform a calculation (``2 + 2``), filter a list (``mylist.filter(e, e > 10)``) or get today's day in the year (``timestamp(now).getDayOfYear())``). 
 
 
@@ -1798,6 +1802,71 @@ Setting these options has **no effect** on the parent rule's ``Pass`` value. Rec
 
 If we set the ``DiscardFail`` on X, we will only get B and C (both positive) in the results, but not A. X.Pass will be false, even if there are no false results returned. 
 
+
+
+# 11. Rule Structure and Use Cases
+
+In this section we'll use our understanding rule organization and evaluation options to accomplish various use cases. 
+
+## Which alarms should we trigger?
+
+In this example, we are going to monitor system metrics such as CPU and memory and issue alerts when metrics exceed certain thresholds. 
+
+The best way to do this is to have a rule for each alarm, and to set the evaluation option ```DiscardFail = true``, so that all rules that are ``false`` are never returned.
+
+
+> The sample code for this section is in [Example_alarms()](example_test.go)
+
+```go
+sysmetrics := indigo.Schema{
+   Elements: []indigo.DataElement{
+	   {Name: "cpu_utilization", Type: indigo.Int{}},
+	   {Name: "disk_free_space", Type: indigo.Int{}},
+	   {Name: "memory_utilization", Type: indigo.Int{}},
+   },
+}
+
+rule := indigo.Rule{
+   ID:    "alarm_check",
+   Rules: map[string]*indigo.Rule{},
+}
+
+// Setting this option so we only get back 
+// rules that evaluate to 'true'
+rule.EvalOptions.DiscardFail = true
+
+rule.Rules["cpu_alarm"] = &indigo.Rule{
+   ID:     "cpu_alarm",
+   Schema: sysmetrics,
+   Expr:   "cpu_utilization > 90",
+}
+
+rule.Rules["disk_alarm"] = &indigo.Rule{
+   ID:     "disk_alarm",
+   Schema: sysmetrics,
+   Expr:   "disk_free_space < 70",
+}
+
+rule.Rules["memory_alarm"] = &indigo.Rule{
+   ID:     "memory_alarm",
+   Schema: sysmetrics,
+   Expr:   "memory_utilization > 90",
+}
+
+data := map[string]interface{}{
+   "cpu_utilization":    99,
+   "disk_free_space":    85,
+   "memory_utilization": 89,
+}
+
+for k := range results.Results {
+   fmt.Println(k)
+}
+
+// Unordered output: cpu_alarm
+```
+
+Rather than setting the ``DiscardFail`` option, we could have iterated through all the results and checked the ``Pass`` flag, but here we don't have to. 
 
 
 
