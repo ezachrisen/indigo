@@ -495,7 +495,7 @@ data := map[string]interface{}{
 }
 
 rule := indigo.Rule{
-	Schema:     schema,
+	Schema:     schema, ①
 	ResultType: indigo.Bool{},
 	Expr:       `flights.exists(k, flights[k] == "Delayed")`,
 }
