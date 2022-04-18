@@ -228,12 +228,10 @@ func Example_stopIfParentNegative() {
 		return
 	}
 
-	fmt.Println(results.Pass)
-
 	for k, v := range results.Results["accounting_majors_only"].Results {
 		fmt.Printf("%s? %t\n", k, v.ExpressionPass)
 	}
-	//	fmt.Println(results)
+	fmt.Println(results)
 	//	fmt.Println(results.Summary())
 
 	// Output: false
