@@ -1834,7 +1834,7 @@ Example uses of the ``StopFirstNegativeChild`` option:
 * An API server needs to quickly decide to allow or disallow an action (child rules with all required conditions)
 * A self-driving car should apply emergency braking immediately if one of the emergency braking conditions is met 
 
-Any negative rule can be turned into a positive rule, so the ``StopFirstPositiveChild`` option would have similar use case examples. 
+Any negative rule can be turned into a positive rule, so the ``StopFirstPositiveChild`` optiob has similar use case examples. 
 
 ## SortFunc
 When the ``StopFirstNegativeChild`` or ``StopFirstPositiveChild`` options are set, the order in which rules are evaluated **may** be important. If you only care that a rule passed or failed, and so you take an action because of that, the order may not matter. 
@@ -1875,7 +1875,7 @@ If we set the ``DiscardFail`` on X, we will only get B and C (both positive) in 
 
 # 11. Rule Structure and Use Cases
 
-In this section we'll use our understanding rule organization and evaluation options to accomplish various use cases. 
+In this section we'll use our understanding of rule organization and evaluation options to accomplish various use cases. 
 
 ## Which alarms should we trigger?
 
