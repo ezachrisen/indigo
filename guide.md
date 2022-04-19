@@ -401,6 +401,8 @@ Rules are owned by the Go code that calls Indigo engine methods. The indigo.Defa
 
 During compilation, an Engine may update a rule by setting the Program field to the compilation output of the rule. The Engine may require that data later during the evaluation phase. It is the responsibility of the calling code to ensure that the Program data is not modified, and that if the rule expression is changed, the rule must be recompiled. 
 
+
+
 ## Using a Non-CEL Evaluator
 
 There are several Go implementations of scripting languages, such as Javscript implemented by [Otto](https://github.com/robertkrimen/otto), and Lua. These languages are good choices for rule evaluation as well. 
@@ -1828,11 +1830,11 @@ If we set the ``DiscardFail`` on X, we will only get B and C (both positive) in 
 
 In this section we'll use our understanding of rule organization and evaluation options to accomplish various use cases. 
 
-## Which alarms should we trigger?
+## Which of these rules are true? 
 
 In this example, we are going to monitor system metrics such as CPU and memory and issue alerts when metrics exceed certain thresholds. 
 
-The best way to do this is to have a rule for each alarm, and to set the evaluation option ```DiscardFail = true``, so that all rules that are ``false`` are never returned.
+The best way to do this is to have a rule for each alarm, and to set the evaluation option ```DiscardFail = true``, so that only ``true`` rules are returned. 
 
 
 > The sample code for this section is in [Example_alarms()](example_test.go)
@@ -1886,7 +1888,20 @@ for k := range results.Results {
 // Unordered output: cpu_alarm
 ```
 
+This is the rule structure:
+
+```mermaid
+graph TD;
+
+alarm_check --> cpu_alarm;
+alarm_check --> disk_alarm;
+alarm_check --> memory_alarm;
+```
+
+
 Rather than setting the ``DiscardFail`` option, we could have iterated through all the results and checked the ``Pass`` flag, but here we don't have to. 
+
+
 
 </br>
 </br>
