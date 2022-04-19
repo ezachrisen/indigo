@@ -1893,7 +1893,7 @@ This is the rule structure:
 ```mermaid
 graph TD;
 
-alarm_check[DiscardFail] --> cpu_alarm;
+alarm_check[alarm_check<br>DiscardFail] --> cpu_alarm;
 alarm_check --> disk_alarm;
 alarm_check --> memory_alarm;
 ```
