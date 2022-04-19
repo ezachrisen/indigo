@@ -1902,6 +1902,54 @@ alarm_check --> memory_alarm;
 Rather than setting the ``DiscardFail`` option, we could have iterated through all the results and checked the ``Pass`` flag, but here we don't have to. 
 
 
+Now, let's modify the example so that there are multiple conditions that can trigger a memory alert: high utilization (>90%) or low remaining megabytes (<16). To do that we create a new "parent" memory alert rule and add the two conditions as child rules:
+
+
+
+```go
+
+memory_alarm := &indigo.Rule{
+	ID:    "memory_alarm",
+	Rules: map[string]*indigo.Rule{},
+	EvalOptions: indigo.EvalOptions{
+		DiscardFail: false,
+		TrueIfAny:   true,
+	},
+}
+
+memory_alarm.Rules["memory_utilization_alarm"] = &indigo.Rule{
+	ID:     "memory_utilization_alarm",
+	Schema: sysmetrics,
+	Expr:   "memory_utilization > 90",
+}
+
+memory_alarm.Rules["memory_remaining_alarm"] = &indigo.Rule{
+	ID:     "memory_remaining_alarm",
+	Schema: sysmetrics,
+	Expr:   "memory_mb_remaining < 16",
+}
+
+rule.Rules["memory_alarm"] = memory_alarm
+
+
+```
+
+We want the memory alarm to trigger when either of the two conditions is true, so we set the ``TrueIfAny`` option as well as the ``DiscardFail`` option. 
+
+
+This is now the rule structure: 
+
+
+```mermaid
+graph TD;
+
+alarm_check[alarm_check<br>DiscardFail] --> cpu_alarm;
+alarm_check --> disk_alarm;
+alarm_check --> memory_alarm[memory_alarm<br>DiscardFail<br>TrueIfAny];
+memory_alarm --> memory_utilization_alarm;
+memory_alarm --> memory_remaining_alarm;
+```
+
 
 </br>
 </br>

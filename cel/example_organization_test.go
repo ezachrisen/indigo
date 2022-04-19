@@ -182,7 +182,7 @@ func Example_stopIfParentNegative() {
 			Age:     21,
 			Credits: 16,
 			Gpa:     3.1,
-			Attrs:   map[string]string{"major": "Computer Science", "home_town": "Chicago"},
+			Attrs:   map[string]string{"major": "Accounting", "home_town": "Chicago"},
 			Status:  school.Student_ENROLLED,
 			Grades:  []float64{3, 3, 4, 2, 3, 3.5, 4},
 		},
@@ -231,8 +231,9 @@ func Example_stopIfParentNegative() {
 	for k, v := range results.Results["accounting_majors_only"].Results {
 		fmt.Printf("%s? %t\n", k, v.ExpressionPass)
 	}
-	fmt.Println(results)
-	//	fmt.Println(results.Summary())
+	//fmt.Println(results)
 
-	// Output: false
+	// Unordered output: rookie? false
+	// honors? true
+	// at_risk? false
 }
