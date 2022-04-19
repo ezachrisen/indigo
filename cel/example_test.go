@@ -911,3 +911,88 @@ func Example_alarms() {
 
 	// Unordered output: cpu_alarm
 }
+
+// Example_alarms illustrates using the DiscardFail option to only return
+// true rules from evaluation with a multi-level hierarchy
+func Example_alarmsTwoLevel() {
+
+	sysmetrics := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "cpu_utilization", Type: indigo.Int{}},
+			{Name: "disk_free_space", Type: indigo.Int{}},
+			{Name: "memory_utilization", Type: indigo.Int{}},
+			{Name: "memory_mb_remaining", Type: indigo.Int{}},
+		},
+	}
+
+	rule := indigo.Rule{
+		ID:    "alarm_check",
+		Rules: map[string]*indigo.Rule{},
+	}
+
+	// Setting this option so we only get back
+	// rules that evaluate to 'true'
+	rule.EvalOptions.DiscardFail = true
+
+	rule.Rules["cpu_alarm"] = &indigo.Rule{
+		ID:     "cpu_alarm",
+		Schema: sysmetrics,
+		Expr:   "cpu_utilization > 90",
+	}
+
+	rule.Rules["disk_alarm"] = &indigo.Rule{
+		ID:     "disk_alarm",
+		Schema: sysmetrics,
+		Expr:   "disk_free_space < 70",
+	}
+
+	memory_alarm := &indigo.Rule{
+		ID:    "memory_alarm",
+		Rules: map[string]*indigo.Rule{},
+		EvalOptions: indigo.EvalOptions{
+			DiscardFail: false,
+			TrueIfAny:   true,
+		},
+	}
+
+	memory_alarm.Rules["memory_utilization_alarm"] = &indigo.Rule{
+		ID:     "memory_utilization_alarm",
+		Schema: sysmetrics,
+		Expr:   "memory_utilization > 90",
+	}
+
+	memory_alarm.Rules["memory_remaining_alarm"] = &indigo.Rule{
+		ID:     "memory_remaining_alarm",
+		Schema: sysmetrics,
+		Expr:   "memory_mb_remaining < 16",
+	}
+
+	rule.Rules["memory_alarm"] = memory_alarm
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(&rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"cpu_utilization":     99,
+		"disk_free_space":     85,
+		"memory_utilization":  89,
+		"memory_mb_remaining": 7,
+	}
+
+	results, err := engine.Eval(context.Background(), &rule, data)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for k := range results.Results {
+		fmt.Println(k)
+	}
+
+	// Unordered output: xcpu_alarm
+	// memory_alarm
+}
