@@ -62,9 +62,7 @@ func ExampleHelloWorld() {
 
 ## For More Information ##
 
-The [usage](Usage.md) page is a brief introduction to the key concepts in Indigo. 
-
-The [Indigo Guide](guide.md) gives a deeper introduction to using Indigo. 
+The [Indigo Guide](guide.md) gives a deeper guide to using Indigo. 
 
 The [use cases](UseCases.md) page gives examples of ways you can struture rules in Indigo.
 
