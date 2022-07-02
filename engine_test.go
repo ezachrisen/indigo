@@ -11,8 +11,73 @@ import (
 	"time"
 
 	"github.com/ezachrisen/indigo"
+	"github.com/ezachrisen/indigo/cel"
 	"github.com/matryer/is"
 )
+
+// Test the scenario where the rule has childs and exists (or not) childs with true as their results
+func TestTrueIfAnyBehavior(t *testing.T) {
+	is := is.New(t)
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+	data := map[string]interface{}{}
+	ctx := context.Background()
+
+	ruleL2 := &indigo.Rule{ID: "l2", Expr: `false`}
+	ruleL1_1 := &indigo.Rule{ID: "l1-1", Expr: `true`}
+	ruleL1 := &indigo.Rule{
+		Expr: `true`,
+		ID:   "l1",
+		Rules: map[string]*indigo.Rule{
+			ruleL1_1.ID: ruleL1_1,
+			"l1-2":      {Expr: `true`, ID: "l1-2"},
+		},
+	}
+	rootRule := &indigo.Rule{
+		ID:          "root",
+		Expr:        `true`,
+		EvalOptions: indigo.EvalOptions{TrueIfAny: true},
+		Rules: map[string]*indigo.Rule{
+			ruleL1.ID: ruleL1,
+			ruleL2.ID: ruleL2,
+		},
+	}
+
+	expectedResults := map[string]bool{
+		rootRule.ID: true, // don't matter this value, since it'll be changed in the loop
+		ruleL2.ID:   true,
+		ruleL1.ID:   true,
+		ruleL1_1.ID: true,
+		"l1-2":      true, // if false, the ruleL1 always will be false
+	}
+
+	// function to check the changes over the expected rules tree
+	check := func(l1, l2 bool) {
+		ruleL1_1.Expr = fmt.Sprintf("%t", l1) // assign the result of an Exp for the child rule
+		ruleL2.Expr = fmt.Sprintf("%t", l2)
+
+		expectedResults[ruleL2.ID] = l2
+		expectedResults[ruleL1_1.ID] = l1       // change the expected value of the leaf
+		expectedResults[ruleL1.ID] = l1         // until the root
+		expectedResults[rootRule.ID] = l2 || l1 // since the leaf rule will propagate the change
+
+		err := engine.Compile(rootRule)
+		is.NoErr(err)
+
+		result, err := engine.Eval(ctx, rootRule, data)
+		is.NoErr(err)
+
+		// verify if matches the expected result
+		is.NoErr(match(flattenResultsRuleResult(result), expectedResults))
+	}
+
+	// possible scenarios for the leaf change
+	for _, expect := range []bool{false, true} {
+		check(expect, false) // if the L2 is false, then we need to check from leaf until the root
+		check(expect, true)  // otherwise, the L2 will make the root to be true
+	}
+
+}
 
 // Test that all rules are evaluated and yield the correct result in the default configuration
 func TestEvaluationTraversalDefault(t *testing.T) {
