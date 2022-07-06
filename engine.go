@@ -138,9 +138,13 @@ done: // break out of inner switch
 	// Based on the results of the child rules, determine the result of the parent rule
 	switch r.EvalOptions.TrueIfAny {
 	case true:
-		// If any of the child rules passed AND the parent's expression passed, the rule passes
-		if u.ExpressionPass && passCount > 0 {
-			u.Pass = true
+		if u.ExpressionPass {
+			// If none of the child rules passed AND the parent's expression passed, the rule
+			// shouldn't pass
+			hasChildren := len(r.Rules) > 0
+			if hasChildren && passCount == 0 {
+				u.Pass = false
+			}
 		}
 	case false:
 		// If one or more of child rules failed, we will fail also, regardless of the parent rule's result
