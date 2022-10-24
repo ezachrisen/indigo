@@ -3,6 +3,7 @@ package cel
 import (
 	"fmt" // required by CEL to construct a proto from an expression
 	"strings"
+	"sync"
 
 	"github.com/ezachrisen/indigo"
 
@@ -12,7 +13,12 @@ import (
 
 // Evaluator implements the indigo.ExpressionEvaluator and indigo.ExpressionCompiler interfaces.
 // It uses the CEL-Go package to compile and evaluate rules.
-type Evaluator struct{}
+type Evaluator struct {
+	// See the [FixedSchema] option
+	fixedSchema *indigo.Schema
+	fixedEnv    *celgo.Env
+	fixedOnce   sync.Once
+}
 
 // celProgram holds a compiled CEL Program and
 // optionally an AST. The AST is used if we're collecting diagnostics
@@ -24,9 +30,25 @@ type celProgram struct {
 
 // NewEvaluator creates a new CEL Evaluator.
 // The evaluator contains internal data used to facilitate CEL expression evaluation.
-func NewEvaluator() *Evaluator {
-	e := Evaluator{}
-	return &e
+func NewEvaluator(opts ...CelOption) *Evaluator {
+	e := &Evaluator{}
+	for _, o := range opts {
+		o(e)
+	}
+	return e
+}
+
+type CelOption func(e *Evaluator)
+
+// FixedSchema mandates that the evaluator will use this schema for all
+// compilations and evaluations. Schemas set on rules will be ignored.  CEL's
+// process to create a celgo.Env from a schema is time consuming; setting the
+// FixedSchema option reduces compilation time by 25% or more. The schema will
+// be evaluated the first time compilation runs.
+func FixedSchema(schema *indigo.Schema) CelOption {
+	return func(e *Evaluator) {
+		e.fixedSchema = schema
+	}
 }
 
 // Compile checks a rule, prepares a compiled CELProgram, and stores the program
@@ -35,7 +57,7 @@ func NewEvaluator() *Evaluator {
 // type and symbol information in diagnostics.
 //
 // Any errors in compilation are returned with a nil program
-func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, _ bool) (interface{}, error) {
+func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, _ bool) (interface{}, error) {
 
 	// A blank expression is ok, but it won't pass through the compilation
 	if expr == "" {
@@ -43,16 +65,37 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, 
 	}
 
 	prog := celProgram{}
+	var err error
 
-	// Convert from an Indigo schema to a set of CEL declarations (schema)
-	opts, err := convertIndigoSchemaToDeclarations(s)
+	e.fixedOnce.Do(func() {
+		if e.fixedSchema == nil {
+			return
+		}
+		env, errx := celEnv(*e.fixedSchema)
+		if errx != nil {
+			err = errx
+			return
+		}
+		e.fixedEnv = env
+		return
+	})
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("converting evaluator schema: %w", err)
 	}
 
-	env, err := celgo.NewEnv(opts...)
-	if err != nil {
-		return nil, err
+	var env *celgo.Env
+	if e.fixedEnv == nil {
+		env, err = celEnv(s)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		env = e.fixedEnv
+	}
+
+	if env == nil {
+		return nil, fmt.Errorf("no valid CEL environment")
 	}
 
 	// Parse the rule expression to an AST
@@ -68,7 +111,7 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, 
 		return nil, fmt.Errorf("checking rule:\n%w", iss.Err())
 	}
 
-	if err = doTypesMatch(c.ResultType(), resultType); err != nil {
+	if err := doTypesMatch(c.ResultType(), resultType); err != nil {
 		return nil, fmt.Errorf("result type mismatch: %w", err)
 	}
 
@@ -80,13 +123,27 @@ func (*Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, 
 	if collectDiagnostics {
 		options = celgo.EvalOptions(celgo.OptTrackState)
 	}
-
 	prog.program, err = env.Program(c, options)
 	if err != nil {
 		return nil, fmt.Errorf("generating program: %w", err)
 	}
 
 	return prog, nil
+}
+
+func celEnv(schema indigo.Schema) (*celgo.Env, error) {
+
+	opts, err := convertIndigoSchemaToDeclarations(schema)
+	if err != nil {
+		return nil, err
+	}
+
+	env, err := celgo.NewEnv(opts...)
+	if err != nil {
+		return nil, err
+	}
+	return env, nil
+
 }
 
 // Evaluate a rule against the input data.

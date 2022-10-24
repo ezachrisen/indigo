@@ -473,25 +473,36 @@ func TestRuleResultTypes(t *testing.T) {
 		},
 	}
 
-	e := indigo.NewEngine(cel.NewEvaluator())
-
 	for i := range cases {
-		//		lc := c
-		//		fmt.Println("Case: ", cases[i].rule.ID)
-		err := e.Compile(&cases[i].rule)
-		if cases[i].err == nil && err != nil {
-			t.Errorf("compiling rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
+		for _, b := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s_fixed_schema_%t", cases[i].rule.ID, b), func(t *testing.T) {
+				var e *indigo.DefaultEngine
+				switch b {
+				case true:
+					s := makeEducationProtoSchema()
+					e = indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(&s)))
+				case false:
+					e = indigo.NewEngine(cel.NewEvaluator())
+				}
+
+				//		lc := c
+				//		fmt.Println("Case: ", cases[i].rule.ID)
+				err := e.Compile(&cases[i].rule)
+				if cases[i].err == nil && err != nil {
+					t.Errorf("compiling rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
+				}
+
+				_, err = e.Eval(context.Background(), &cases[i].rule, makeStudentProtoData())
+
+				if err != nil && cases[i].err == nil {
+					t.Fatalf("For rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
+				} /* else {
+						if res != nil {
+						 	fmt.Printf("%v\nn", res)
+						 }
+				} */
+			})
 		}
-
-		_, err = e.Eval(context.Background(), &cases[i].rule, makeStudentProtoData())
-
-		if err != nil && cases[i].err == nil {
-			t.Fatalf("For rule %s, wanted err = %v, got %v", cases[i].rule.ID, cases[i].err, err)
-		} /* else {
-				if res != nil {
-				 	fmt.Printf("%v\nn", res)
-				 }
-		} */
 	}
 }
 
@@ -842,10 +853,23 @@ func BenchmarkEval2000Rules(b *testing.B) {
 }
 
 func BenchmarkCompileRule(b *testing.B) {
+	b.StopTimer()
 	is := is.New(b)
 	e := indigo.NewEngine(cel.NewEvaluator())
-
 	r := makeEducationProtoRules("rule")
+	b.StartTimer()
+	for i := 1; i < b.N; i++ {
+		err := e.Compile(r)
+		is.NoErr(err)
+	}
+}
+
+func BenchmarkCompileRuleWithFixedSchema(b *testing.B) {
+	b.StopTimer()
+	is := is.New(b)
+	r := makeEducationProtoRules("rule")
+	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(&r.Schema)))
+	b.StartTimer()
 	for i := 1; i < b.N; i++ {
 		err := e.Compile(r)
 		is.NoErr(err)

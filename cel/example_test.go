@@ -993,6 +993,6 @@ func Example_alarmsTwoLevel() {
 		fmt.Println(k)
 	}
 
-	// Unordered output: xcpu_alarm
+	// Unordered output: cpu_alarm
 	// memory_alarm
 }
