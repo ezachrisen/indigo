@@ -111,7 +111,12 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 	result, err := e.Eval(context.Background(), r, map[string]interface{}{})
 	is.NoErr(err)
 	//	fmt.Println(m.rulesTested)
-	//	fmt.Println(result)
+	fmt.Println(result)
+	fmt.Println(result.SummaryCompact())
+	js, err := json.MarshalIndent(result.SummaryCompact(), "", "  ")
+	if err == nil {
+		fmt.Println(string(js))
+	}
 	is.NoErr(match(flattenResultsExprResult(result), expectedResults))
 }
 

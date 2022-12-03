@@ -119,6 +119,64 @@ func trueFalse(t string) string {
 	}
 }
 
+type SummaryCompact struct {
+	Rule     string           `json:"rule,omitempty"`
+	Children []SummaryCompact `json:"children,omitempty"`
+}
+
+func (u *Result) SummaryCompact() SummaryCompact {
+	s := SummaryCompact{}
+
+	if u == nil {
+		return s
+	}
+	var ruleName string
+	if u.Rule == nil {
+		ruleName = "(nil)"
+	} else {
+		ruleName = u.Rule.ID
+	}
+	s.Rule = fmt.Sprintf("%s (%t/%t)", ruleName, u.Pass, u.ExpressionPass)
+	for _, c := range u.Results {
+		cs := c.SummaryCompact()
+		s.Children = append(s.Children, cs)
+	}
+	return s
+}
+
+/*
+type Summary struct {
+	RuleID         string
+	Pass           bool
+	ExpressionPass bool
+	Children       []*Summary
+}
+
+func (u *Result) SummaryCompact() *Summary {
+	s := Summary{}
+
+	if u == nil {
+		return nil
+	}
+
+	if u.Rule == nil {
+		s.RuleID = "(nil)"
+	} else {
+		s.RuleID = u.Rule.ID
+	}
+	s.Pass = u.Pass
+	s.ExpressionPass = u.ExpressionPass
+	for _, c := range u.Results {
+		cs := c.Summary()
+		if cs != nil {
+			s.Children = append(s.Children, cs)
+		}
+	}
+	return &s
+}
+
+*/
+
 // String produces a list of rules (including child rules) executed and the result of the evaluation.
 func (u *Result) Summary() string {
 
