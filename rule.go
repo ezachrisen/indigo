@@ -175,7 +175,7 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 // With a nil function, returns either a cached list of rules (whose sort order may
 // have been set by a previous sort operation), or a list of rules whose order
 // is not defined.
-func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool, op string) []*Rule {
+func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool) []*Rule {
 
 	if fn == nil && len(r.sortedRules) == len(r.Rules) {
 		return r.sortedRules

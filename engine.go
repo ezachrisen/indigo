@@ -94,7 +94,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	var passCount int
 
 done: // break out of inner switch
-	for _, cr := range r.sortChildRules(o.SortFunc, o.overrideSort, "eval") {
+	for _, cr := range r.sortChildRules(o.SortFunc, o.overrideSort) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -188,7 +188,7 @@ func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
 		}
 	}
 
-	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true, "comp")
+	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
 
 	return nil
 }
