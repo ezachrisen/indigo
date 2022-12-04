@@ -1,10 +1,11 @@
-test: race_test normal_test benchmark
+test:
+	go test -count=1 ./...
+
+full_test: race_test test benchmark
 
 race_test:
 	go test -v -race ./...
 
-normal_test:
-	go test -count=1 ./...
 
 benchmark:
 	@echo "Benchmarking results saved in ./testdata/benchmarks/after.txt"

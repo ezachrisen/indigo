@@ -125,7 +125,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 
 	// Specify the sort order for all rules
 	err := indigo.ApplyToRule(r, func(r *indigo.Rule) error {
-		r.EvalOptions.SortFunc = sortRulesAlpha
+		r.EvalOptions.SortFunc = indigo.SortRulesAlpha
 		r.EvalOptions.StopFirstNegativeChild = true
 		return nil
 	})
@@ -321,7 +321,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 		"StopFirstPositiveChild": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
@@ -330,7 +330,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 		"StopFirstNegativeChild": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b3", "b4", "b4-1", "b4-2")
@@ -340,7 +340,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
@@ -490,7 +490,7 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 		"StopFirstPositiveChild": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 			},
 			want: func() map[string]bool {
 				m := deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
@@ -503,7 +503,7 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 		"StopFirstNegativeChild": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b3", "b4", "b4-1", "b4-2")
@@ -514,7 +514,7 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 			},
 			want: func() map[string]bool {
 				m := deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
@@ -529,7 +529,7 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 			prep: func(r *indigo.Rule) {
 				r.Rules["E"].EvalOptions.StopFirstNegativeChild = true
 				r.Rules["E"].EvalOptions.StopFirstPositiveChild = true
-				r.Rules["E"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["E"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 				r.Rules["E"].Rules["e1"].Expr = `false` // make evaluation stop on the first rule
 			},
 			want: func() map[string]bool {
@@ -751,7 +751,7 @@ func TestEvalTrueIfAny(t *testing.T) {
 				r.Rules["E"].EvalOptions.TrueIfAny = true
 
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 			},
 			want: func() map[string]bool {
 				m := deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
@@ -766,7 +766,7 @@ func TestEvalTrueIfAny(t *testing.T) {
 				r.Rules["E"].EvalOptions.TrueIfAny = true
 
 				r.Rules["B"].EvalOptions.StopFirstNegativeChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 
 				r.Rules["B"].Rules["b1"].Expr = "false"
 
@@ -986,14 +986,14 @@ func TestGlobalEvalOptions(t *testing.T) {
 			prep: func(r *indigo.Rule) {
 				r.EvalOptions.StopIfParentNegative = true
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 				r.Rules["B"].EvalOptions.DiscardFail = true
 				// we'll check that the 2 true rules in B, b1 and b3,
 				// come back in the order we expect
-				// with sortRulesAlpha, we expect b1 to be returned,
-				// with sortRulesAlphaDesc we expect b3 to be returned
+				// with indigo.SortRulesAlpha, we expect b1 to be returned,
+				// with indigo.SortRulesAlphaDesc we expect b3 to be returned
 			},
-			opts: []indigo.EvalOption{indigo.SortFunc(sortRulesAlphaDesc)},
+			opts: []indigo.EvalOption{indigo.SortFunc(indigo.SortRulesAlphaDesc)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results["B"].Results), 1)
 				if x, ok := r.Results["B"].Results["b3"]; !ok {
@@ -1005,7 +1005,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 
 		{
 			// Check that global (true) overrides local option (false)
-			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
+			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 2) // B is false, D is first positive child
 				is.True(r.Results["D"].ExpressionPass)
@@ -1019,10 +1019,10 @@ func TestGlobalEvalOptions(t *testing.T) {
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
 				r.Rules["D"].EvalOptions.StopFirstPositiveChild = true
 				r.Rules["E"].EvalOptions.StopFirstPositiveChild = true
-				r.EvalOptions.SortFunc = sortRulesAlpha
-				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
-				r.Rules["D"].EvalOptions.SortFunc = sortRulesAlpha
-				r.Rules["E"].EvalOptions.SortFunc = sortRulesAlpha
+				r.EvalOptions.SortFunc = indigo.SortRulesAlpha
+				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
+				r.Rules["D"].EvalOptions.SortFunc = indigo.SortRulesAlpha
+				r.Rules["E"].EvalOptions.SortFunc = indigo.SortRulesAlpha
 			},
 
 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(false)},
@@ -1033,7 +1033,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 
 		{
 			// Check that global (true) overrides local option (false)
-			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.SortFunc(sortRulesAlpha)},
+			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 1) // B is first, should stop evaluation
 				is.True(!r.Results["B"].ExpressionPass)
@@ -1041,7 +1041,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 		},
 		{
 			// Check that global (true) overrides local option (false)
-			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
+			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 1) // B should stop it
 				is.True(!r.Results["B"].ExpressionPass)

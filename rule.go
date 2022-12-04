@@ -190,6 +190,16 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool) []*Rule {
 	return keys
 }
 
+// SortRulesAlpha will sort rules alphabetically by their rule ID
+func SortRulesAlpha(rules []*Rule, i, j int) bool {
+	return rules[i].ID < rules[j].ID
+}
+
+// SortRulesAlphaDesc will sort rules alphabetically (descending) by their rule ID
+func SortRulesAlphaDesc(rules []*Rule, i, j int) bool {
+	return rules[i].ID > rules[j].ID
+}
+
 /*
 // sortChildKeys sorts the IDs of the child rules according to the
 // SortFunc set in evaluation options. If no SortFunc is set, the evaluation
