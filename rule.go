@@ -171,22 +171,47 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 	return rows, maxExprLength
 }
 
-// sortChildRule returns a list of rules, ordered by the function.
-// With a nil function, returns the rules in unspecified sort order
-func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool) []*Rule {
+// sortChildRules returns a list of rules, ordered by the function.
+// With a nil function, returns either a cached list of rules (whose sort order may
+// have been set by a previous sort operation), or a list of rules whose order
+// is not defined.
+func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool, op string) []*Rule {
+
 	if fn == nil && len(r.sortedRules) == len(r.Rules) {
 		return r.sortedRules
 	}
-	keys := make([]*Rule, 0, len(r.Rules))
-	for k := range r.Rules {
-		keys = append(keys, r.Rules[k])
+
+	if !force && len(r.sortedRules) == len(r.Rules) {
+		return r.sortedRules
 	}
 
-	if fn != nil {
+	//	fmt.Println("  ", op, force, "getting keys for ", r.ID)
+	keys := make([]*Rule, len(r.Rules), len(r.Rules))
+	var i int
+	for k := range r.Rules {
+		keys[i] = r.Rules[k]
+		i++
+	}
+
+	if fn != nil && len(keys) > 0 && force {
+
+		//		fmt.Println("  ", op, force, "sorting keys for ", r.ID, "--")
 		sort.Slice(keys, func(i, j int) bool {
 			return fn(keys, i, j)
 		})
 	}
+
+	/*
+		if len(keys) > 0 {
+		fmt.Printf("  sorted: ")
+			for _, x := range keys {
+				if x != nil {
+					fmt.Printf("%s ", x.ID)
+				}
+			}
+			fmt.Printf("\n")
+		}
+	*/
 	return keys
 }
 

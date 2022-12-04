@@ -185,7 +185,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	//	fmt.Println(m.rulesTested)
 	//fmt.Println(result)
 	is.NoErr(match(flattenResultsExprResult(result), expectedResults))
-	// fmt.Printf("Expected: %+v\n", expectkedOrder)
+	// fmt.Printf("Expected: %+v\n", expectedOrder)
 	// fmt.Printf("Got     : %+v\n", flattenResultsEvaluated(result))
 	is.True(reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result))) // not all rules were evaluated
 }
@@ -221,8 +221,10 @@ func TestNilDataOrRule(t *testing.T) {
 	is := is.New(t)
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
+	err := e.Compile(r)
+	is.NoErr(err)
 
-	_, err := e.Eval(context.Background(), r, nil)
+	_, err = e.Eval(context.Background(), r, nil)
 	is.True(err != nil) // should get an error if the data map is nil
 	is.True(strings.Contains(err.Error(), "data is nil"))
 
@@ -318,7 +320,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 				return map[string]bool{"rule1": true}
 			},
 		},
-		"StopFirstPositiveChild": {
+		"StopFirstPositiveChildX": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
 				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
@@ -391,15 +393,21 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 	}
 
 	for k, c := range cases {
-		r := makeRule()
-		c.prep(r)
+		c := c
+		t.Run(k, func(t *testing.T) {
+			r := makeRule()
+			c.prep(r)
+			err := e.Compile(r)
+			is.NoErr(err)
 
-		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
-		is.NoErr(err)
-		err = match(flattenResultsExprResult(u), c.want())
-		if err != nil {
-			t.Errorf("Error in case %s: %v", k, err)
-		}
+			u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
+			is.NoErr(err)
+			//			fmt.Println("got: ", flattenResultsExprResult(u))
+			err = match(flattenResultsExprResult(u), c.want())
+			if err != nil {
+				t.Errorf("%v", err)
+			}
+		})
 	}
 }
 
@@ -487,7 +495,7 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 				return map[string]bool{"rule1": false}
 			},
 		},
-		"StopFirstPositiveChild": {
+		"StopFirstPositiveChild-1": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
 				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
@@ -580,59 +588,64 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 	// fmt.Println(u)
 
 	for k, c := range cases {
-		r := makeRule()
+		c := c
+		t.Run(k, func(t *testing.T) {
+			r := makeRule()
 
-		// In the rule created by makeRule, ALL children of rule1 are
-		// false, which would make this test not very interesting.
-		// We'll manipulate a few of the rules to make them more interesting to test.
+			// In the rule created by makeRule, ALL children of rule1 are
+			// false, which would make this test not very interesting.
+			// We'll manipulate a few of the rules to make them more interesting to test.
 
-		r.Rules["D"].Rules["d2"].Expr = `true` // this will make D true
-		r.Rules["B"].Expr = `true`             // this will not make B true, since its children are false
+			r.Rules["D"].Rules["d2"].Expr = `true` // this will make D true
+			r.Rules["B"].Expr = `true`             // this will not make B true, since its children are false
 
-		// Modified results
-		// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-		// │                                                                                                                       │
-		// │ INDIGO RESULT SUMMARY                                                                                                 │
-		// │                                                                                                                       │
-		// ├────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
-		// │            │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
-		// │ Rule       │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
-		// │            │       │ Fail  │       │        │             │             │            │            │         │         │
-		// ├────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
-		// │ rule1      │ FAIL  │ PASS  │ 3     │ true   │ yes         │             │            │            │         │         │
-		// │   D        │ PASS  │ PASS  │ 3     │ true   │ yes         │             │            │            │         │         │
-		// │     d1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
-		// │     d2     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
-		// │     d3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
-		// │   B        │ FAIL  │ PASS  │ 4     │ true   │ yes         │             │            │            │         │         │
-		// │     b1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
-		// │     b2     │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
-		// │     b3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
-		// │     b4     │ FAIL  │ FAIL  │ 2     │ false  │ yes         │             │            │            │         │         │
-		// │       b4-1 │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
-		// │       b4-2 │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
-		// │   E        │ FAIL  │ FAIL  │ 3     │ false  │ yes         │             │            │            │         │         │
-		// │     e3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
-		// │     e1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
-		// │     e2     │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
-		// └────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+			// Modified results
+			// ┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+			// │                                                                                                                       │
+			// │ INDIGO RESULT SUMMARY                                                                                                 │
+			// │                                                                                                                       │
+			// ├────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+			// │            │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+			// │ Rule       │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+			// │            │       │ Fail  │       │        │             │             │            │            │         │         │
+			// ├────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+			// │ rule1      │ FAIL  │ PASS  │ 3     │ true   │ yes         │             │            │            │         │         │
+			// │   D        │ PASS  │ PASS  │ 3     │ true   │ yes         │             │            │            │         │         │
+			// │     d1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+			// │     d2     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+			// │     d3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+			// │   B        │ FAIL  │ PASS  │ 4     │ true   │ yes         │             │            │            │         │         │
+			// │     b1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+			// │     b2     │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
+			// │     b3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+			// │     b4     │ FAIL  │ FAIL  │ 2     │ false  │ yes         │             │            │            │         │         │
+			// │       b4-1 │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+			// │       b4-2 │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
+			// │   E        │ FAIL  │ FAIL  │ 3     │ false  │ yes         │             │            │            │         │         │
+			// │     e3     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+			// │     e1     │ PASS  │ PASS  │ 0     │ true   │ yes         │             │            │            │         │         │
+			// │     e2     │ FAIL  │ FAIL  │ 0     │ false  │ yes         │             │            │            │         │         │
+			// └────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 
-		c.prep(r)
+			c.prep(r)
+			err := e.Compile(r)
+			is.NoErr(err)
 
-		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
+			u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
 
-		is.NoErr(err)
-		//		fmt.Println(u)
+			is.NoErr(err)
+			//		fmt.Println(u)
 
-		// if k == "StopFirstPositiveChild" {
-		// 	fmt.Println(indigo.DiagnosticsReport(u, nil))
-		// }
-		err = match(flattenResultsRuleResult(u), c.want())
-		if err != nil {
-			t.Errorf("Error in case %s: %v", k, err)
-			// fmt.Println(r)
-			// fmt.Println(u)
-		}
+			// if k == "StopFirstPositiveChild" {
+			// 	fmt.Println(indigo.DiagnosticsReport(u, nil))
+			// }
+			err = match(flattenResultsRuleResult(u), c.want())
+			if err != nil {
+				t.Errorf("Error in case %s: %v", k, err)
+				// fmt.Println(r)
+				// fmt.Println(u)
+			}
+		})
 	}
 }
 
@@ -784,6 +797,8 @@ func TestEvalTrueIfAny(t *testing.T) {
 		r := makeRule()
 
 		c.prep(r)
+		err := e.Compile(r)
+		is.NoErr(err)
 
 		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
 		is.NoErr(err)
@@ -1116,6 +1131,9 @@ func TestGlobalEvalOptions(t *testing.T) {
 		if c.prep != nil {
 			c.prep(r)
 		}
+		err := e.Compile(r)
+		is.NoErr(err)
+
 		result, err := e.Eval(context.Background(), r, map[string]interface{}{}, c.opts...)
 		is.NoErr(err)
 		c.chk(result)

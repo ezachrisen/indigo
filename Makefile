@@ -9,9 +9,7 @@ race_test:
 
 benchmark:
 	@echo "Benchmarking results saved in ./testdata/benchmarks/after.txt"
-	@echo "   Update ./testdata/benchmarks/reference.txt to set a new 'before' point."	
-	go test  -bench=. -count 5 ./... | tee ./testdata/benchmarks/after.txt
-	benchstat ./testdata/benchmarks/reference.txt ./testdata/benchmarks/after.txt
+	go test  -bench=. -count 5 -benchmem ./... | tee ./testdata/benchmarks/after.txt
 
 stats:
 	benchstat ./testdata/benchmarks/reference.txt ./testdata/benchmarks/after.txt
