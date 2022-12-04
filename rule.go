@@ -61,7 +61,6 @@ type Rule struct {
 	// Add the corresponding object in the data with the reserved key name selfKey
 	// (see constants).
 	// Child rules do not inherit the self value.
-	// See example for usage. TODO: example
 	Self interface{} `json:"-"`
 
 	// A set of child rules.
@@ -76,6 +75,13 @@ type Rule struct {
 
 	// Options determining how the child rules should be handled.
 	EvalOptions EvalOptions `json:"eval_options"`
+
+	// sortedRules contains a list of child rules, sorted by the
+	// EvalOptions.SortFunc. During rule evaluation, the rules are evaluated in
+	// the order they appear in this list. The sorted list is calculated at
+	// compile time. If SortFunc is not specified, the evaluation order is
+	// unspecified.
+	sortedRules []*Rule
 }
 
 const (
@@ -165,19 +171,74 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 	return rows, maxExprLength
 }
 
+// sortChildRules returns a list of rules, ordered by the function.
+// With a nil function, returns either a cached list of rules (whose sort order may
+// have been set by a previous sort operation), or a list of rules whose order
+// is not defined.
+func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool) []*Rule {
+
+	if fn == nil && len(r.sortedRules) == len(r.Rules) {
+		return r.sortedRules
+	}
+
+	if !force && len(r.sortedRules) == len(r.Rules) {
+		return r.sortedRules
+	}
+
+	//	fmt.Println("  ", op, force, "getting keys for ", r.ID)
+	keys := make([]*Rule, len(r.Rules), len(r.Rules))
+	var i int
+	for k := range r.Rules {
+		keys[i] = r.Rules[k]
+		i++
+	}
+
+	if fn != nil && len(keys) > 0 && force {
+
+		//		fmt.Println("  ", op, force, "sorting keys for ", r.ID, "--")
+		sort.Slice(keys, func(i, j int) bool {
+			return fn(keys, i, j)
+		})
+	}
+
+	/*
+		if len(keys) > 0 {
+		fmt.Printf("  sorted: ")
+			for _, x := range keys {
+				if x != nil {
+					fmt.Printf("%s ", x.ID)
+				}
+			}
+			fmt.Printf("\n")
+		}
+	*/
+	return keys
+}
+
+// SortRulesAlpha will sort rules alphabetically by their rule ID
+func SortRulesAlpha(rules []*Rule, i, j int) bool {
+	return rules[i].ID < rules[j].ID
+}
+
+// SortRulesAlphaDesc will sort rules alphabetically (descending) by their rule ID
+func SortRulesAlphaDesc(rules []*Rule, i, j int) bool {
+	return rules[i].ID > rules[j].ID
+}
+
+/*
 // sortChildKeys sorts the IDs of the child rules according to the
 // SortFunc set in evaluation options. If no SortFunc is set, the evaluation
 // order is not specified.
 // TODO: allow this function to be canceled
 // TODO: cache sorting
 // TODO: add sorting benchmark
-func (r *Rule) sortChildKeys(o EvalOptions) []*Rule {
+func (r *Rule) sortChildRulesByOption(o EvalOptions) []*Rule {
 	keys := make([]*Rule, 0, len(r.Rules))
 	for k := range r.Rules {
 		keys = append(keys, r.Rules[k])
 	}
 
-	if o.SortFunc != nil && sortOrderMatters(o) {
+	if o.SortFunc != nil {
 		sort.Slice(keys, func(i, j int) bool {
 			return o.SortFunc(keys, i, j)
 		})
@@ -195,3 +256,4 @@ func sortOrderMatters(o EvalOptions) bool {
 	return false
 
 }
+*/

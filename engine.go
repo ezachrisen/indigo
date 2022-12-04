@@ -94,7 +94,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	var passCount int
 
 done: // break out of inner switch
-	for _, cr := range r.sortChildKeys(o) {
+	for _, cr := range r.sortChildRules(o.SortFunc, o.overrideSort) {
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -187,6 +187,9 @@ func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
 			return err
 		}
 	}
+
+	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
+
 	return nil
 }
 
@@ -263,11 +266,22 @@ type EvalOptions struct {
 
 	// Specify the function used to sort the child rules before evaluation.
 	// Useful in scenarios where you are asking the engine to stop evaluating
-	// after either the first negative or first positive child.
+	// after either the first negative or first positive child in order to
+	// select a rule with some relative characteristic, such as the "highest
+	// priority rule".
+	//
 	// See the ExampleSortFunc() for an example.
 	// The function returns whether rules[i] < rules[j] for some attribute.
 	// Default: No sort
 	SortFunc func(rules []*Rule, i, j int) bool `json:"-"`
+
+	// this special field is updated by the SortFunc option. It is necessary
+	// because we need to know if the local rule-specific sort funtion
+	// is being overriden by the a global option.
+	//  (1) Rule supplied its own sort function, overriding with global
+	//  (2) Rule did not supply its own sort
+	// and was overridden by a global eval option,
+	overrideSort bool
 }
 
 // EvalOption is a functional option for specifying how evaluations behave.
@@ -288,6 +302,7 @@ func ReturnDiagnostics(b bool) EvalOption {
 func SortFunc(x func(rules []*Rule, i, j int) bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.SortFunc = x
+		f.overrideSort = true
 	}
 }
 

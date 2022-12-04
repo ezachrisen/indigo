@@ -112,8 +112,3 @@ func makeRule() *indigo.Rule {
 		},
 	}
 }
-
-// SortRulesAlpha will sort rules alphabetically by their rule ID
-func sortRulesAlpha(rules []*indigo.Rule, i, j int) bool {
-	return rules[i].ID < rules[j].ID
-}
