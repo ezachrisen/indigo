@@ -76,6 +76,13 @@ type Rule struct {
 
 	// Options determining how the child rules should be handled.
 	EvalOptions EvalOptions `json:"eval_options"`
+
+	// sortedRules contains a list of child rules, sorted by the
+	// EvalOptions.SortFunc.  If SortFunc is not specified, the evaluation order
+	// is unspecified. During rule evaluation, the rules are evaluated in the
+	// order they appear in this list. The sorted list is calculated at compile
+	// time.
+	sortedRules []*Rule
 }
 
 const (
@@ -165,19 +172,40 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 	return rows, maxExprLength
 }
 
+// sortChildRule returns a list of rules, ordered by the function.
+// With a nil function, returns the rules in unspecified sort order
+func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool) []*Rule {
+	if fn == nil && len(r.sortedRules) == len(r.Rules) {
+		return r.sortedRules
+	}
+
+	keys := make([]*Rule, 0, len(r.Rules))
+	for k := range r.Rules {
+		keys = append(keys, r.Rules[k])
+	}
+
+	if fn != nil {
+		sort.Slice(keys, func(i, j int) bool {
+			return fn(keys, i, j)
+		})
+	}
+	return keys
+}
+
+/*
 // sortChildKeys sorts the IDs of the child rules according to the
 // SortFunc set in evaluation options. If no SortFunc is set, the evaluation
 // order is not specified.
 // TODO: allow this function to be canceled
 // TODO: cache sorting
 // TODO: add sorting benchmark
-func (r *Rule) sortChildKeys(o EvalOptions) []*Rule {
+func (r *Rule) sortChildRulesByOption(o EvalOptions) []*Rule {
 	keys := make([]*Rule, 0, len(r.Rules))
 	for k := range r.Rules {
 		keys = append(keys, r.Rules[k])
 	}
 
-	if o.SortFunc != nil && sortOrderMatters(o) {
+	if o.SortFunc != nil {
 		sort.Slice(keys, func(i, j int) bool {
 			return o.SortFunc(keys, i, j)
 		})
@@ -195,3 +223,4 @@ func sortOrderMatters(o EvalOptions) bool {
 	return false
 
 }
+*/

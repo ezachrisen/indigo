@@ -1,49 +1,54 @@
 PASS
-ok  	github.com/ezachrisen/indigo	0.037s
+ok  	github.com/ezachrisen/indigo	0.007s
 goos: linux
 goarch: amd64
 pkg: github.com/ezachrisen/indigo/cel
-cpu: AMD EPYC 7601 32-Core Processor                
-BenchmarkSimpleRule-2                  	  686116	      1693 ns/op
-BenchmarkSimpleRule-2                  	  675972	      1760 ns/op
-BenchmarkSimpleRule-2                  	  703939	      1758 ns/op
-BenchmarkSimpleRule-2                  	  724766	      1516 ns/op
-BenchmarkSimpleRule-2                  	  694351	      1675 ns/op
-BenchmarkSimpleRuleWithDiagnostics-2   	   95245	     11345 ns/op
-BenchmarkSimpleRuleWithDiagnostics-2   	   98253	     11478 ns/op
-BenchmarkSimpleRuleWithDiagnostics-2   	  102088	     11408 ns/op
-BenchmarkSimpleRuleWithDiagnostics-2   	  102492	     11305 ns/op
-BenchmarkSimpleRuleWithDiagnostics-2   	   89911	     11348 ns/op
-BenchmarkRuleWithArray-2               	  685462	      1688 ns/op
-BenchmarkRuleWithArray-2               	  715675	      1615 ns/op
-BenchmarkRuleWithArray-2               	  724530	      1803 ns/op
-BenchmarkRuleWithArray-2               	  806916	      1543 ns/op
-BenchmarkRuleWithArray-2               	  777858	      1768 ns/op
-BenchmarkProtoWithSelfX-2              	  447990	      2795 ns/op
-BenchmarkProtoWithSelfX-2              	  396921	      2915 ns/op
-BenchmarkProtoWithSelfX-2              	  395241	      2536 ns/op
-BenchmarkProtoWithSelfX-2              	  473436	      2373 ns/op
-BenchmarkProtoWithSelfX-2              	  504907	      2396 ns/op
-BenchmarkProtoWithoutSelf-2            	  601178	      2294 ns/op
-BenchmarkProtoWithoutSelf-2            	  532020	      2502 ns/op
-BenchmarkProtoWithoutSelf-2            	  471997	      2433 ns/op
-BenchmarkProtoWithoutSelf-2            	  509944	      2347 ns/op
-BenchmarkProtoWithoutSelf-2            	  434738	      2369 ns/op
-BenchmarkProtoCreation-2               	  124219	     10270 ns/op
-BenchmarkProtoCreation-2               	  114033	     10234 ns/op
-BenchmarkProtoCreation-2               	  131470	      8365 ns/op
-BenchmarkProtoCreation-2               	  130394	     10304 ns/op
-BenchmarkProtoCreation-2               	  106173	     10203 ns/op
-BenchmarkEval2000Rules-2               	      92	  13928213 ns/op
-BenchmarkEval2000Rules-2               	      80	  13138517 ns/op
-BenchmarkEval2000Rules-2               	      70	  15631092 ns/op
-BenchmarkEval2000Rules-2               	      84	  13387314 ns/op
-BenchmarkEval2000Rules-2               	      91	  13944332 ns/op
-BenchmarkCompileRule-2                 	     100	  17106579 ns/op
-BenchmarkCompileRule-2                 	     100	  17230730 ns/op
-BenchmarkCompileRule-2                 	     100	  18496477 ns/op
-BenchmarkCompileRule-2                 	     100	  17263820 ns/op
-BenchmarkCompileRule-2                 	     100	  16906674 ns/op
+cpu: Intel(R) Xeon(R) CPU @ 2.20GHz
+BenchmarkSimpleRule-8                   	 1343701	       898.0 ns/op
+BenchmarkSimpleRule-8                   	 1366482	       892.9 ns/op
+BenchmarkSimpleRule-8                   	 1341778	       889.3 ns/op
+BenchmarkSimpleRule-8                   	 1310580	       886.1 ns/op
+BenchmarkSimpleRule-8                   	 1342784	       892.4 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  172635	      6857 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  164475	      6802 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  166822	      6914 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  173283	      6805 ns/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  171216	      6825 ns/op
+BenchmarkRuleWithArray-8                	 1305850	       919.1 ns/op
+BenchmarkRuleWithArray-8                	 1296468	       910.3 ns/op
+BenchmarkRuleWithArray-8                	 1260934	       945.7 ns/op
+BenchmarkRuleWithArray-8                	 1292270	       923.9 ns/op
+BenchmarkRuleWithArray-8                	 1297274	       921.8 ns/op
+BenchmarkProtoWithSelfX-8               	  766545	      1507 ns/op
+BenchmarkProtoWithSelfX-8               	  716029	      1500 ns/op
+BenchmarkProtoWithSelfX-8               	  700113	      1523 ns/op
+BenchmarkProtoWithSelfX-8               	  712276	      1508 ns/op
+BenchmarkProtoWithSelfX-8               	  719314	      1528 ns/op
+BenchmarkProtoWithoutSelf-8             	  939771	      1252 ns/op
+BenchmarkProtoWithoutSelf-8             	  970904	      1272 ns/op
+BenchmarkProtoWithoutSelf-8             	  945142	      1272 ns/op
+BenchmarkProtoWithoutSelf-8             	  945219	      1269 ns/op
+BenchmarkProtoWithoutSelf-8             	  959866	      1250 ns/op
+BenchmarkProtoCreation-8                	  191866	      5941 ns/op
+BenchmarkProtoCreation-8                	  196642	      5813 ns/op
+BenchmarkProtoCreation-8                	  194670	      6037 ns/op
+BenchmarkProtoCreation-8                	  185630	      5961 ns/op
+BenchmarkProtoCreation-8                	  181488	      5884 ns/op
+BenchmarkEval2000Rules-8                	     194	   6219244 ns/op
+BenchmarkEval2000Rules-8                	     200	   6495188 ns/op
+BenchmarkEval2000Rules-8                	     202	   5556123 ns/op
+BenchmarkEval2000Rules-8                	     214	   6098439 ns/op
+BenchmarkEval2000Rules-8                	     196	   6227567 ns/op
+BenchmarkCompileRule-8                  	     921	   1158957 ns/op
+BenchmarkCompileRule-8                  	    1059	   1153858 ns/op
+BenchmarkCompileRule-8                  	     974	   1149511 ns/op
+BenchmarkCompileRule-8                  	     992	   1163855 ns/op
+BenchmarkCompileRule-8                  	     991	   1175040 ns/op
+BenchmarkCompileRuleWithFixedSchema-8   	    1284	    937495 ns/op
+BenchmarkCompileRuleWithFixedSchema-8   	    1197	   1027465 ns/op
+BenchmarkCompileRuleWithFixedSchema-8   	    1291	    942114 ns/op
+BenchmarkCompileRuleWithFixedSchema-8   	    1255	    947922 ns/op
+BenchmarkCompileRuleWithFixedSchema-8   	    1288	    939985 ns/op
 PASS
-ok  	github.com/ezachrisen/indigo/cel	230.294s
+ok  	github.com/ezachrisen/indigo/cel	81.701s
 ?   	github.com/ezachrisen/indigo/examples/dynamic_schema	[no test files]
