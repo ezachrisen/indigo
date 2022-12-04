@@ -833,7 +833,70 @@ func BenchmarkEval2000Rules(b *testing.B) {
 		Age:            16,
 		Gpa:            3,
 		Status:         school.Student_PROBATION,
-		Grades:         []float64{4.0, 4.0, 3.7},
+		Grades:         []float64{2.0, 2.0, 3.7},
+		Attrs:          map[string]string{"Nickname": "Joey"},
+		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+	}
+
+	data := map[string]interface{}{
+		"student": &s,
+		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := e.Eval(context.Background(), r, data)
+		if err != nil {
+			b.Error(err)
+		}
+
+	}
+}
+
+func BenchmarkEval2000RulesWithSort(b *testing.B) {
+	b.StopTimer()
+	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
+	if err != nil {
+		b.Error(err)
+	}
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "self", Type: indigo.Proto{Message: &school.HonorsConfiguration{}}},
+		},
+	}
+
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	r := &indigo.Rule{
+		ID:     "student_actions",
+		Schema: schema,
+		Rules:  map[string]*indigo.Rule{},
+	}
+	r.EvalOptions.SortFunc = indigo.SortRulesAlpha // <-- we'll sort all 2000 child rules alphabetically
+
+	for i := 0; i < 2_000; i++ {
+		cr := &indigo.Rule{
+			ID:     fmt.Sprintf("at_risk_%d", i),
+			Expr:   `student.gpa < self.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
+			Schema: schema,
+			Self:   &school.HonorsConfiguration{Minimum_GPA: 3.7},
+			Meta:   false,
+		}
+		r.Rules[cr.ID] = cr
+	}
+
+	err = e.Compile(r)
+	if err != nil {
+		log.Fatalf("Error adding ruleset: %v", err)
+	}
+
+	s := school.Student{
+		Age:            16,
+		Gpa:            3,
+		Status:         school.Student_PROBATION,
+		Grades:         []float64{2.0, 2.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
 		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}

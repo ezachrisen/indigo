@@ -53,6 +53,10 @@
 // the results. Users of your result should expect that the definition of the rule stays constant.
 // Instead, we recommend creating a new rule with a new version number in the ID to separate updates.
 //
+//    WARNING! YOU **MUST** COMPILE THE RULE AFTER MAKING MODIFICATIONS TO THE RULE, INCLUDING
+//    THE LIST OF CHILD RULES.
+//
+//
 // Structuring Rule Hierarchies for Updates
 //
 // The ability to organize rules in a hierarchy is useful to ensure that rule updates are atomic and consistent.
