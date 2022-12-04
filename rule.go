@@ -61,7 +61,6 @@ type Rule struct {
 	// Add the corresponding object in the data with the reserved key name selfKey
 	// (see constants).
 	// Child rules do not inherit the self value.
-	// See example for usage. TODO: example
 	Self interface{} `json:"-"`
 
 	// A set of child rules.
@@ -78,10 +77,10 @@ type Rule struct {
 	EvalOptions EvalOptions `json:"eval_options"`
 
 	// sortedRules contains a list of child rules, sorted by the
-	// EvalOptions.SortFunc.  If SortFunc is not specified, the evaluation order
-	// is unspecified. During rule evaluation, the rules are evaluated in the
-	// order they appear in this list. The sorted list is calculated at compile
-	// time.
+	// EvalOptions.SortFunc. During rule evaluation, the rules are evaluated in
+	// the order they appear in this list. The sorted list is calculated at
+	// compile time. If SortFunc is not specified, the evaluation order is
+	// unspecified.
 	sortedRules []*Rule
 }
 
@@ -178,7 +177,6 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool) []*Rule {
 	if fn == nil && len(r.sortedRules) == len(r.Rules) {
 		return r.sortedRules
 	}
-
 	keys := make([]*Rule, 0, len(r.Rules))
 	for k := range r.Rules {
 		keys = append(keys, r.Rules[k])
