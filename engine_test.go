@@ -982,6 +982,28 @@ func TestGlobalEvalOptions(t *testing.T) {
 			},
 		},
 		{
+			// Check that the global sort function overrides the rule's sort function
+			prep: func(r *indigo.Rule) {
+				r.EvalOptions.StopIfParentNegative = true
+				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
+				r.Rules["B"].EvalOptions.SortFunc = sortRulesAlpha
+				r.Rules["B"].EvalOptions.DiscardFail = true
+				// we'll check that the 2 true rules in B, b1 and b3,
+				// come back in the order we expect
+				// with sortRulesAlpha, we expect b1 to be returned,
+				// with sortRulesAlphaDesc we expect b3 to be returned
+			},
+			opts: []indigo.EvalOption{indigo.SortFunc(sortRulesAlphaDesc)},
+			chk: func(r *indigo.Result) {
+				is.Equal(len(r.Results["B"].Results), 1)
+				if x, ok := r.Results["B"].Results["b3"]; !ok {
+					t.Errorf("expected b3, got %s", x.Rule.ID)
+				}
+
+			},
+		},
+
+		{
 			// Check that global (true) overrides local option (false)
 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(sortRulesAlpha)},
 			chk: func(r *indigo.Result) {
