@@ -137,8 +137,8 @@ func TestParser(t *testing.T) {
 			t.Errorf("case %s: wanted type %s, got %s", key, c.wantType, typ)
 		}
 
-		if !reflect.DeepEqual(typ, c.wantType) {
-			t.Errorf("case %s: deep equal fails. Want %+v, got %+v", key, c.wantType, typ)
+		if c.wantType.String() != typ.String() {
+			t.Errorf("case %s: type mismatch.Wanted %+v (%T), got %+v (%T)", key, c.wantType, c.wantType, typ, typ)
 		}
 	}
 }

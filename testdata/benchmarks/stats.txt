@@ -1,0 +1,51 @@
+benchstat ./testdata/benchmarks/reference.txt ./testdata/benchmarks/after.txt
+goos: linux
+goarch: amd64
+pkg: github.com/ezachrisen/indigo/cel
+cpu: Intel(R) Xeon(R) CPU @ 2.20GHz
+                             │ ./testdata/benchmarks/reference.txt │   ./testdata/benchmarks/after.txt   │
+                             │               sec/op                │    sec/op     vs base               │
+SimpleRule-2                                          1.014µ ± ∞ ¹   1.163µ ± ∞ ¹  +14.69% (p=0.008 n=5)
+SimpleRuleWithDiagnostics-2                           7.484µ ± ∞ ¹   8.191µ ± ∞ ¹   +9.45% (p=0.008 n=5)
+RuleWithArray-2                                       1.012µ ± ∞ ¹   1.177µ ± ∞ ¹  +16.30% (p=0.008 n=5)
+ProtoWithSelfX-2                                      1.673µ ± ∞ ¹   1.834µ ± ∞ ¹   +9.62% (p=0.008 n=5)
+ProtoWithoutSelf-2                                    1.382µ ± ∞ ¹   1.556µ ± ∞ ¹  +12.59% (p=0.008 n=5)
+ProtoCreation-2                                       6.220µ ± ∞ ¹   7.102µ ± ∞ ¹  +14.18% (p=0.008 n=5)
+Eval2000Rules-2                                       7.530m ± ∞ ¹   7.360m ± ∞ ¹        ~ (p=0.310 n=5)
+Eval2000RulesWithSort-2                               7.424m ± ∞ ¹   7.293m ± ∞ ¹        ~ (p=0.056 n=5)
+CompileRule-2                                        1256.6µ ± ∞ ¹   765.8µ ± ∞ ¹  -39.06% (p=0.008 n=5)
+CompileRuleWithFixedSchema-2                          990.8µ ± ∞ ¹   548.7µ ± ∞ ¹  -44.62% (p=0.008 n=5)
+geomean                                               38.78µ         37.24µ         -3.97%
+¹ need >= 6 samples for confidence interval at level 0.95
+
+                             │ ./testdata/benchmarks/reference.txt │    ./testdata/benchmarks/after.txt     │
+                             │                B/op                 │     B/op       vs base                 │
+SimpleRule-2                                           560.0 ± ∞ ¹     560.0 ± ∞ ¹        ~ (p=1.000 n=5) ²
+SimpleRuleWithDiagnostics-2                          2.856Ki ± ∞ ¹   2.884Ki ± ∞ ¹   +0.96% (p=0.008 n=5)
+RuleWithArray-2                                        560.0 ± ∞ ¹     560.0 ± ∞ ¹        ~ (p=1.000 n=5) ²
+ProtoWithSelfX-2                                       584.0 ± ∞ ¹     584.0 ± ∞ ¹        ~ (p=1.000 n=5) ²
+ProtoWithoutSelf-2                                     560.0 ± ∞ ¹     560.0 ± ∞ ¹        ~ (p=1.000 n=5)
+ProtoCreation-2                                      2.388Ki ± ∞ ¹   2.383Ki ± ∞ ¹   -0.20% (p=0.008 n=5)
+Eval2000Rules-2                                      518.4Ki ± ∞ ¹   518.4Ki ± ∞ ¹        ~ (p=1.000 n=5)
+Eval2000RulesWithSort-2                              518.4Ki ± ∞ ¹   518.4Ki ± ∞ ¹        ~ (p=1.000 n=5)
+CompileRule-2                                        213.9Ki ± ∞ ¹   171.0Ki ± ∞ ¹  -20.08% (p=0.008 n=5)
+CompileRuleWithFixedSchema-2                         151.5Ki ± ∞ ¹   119.5Ki ± ∞ ¹  -21.09% (p=0.008 n=5)
+geomean                                              9.426Ki         9.008Ki         -4.43%
+¹ need >= 6 samples for confidence interval at level 0.95
+² all samples are equal
+
+                             │ ./testdata/benchmarks/reference.txt │    ./testdata/benchmarks/after.txt    │
+                             │              allocs/op              │  allocs/op    vs base                 │
+SimpleRule-2                                           9.000 ± ∞ ¹    9.000 ± ∞ ¹        ~ (p=1.000 n=5) ²
+SimpleRuleWithDiagnostics-2                            64.00 ± ∞ ¹    64.00 ± ∞ ¹        ~ (p=1.000 n=5) ²
+RuleWithArray-2                                        9.000 ± ∞ ¹    9.000 ± ∞ ¹        ~ (p=1.000 n=5) ²
+ProtoWithSelfX-2                                       12.00 ± ∞ ¹    12.00 ± ∞ ¹        ~ (p=1.000 n=5) ²
+ProtoWithoutSelf-2                                     9.000 ± ∞ ¹    9.000 ± ∞ ¹        ~ (p=1.000 n=5) ²
+ProtoCreation-2                                        41.00 ± ∞ ¹    41.00 ± ∞ ¹        ~ (p=1.000 n=5) ²
+Eval2000Rules-2                                       16.00k ± ∞ ¹   16.00k ± ∞ ¹        ~ (p=1.000 n=5) ²
+Eval2000RulesWithSort-2                               16.00k ± ∞ ¹   16.00k ± ∞ ¹        ~ (p=1.000 n=5) ²
+CompileRule-2                                         3.649k ± ∞ ¹   2.959k ± ∞ ¹  -18.91% (p=0.008 n=5)
+CompileRuleWithFixedSchema-2                          3.088k ± ∞ ¹   2.529k ± ∞ ¹  -18.10% (p=0.008 n=5)
+geomean                                                191.5          183.8         -4.01%
+¹ need >= 6 samples for confidence interval at level 0.95
+² all samples are equal
