@@ -7,6 +7,7 @@ import (
 
 	"github.com/ezachrisen/indigo"
 
+	"github.com/google/cel-go/cel"
 	celgo "github.com/google/cel-go/cel"
 	"google.golang.org/protobuf/types/dynamicpb"
 )
@@ -18,6 +19,9 @@ type Evaluator struct {
 	fixedSchema *indigo.Schema
 	fixedEnv    *celgo.Env
 	fixedOnce   sync.Once
+
+	// See the [CELOptions] option
+	envOpts []cel.EnvOption
 }
 
 // celProgram holds a compiled CEL Program and
@@ -51,6 +55,15 @@ func FixedSchema(schema *indigo.Schema) CelOption {
 	}
 }
 
+// CELOptions receives a list of options that will be passed to CEL in the cel.NewEnv(...) call during compilation.
+// Among other things, this enables Indigo users to define a custom function and pass it to CEL.
+// See [cel/example_test.go] for an example of using a custom function.
+func CELOptions(opts ...cel.EnvOption) CelOption {
+	return func(e *Evaluator) {
+		e.envOpts = opts
+	}
+}
+
 // Compile checks a rule, prepares a compiled CELProgram, and stores the program
 // in rule.Program. CELProgram contains the compiled program used to evaluate the rules,
 // and if we're collecting diagnostics, CELProgram also contains the CEL AST to provide
@@ -71,7 +84,7 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 		if e.fixedSchema == nil {
 			return
 		}
-		env, errx := celEnv(*e.fixedSchema)
+		env, errx := celEnv(*e.fixedSchema, e.envOpts)
 		if errx != nil {
 			err = errx
 			return
@@ -86,10 +99,11 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 
 	var env *celgo.Env
 	if e.fixedEnv == nil {
-		env, err = celEnv(s)
+		env, err = celEnv(s, e.envOpts)
 		if err != nil {
 			return nil, err
 		}
+
 	} else {
 		env = e.fixedEnv
 	}
@@ -131,13 +145,14 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 	return prog, nil
 }
 
-func celEnv(schema indigo.Schema) (*celgo.Env, error) {
+func celEnv(schema indigo.Schema, opts []celgo.EnvOption) (*celgo.Env, error) {
 
-	opts, err := convertIndigoSchemaToDeclarations(schema)
+	decls, err := convertIndigoSchemaToDeclarations(schema)
 	if err != nil {
 		return nil, err
 	}
 
+	opts = append(opts, decls...)
 	env, err := celgo.NewEnv(opts...)
 	if err != nil {
 		return nil, err

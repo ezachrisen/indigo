@@ -181,7 +181,7 @@ func TestTypeConversion(t *testing.T) {
 
 	// Check if converting FROM indigo TO cel works
 	for _, c := range cases {
-		cl, err := convertIndigoToExprType(c.indigoType)
+		cl, err := exprType(c.indigoType)
 		if err != nil {
 			t.Error(err)
 		}
@@ -237,8 +237,9 @@ func TestNils(t *testing.T) {
 	_, err = convertIndigoSchemaToDeclarations(indigo.Schema{})
 	is.NoErr(err)
 
-	_, err = convertIndigoToExprType(nil)
-	is.True(err != nil)
+	x, err := exprType(nil)
+	is.True(err == nil)
+	is.True(x == nil)
 
 	_, err = collectDiagnostics(nil, nil, nil)
 	is.True(err != nil)

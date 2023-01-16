@@ -3,6 +3,7 @@ package indigo
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -76,26 +77,27 @@ type String struct{}
 
 // Int defines an Indigo int type. The exact "Int" implementation and size
 // depends on the evaluator used.
-type Int struct{}
+type Int struct{ Value int }
 
 // Float defines an Indigo float type. The implementation of the float (size, precision)
 // depends on the evaluator used.
-type Float struct{}
+type Float struct{ Value float64 }
 
 // Any defines an Indigo type for an "undefined" or unspecified type.
-type Any struct{}
+type Any struct{ Value any }
 
 // Bool defines an Indigo type for true/false.
-type Bool struct{}
+type Bool struct{ Value bool }
 
 // Duration defines an Indigo type for the time.Duration type.
-type Duration struct{}
+type Duration struct{ value time.Duration }
 
 // Timestamp defines an Indigo type for the time.Time type.
-type Timestamp struct{}
+type Timestamp struct{ Value time.Time }
 
 // Proto defines an Indigo type for a protobuf type.
 type Proto struct {
+	Value   proto.Message
 	Message proto.Message // an instance of the proto message
 }
 
@@ -122,13 +124,22 @@ func (p *Proto) ProtoFullName() (string, error) {
 
 // List defines an Indigo type representing a slice of values
 type List struct {
+	Value     any
 	ValueType Type // the type of element stored in the list
 }
 
 // Map defines an Indigo type representing a map of keys and values.
 type Map struct {
+	Value     any
 	KeyType   Type // the type of the map key
 	ValueType Type // the type of the value stored in the map
+}
+
+type BinaryFunction struct {
+	LHS    Type
+	RHS    Type
+	Return Type
+	Func   func(lhs, rhs Value) (Type, error)
 }
 
 // String Methods
@@ -139,6 +150,8 @@ func (Any) String() string       { return "any" }
 func (Duration) String() string  { return "duration" }
 func (Timestamp) String() string { return "timestamp" }
 func (Float) String() string     { return "float" }
+func (t List) String() string    { return fmt.Sprintf("[]%v", t.ValueType) }
+func (t Map) String() string     { return fmt.Sprintf("map[%s]%s", t.KeyType, t.ValueType) }
 func (p Proto) String() string {
 	s, err := p.ProtoFullName()
 	if err != nil {
@@ -147,8 +160,13 @@ func (p Proto) String() string {
 	return "proto(" + s + ")"
 
 }
-func (t List) String() string { return fmt.Sprintf("[]%v", t.ValueType) }
-func (t Map) String() string  { return fmt.Sprintf("map[%s]%s", t.KeyType, t.ValueType) }
+func (t BinaryFunction) String() string {
+	return fmt.Sprintf("(%s,%s) %s ", t.LHS, t.RHS, t.Return)
+}
+
+type Value interface {
+	Value() any
+}
 
 // ParseType parses a string that represents an Indigo type and returns the type.
 // The primitive types are their lower-case names (string, int, duration, etc.)
@@ -263,5 +281,5 @@ func parseProto(t string) (Type, error) {
 	if err != nil {
 		return Any{}, err
 	}
-	return Proto{p.New().Interface()}, nil
+	return Proto{Message: p.New().Interface()}, nil
 }

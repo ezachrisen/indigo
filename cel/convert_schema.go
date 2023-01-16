@@ -9,10 +9,13 @@ package cel
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/ezachrisen/indigo"
 	celgo "github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
@@ -27,11 +30,17 @@ func convertIndigoSchemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, erro
 	// we'll collect them in types
 	types := []interface{}{}
 
-	for _, d := range s.Elements {
-		typ, err := convertIndigoToExprType(d.Type)
+	// custom options will be converted directly to EnvOptions
+	opts := []celgo.EnvOption{}
 
+	for _, d := range s.Elements {
+		typ, err := exprType(d.Type)
 		if err != nil {
-			return nil, fmt.Errorf("converting element %s in schema %s: %v", s.Name, d.Name, err)
+			return nil, fmt.Errorf("converting element %q in schema %q to CEL type: %v", d.Name, s.Name, err)
+		}
+
+		if typ == nil {
+			continue
 		}
 		declarations = append(declarations, decls.NewVar(d.Name, typ))
 
@@ -40,7 +49,17 @@ func convertIndigoSchemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, erro
 		}
 	}
 
-	opts := []celgo.EnvOption{}
+	for _, d := range s.Elements {
+		opt, err := convertIndigoToOpt(d)
+		if err != nil {
+			return nil, fmt.Errorf("convertin element %q in schema %q to CEL option: %v", d.Name, s.Name, err)
+		}
+		if opt == nil {
+			continue
+		}
+		opts = append(opts, opt)
+	}
+
 	opts = append(opts, celgo.Declarations(declarations...))
 	opts = append(opts, celgo.Types(types...))
 	if len(opts) == 0 {
@@ -50,9 +69,9 @@ func convertIndigoSchemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, erro
 	return opts, nil
 }
 
-// convertIndigoToExprType converts from an indigo type to a expr.Type,
+// exprType converts from an indigo type to a expr.Type,
 // which is used by CEL to represent types in its schema.
-func convertIndigoToExprType(t indigo.Type) (*gexpr.Type, error) {
+func exprType(t indigo.Type) (*gexpr.Type, error) {
 
 	switch v := t.(type) {
 	case indigo.String:
@@ -68,17 +87,17 @@ func convertIndigoToExprType(t indigo.Type) (*gexpr.Type, error) {
 	case indigo.Timestamp:
 		return decls.Timestamp, nil
 	case indigo.Map:
-		key, err := convertIndigoToExprType(v.KeyType)
+		key, err := exprType(v.KeyType)
 		if err != nil {
 			return nil, fmt.Errorf("setting key of %v map: %w", v.KeyType, err)
 		}
-		val, err := convertIndigoToExprType(v.ValueType)
+		val, err := exprType(v.ValueType)
 		if err != nil {
 			return nil, fmt.Errorf("setting value of %v map: %w", v.ValueType, err)
 		}
 		return decls.NewMapType(key, val), nil
 	case indigo.List:
-		val, err := convertIndigoToExprType(v.ValueType)
+		val, err := exprType(v.ValueType)
 		if err != nil {
 			return nil, fmt.Errorf("setting value of %v list: %w", v.ValueType, err)
 		}
@@ -90,6 +109,149 @@ func convertIndigoToExprType(t indigo.Type) (*gexpr.Type, error) {
 		}
 		return decls.NewObjectType(n), nil
 	default:
-		return nil, fmt.Errorf("unknown indigo type %s", t)
+		return nil, nil
 	}
+}
+
+func binaryWrapper(name string, f indigo.BinaryFunction) func(lhs, rhs ref.Val) ref.Val {
+
+	return func(lhs, rhs ref.Val) ref.Val {
+
+		// reg, err := types.NewRegistry(&gexpr.ParsedExpr{})
+		// if err != nil {
+		// 	return types.NewErr("cannot initialize type registry")
+		// }
+
+		// wantType, err := celType(f.Return)
+		// if err != nil {
+		// 	return types.NewErr("the expected return value from %s is not supported by CEL", name)
+		// }
+
+		x, err := f.Func(lhs, rhs)
+		if err != nil {
+			return types.NewErr(err.Error())
+		}
+
+		if reflect.TypeOf(f.Return) != reflect.TypeOf(x) {
+			return types.NewErr("expeted %s to return a %q, got a %q", name, f.Return, x)
+		}
+
+		ref, err := refVal(x)
+
+		return nil
+		// val, err := celType(x)
+		// if err != nil {
+		// 	return types.NewErr("return value (%#v) from %s could not be converted to CEL value: %w", x, name, err)
+		// }
+
+		// return
+		// return val
+	}
+
+}
+
+func refVal(t indigo.Type) (ref.Val, error) {
+
+	switch v := t.(type) {
+	case indigo.String:
+		return ref.
+	case indigo.Int:
+		return decls.Int, nil
+	case indigo.Float:
+		return decls.Double, nil
+	case indigo.Bool:
+		return decls.Bool, nil
+	case indigo.Duration:
+		return decls.Duration, nil
+	case indigo.Timestamp:
+		return decls.Timestamp, nil
+	case indigo.Map:
+		key, err := exprType(v.KeyType)
+		if err != nil {
+			return nil, fmt.Errorf("setting key of %v map: %w", v.KeyType, err)
+		}
+		val, err := exprType(v.ValueType)
+		if err != nil {
+			return nil, fmt.Errorf("setting value of %v map: %w", v.ValueType, err)
+		}
+		return decls.NewMapType(key, val), nil
+	case indigo.List:
+		val, err := exprType(v.ValueType)
+		if err != nil {
+			return nil, fmt.Errorf("setting value of %v list: %w", v.ValueType, err)
+		}
+		return decls.NewListType(val), nil
+	case indigo.Proto:
+		n, err := v.ProtoFullName()
+		if err != nil {
+			return nil, err
+		}
+		return decls.NewObjectType(n), nil
+	default:
+		return nil, nil
+	}
+}
+
+
+
+
+func isError(val ref.Val) bool {
+	switch val.(type) {
+	case *types.Err:
+		return true
+	default:
+		return false
+	}
+}
+func convertIndigoToOpt(e indigo.DataElement) (celgo.EnvOption, error) {
+
+	switch v := e.Type.(type) {
+	case indigo.BinaryFunction:
+		return binaryFunction(e.Name, v)
+	default:
+		return nil, nil
+
+	}
+}
+
+func celType(t indigo.Type) (*celgo.Type, error) {
+	x, err := exprType(t)
+	if err != nil {
+		return nil, err
+	}
+
+	y, err := celgo.ExprTypeToType(x)
+	if err != nil {
+		return nil, err
+	}
+	return y, nil
+
+}
+
+func binaryFunction(name string, v indigo.BinaryFunction) (celgo.EnvOption, error) {
+	if v.Func == nil {
+		return nil, fmt.Errorf("%q missing function", name)
+	}
+
+	lhs, err := celType(v.LHS)
+	if err != nil {
+		return nil, err
+	}
+
+	rhs, err := celType(v.RHS)
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := celType(v.Return)
+	if err != nil {
+		return nil, err
+	}
+
+	return celgo.Function(name,
+		celgo.Overload(fmt.Sprintf("%s_%s_%s", name, v.LHS, v.RHS),
+			[]*celgo.Type{lhs, rhs},
+			ret,
+			celgo.BinaryBinding(binaryWrapper(name, v)))), nil
+
 }

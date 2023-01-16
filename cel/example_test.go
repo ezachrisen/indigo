@@ -3,10 +3,14 @@ package cel_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ezachrisen/indigo"
 	"github.com/ezachrisen/indigo/cel"
+	celgo "github.com/google/cel-go/cel"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -995,4 +999,257 @@ func Example_alarmsTwoLevel() {
 
 	// Unordered output: cpu_alarm
 	// memory_alarm
+}
+
+/*
+// This example implements strings.Trim and its example (https://go.dev/play/p/ElmuOXm1h4j)
+// as a custom CEL function.
+func Example_customFunction() {
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.String{}},
+			{Name: "cutset", Type: indigo.String{}},
+			{Name: "trimset", Type: indigo.BinaryFunction{
+				LHS:    indigo.String{},
+				RHS:    indigo.String{},
+				Return: indigo.String{},
+				Func: func(lhs, rhs indigo.Value) (indigo.Value, error) {
+					if lhs == nil || rhs == nil {
+						return nil, fmt.Errorf("lhs or rhs is nil")
+					}
+					l, ok := lhs.Value().(string)
+					if !ok {
+						return nil, fmt.Errorf("lhs argument must be string, is %T", lhs)
+					}
+
+					r, ok := rhs.Value().(string)
+					if !ok {
+						return nil, fmt.Errorf("rhs argument must be string")
+					}
+					return types.String(strings.Trim(l, r)), nil
+				},
+			},
+			},
+		},
+	}
+
+	rule := indigo.NewRule("xxx", "trimset(s,cutset)")
+	rule.Schema = schema
+	rule.ResultType = indigo.String{}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	data := map[string]interface{}{
+		"s":      "¡¡¡Hello, Gophers!!!",
+		"cutset": "!¡",
+	}
+	results, err := engine.Eval(context.Background(), rule, data)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(results.Value)
+
+	// Output:
+	// Hello, Gophersd (actually ok)
+
+}
+*/
+
+// This example implements strings.Trim and its example (https://go.dev/play/p/ElmuOXm1h4j)
+// as a custom CEL function.
+func Example_customFunctionProto() {
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "factor", Type: indigo.Float{}},
+			{Name: "upgrade", Type: indigo.BinaryFunction{
+				LHS:    indigo.Proto{Message: &school.Student{}},
+				RHS:    indigo.Float{},
+				Return: indigo.Float{},
+				Func: func(student, factor indigo.Value) (indigo.Type, error) {
+					if student == nil {
+						return nil, fmt.Errorf("missing student")
+					}
+
+					s, ok := student.Value().(*school.Student)
+					if !ok {
+						return nil, fmt.Errorf("incorrect type for student")
+					}
+
+					f, ok := factor.Value().(float64)
+					if !ok {
+						return nil, fmt.Errorf("incorrect type for factor")
+					}
+					return indigo.Float{Value: s.Gpa * f}, nil
+				},
+			},
+			},
+		},
+	}
+
+	rule := indigo.NewRule("xxx", "upgrade(student,factor)")
+	rule.Schema = schema
+	rule.ResultType = indigo.Float{}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"student": &school.Student{
+			Age: 21,
+			Gpa: 2.0,
+		},
+		"factor": 1.1,
+	}
+	results, err := engine.Eval(context.Background(), rule, data)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(results.Value)
+
+	// Output:
+	// 2.2
+
+}
+
+// This example implements strings.Trim and its example (https://go.dev/play/p/ElmuOXm1h4j)
+// as a custom CEL function.
+func Example_customFunctionProtoModifier() {
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "factor", Type: indigo.Float{}},
+			{Name: "upgrade", Type: indigo.BinaryFunction{
+				LHS:    indigo.Proto{Message: &school.Student{}},
+				RHS:    indigo.Float{},
+				Return: indigo.Proto{Message: &school.Student{}},
+				Func: func(student, factor indigo.Value) (indigo.Type, error) {
+					if student == nil {
+						return nil, fmt.Errorf("missing student")
+					}
+
+					s, ok := student.Value().(*school.Student)
+					if !ok {
+						return nil, fmt.Errorf("incorrect type for student")
+					}
+
+					f, ok := factor.Value().(float64)
+					if !ok {
+						return nil, fmt.Errorf("incorrect type for factor")
+					}
+					s.Gpa = s.Gpa * f
+					return indigo.Proto{Value: s}, nil
+				},
+			},
+			},
+		},
+	}
+
+	rule := indigo.NewRule("xxx", "upgrade(student,factor)")
+	rule.Schema = schema
+	rule.ResultType = indigo.Proto{Message: &school.Student{}}
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	data := map[string]interface{}{
+		"student": &school.Student{
+			Age: 21,
+			Gpa: 2.0,
+		},
+		"factor": 1.1,
+	}
+	results, err := engine.Eval(context.Background(), rule, data)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(results.Value)
+
+	// Output:
+	// 2.2
+
+}
+
+// This example implements strings.Trim and its example (https://go.dev/play/p/ElmuOXm1h4j)
+// as a custom CEL function.
+func Example_customFunctionORIGINAL() {
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "s", Type: indigo.String{}},
+			{Name: "cutset", Type: indigo.String{}},
+		},
+	}
+
+	rule := indigo.NewRule("xxx", "trimset(s,cutset)")
+	rule.Schema = schema
+	rule.ResultType = indigo.String{}
+
+	engine := indigo.NewEngine(cel.NewEvaluator(
+		cel.CELOptions(
+			celgo.Function("trimset",
+				celgo.Overload("trimset_string_string",
+					[]*celgo.Type{celgo.StringType, celgo.StringType},
+					celgo.StringType,
+					celgo.BinaryBinding(func(lhs, rhs ref.Val) ref.Val {
+						l, ok := lhs.Value().(string)
+						if !ok {
+							return types.NewErr("lhs argument must be string")
+						}
+
+						r, ok := rhs.Value().(string)
+						if !ok {
+							return types.NewErr("rhs argument must be string")
+						}
+						return types.String(
+							strings.Trim(l, r))
+					},
+					),
+				),
+			),
+		),
+	),
+	)
+
+	err := engine.Compile(rule)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	data := map[string]interface{}{
+		"s":      "¡¡¡Hello, Gophers!!!",
+		"cutset": "!¡",
+	}
+	results, err := engine.Eval(context.Background(), rule, data)
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(results.Value)
+
+	// Output:
+	// Hello, Gophers
+
 }

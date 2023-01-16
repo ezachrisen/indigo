@@ -94,7 +94,7 @@ func TestParser(t *testing.T) {
 		"proto": {
 			str:       "proto(testdata.school.Student)",
 			wantError: false,
-			wantType:  indigo.Proto{&school.Student{}},
+			wantType:  indigo.Proto{Message: &school.Student{}},
 		},
 		"list2": {
 			str:       "[]",
