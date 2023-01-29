@@ -12,6 +12,8 @@ require (
 	google.golang.org/protobuf v1.28.1
 )
 
+require github.com/google/go-cmp v0.5.8
+
 require (
 	github.com/antlr/antlr4/runtime/Go/antlr v1.4.10 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect

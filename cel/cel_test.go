@@ -2,6 +2,7 @@ package cel_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 	"github.com/ezachrisen/indigo/testdata/school"
 	"github.com/google/cel-go/common/types/pb"
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/matryer/is"
@@ -504,6 +507,201 @@ func TestRuleResultTypes(t *testing.T) {
 			})
 		}
 	}
+}
+
+func checkBinary(name string, x, y, z indigo.Value, f func(lhs, rhs indigo.Value) (indigo.Value, error), t *testing.T, wantErr error) {
+	t.Run(name, func(t *testing.T) {
+		rule := indigo.NewRule(name, "z == lambda(x,y)")
+		rule.Schema = indigo.Schema{
+			Elements: []indigo.DataElement{
+				{Name: "x", Type: indigo.TypeOf(x)},
+				{Name: "y", Type: indigo.TypeOf(y)},
+				{Name: "z", Type: indigo.TypeOf(z)},
+				{Name: "lambda", Type: indigo.BinaryFunction{
+					LHS:    indigo.TypeOf(x),
+					RHS:    indigo.TypeOf(y),
+					Return: indigo.TypeOf(z),
+					Func:   f,
+				},
+				},
+			},
+		}
+		rule.ResultType = indigo.Bool{}
+
+		engine := indigo.NewEngine(cel.NewEvaluator())
+
+		err := engine.Compile(rule)
+		if err != nil && wantErr == nil {
+			t.Errorf("unexpected compile error: %v", err)
+			return
+		}
+
+		if wantErr != nil && !errors.Is(err, wantErr) {
+			t.Errorf("wanted error %v, got %v", wantErr, err)
+			return
+		}
+
+		got, err := engine.Eval(context.Background(), rule, map[string]interface{}{
+			"x": x.Value(),
+			"y": y.Value(),
+			"z": z.Value(),
+		})
+
+		if err != nil {
+			t.Errorf("unexpected eval error: %v", err)
+			return
+		}
+
+		//		fmt.Println(got)
+		if got.ExpressionPass != true {
+			t.Errorf("failed: \n\n%s\n\n", got)
+		}
+	})
+}
+
+// TestBinaryFunction tests various combinations of input/output values to a binary function
+func TestBinaryFunction(t *testing.T) {
+
+	// -------------------- successes
+
+	checkBinary("int+int", indigo.Int{Val: 10}, indigo.Int{Val: 20}, indigo.Int{Val: 30},
+		func(x, y indigo.Value) (indigo.Value, error) {
+			return indigo.Int{Val: x.Value().(int64) + y.Value().(int64)}, nil
+		}, t, nil)
+
+	checkBinary("float+float", indigo.Float{Val: 1}, indigo.Float{Val: 1}, indigo.Float{Val: 2},
+		func(x, y indigo.Value) (indigo.Value, error) {
+			return indigo.Float{Val: x.Value().(float64) + y.Value().(float64)}, nil
+		}, t, nil)
+
+	checkBinary("string+string", indigo.String{Val: "abc"}, indigo.String{Val: "def"}, indigo.String{Val: "abc-def"},
+		func(x, y indigo.Value) (indigo.Value, error) {
+			return indigo.String{Val: x.Value().(string) + "-" + y.Value().(string)}, nil
+		}, t, nil)
+
+	checkBinary("min timestamp",
+		indigo.Timestamp{Val: time.Date(2022, 10, 10, 0, 0, 0, 0, time.UTC)},
+		indigo.Timestamp{Val: time.Date(1999, 1, 1, 0, 0, 0, 0, time.UTC)},
+		indigo.Timestamp{Val: time.Date(1999, 1, 1, 0, 0, 0, 0, time.UTC)},
+		func(x, y indigo.Value) (indigo.Value, error) {
+			xt := x.Value().(time.Time)
+			yt := y.Value().(time.Time)
+			if xt.Before(yt) {
+				return indigo.Timestamp{Val: xt}, nil
+			}
+			return indigo.Timestamp{Val: yt}, nil
+		}, t, nil)
+
+	checkBinary("min duration",
+		indigo.Duration{Val: time.Duration(100 * time.Millisecond)},
+		indigo.Duration{Val: time.Duration(200 * time.Millisecond)},
+		indigo.Duration{Val: time.Duration(100 * time.Millisecond)},
+		func(x, y indigo.Value) (indigo.Value, error) {
+			xt := x.Value().(time.Duration)
+			yt := y.Value().(time.Duration)
+			if xt < yt {
+				return indigo.Duration{Val: xt}, nil
+			}
+			return indigo.Duration{Val: yt}, nil
+		}, t, nil)
+
+	// -------------------- failures
+	checkBinary("bad return", indigo.Int{Val: 10}, indigo.Int{Val: 20}, indigo.Float{Val: 30},
+		func(x, y indigo.Value) (indigo.Value, error) {
+			return indigo.Int{Val: x.Value().(int64) + y.Value().(int64)}, nil
+		}, t, indigo.ErrUnexpectedReturnType)
+
+}
+
+// TestBinaryFunctionProto returns a proto message from a binary function
+func TestBinaryFunctionProto(t *testing.T) {
+
+	for _, c := range []struct {
+		name   string
+		rule   string
+		result indigo.Type
+		schema indigo.Schema
+		data   map[string]any
+		want   any
+		err    error
+	}{
+		{
+			name:   "proto_float_proto",
+			rule:   "upgrade(student,factor)",
+			result: indigo.Proto{Message: &school.Student{}},
+			data: map[string]interface{}{
+				"student": &school.Student{
+					Age: 21,
+					Gpa: 2.0,
+				},
+				"factor": 1.1,
+			},
+			want: &school.Student{
+				Age: 21,
+				Gpa: 2.2,
+			},
+			schema: indigo.Schema{
+				Elements: []indigo.DataElement{
+					{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+					{Name: "factor", Type: indigo.Float{}},
+					{Name: "upgrade", Type: indigo.BinaryFunction{
+						LHS:    indigo.Proto{Message: &school.Student{}},
+						RHS:    indigo.Float{},
+						Return: indigo.Proto{Message: &school.Student{}},
+						Func: func(student, factor indigo.Value) (indigo.Value, error) {
+							if student == nil {
+								return nil, fmt.Errorf("missing student")
+							}
+
+							s, ok := student.Value().(*school.Student)
+							if !ok {
+								return nil, fmt.Errorf("incorrect type for student")
+							}
+
+							f, ok := factor.Value().(float64)
+							if !ok {
+								return nil, fmt.Errorf("incorrect type for factor")
+							}
+							s.Gpa = s.Gpa * f
+							return indigo.Proto{Val: s}, nil
+						},
+					},
+					},
+				},
+			},
+		},
+	} {
+
+		t.Run(c.name, func(t *testing.T) {
+			c := c
+			t.Parallel()
+
+			rule := indigo.NewRule("xxx", c.rule)
+			rule.Schema = c.schema
+			rule.ResultType = c.result
+
+			engine := indigo.NewEngine(cel.NewEvaluator())
+
+			err := engine.Compile(rule)
+			if err != nil {
+				t.Errorf("unexpected compile error: %v", err)
+				return
+			}
+			got, err := engine.Eval(context.Background(), rule, c.data)
+			if err != nil {
+				t.Errorf("unexpected eval error: %v", err)
+				fmt.Println(err)
+				return
+			}
+			fmt.Println(got)
+			if d := cmp.Diff(c.want, got.Value, protocmp.Transform()); d != "" {
+				t.Errorf("Diff\n\n%s\n", d)
+				//				t.Errorf("\nwanted: %s\ngot   : %s", c.want, got)
+				return
+			}
+		})
+	}
+
 }
 
 // Generate all diagnostics for both sets of rules to make sure

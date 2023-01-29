@@ -1,6 +1,7 @@
 package indigo
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -72,32 +73,56 @@ type Type interface {
 	String() string
 }
 
+type Value interface {
+	Value() any
+}
+
+func TypeOf(v Value) Type {
+
+	switch v.(type) {
+	case Int:
+		return Int{}
+	case Float:
+		return Float{}
+	case String:
+		return String{}
+	case Bool:
+		return Bool{}
+	case Duration:
+		return Duration{}
+	case Timestamp:
+		return Timestamp{}
+	default:
+		return Any{}
+	}
+}
+
 // String defines an Indigo string type.
-type String struct{}
+type String struct{ Val string }
 
 // Int defines an Indigo int type. The exact "Int" implementation and size
 // depends on the evaluator used.
-type Int struct{ Value int }
+type Int struct{ Val int64 }
 
 // Float defines an Indigo float type. The implementation of the float (size, precision)
 // depends on the evaluator used.
-type Float struct{ Value float64 }
+type Float struct{ Val float64 }
 
 // Any defines an Indigo type for an "undefined" or unspecified type.
-type Any struct{ Value any }
+type Any struct{ Val any }
 
 // Bool defines an Indigo type for true/false.
-type Bool struct{ Value bool }
+type Bool struct{ Val bool }
 
 // Duration defines an Indigo type for the time.Duration type.
-type Duration struct{ value time.Duration }
+type Duration struct{ Val time.Duration }
 
 // Timestamp defines an Indigo type for the time.Time type.
-type Timestamp struct{ Value time.Time }
+type Timestamp struct{ Val time.Time }
 
 // Proto defines an Indigo type for a protobuf type.
 type Proto struct {
-	Value   proto.Message
+	Val     proto.Message
 	Message proto.Message // an instance of the proto message
 }
 
@@ -122,6 +147,10 @@ func (p *Proto) ProtoFullName() (string, error) {
 
 }
 
+func (p Proto) Value() any {
+	return p.Val
+}
+
 // List defines an Indigo type representing a slice of values
 type List struct {
 	Value     any
@@ -139,8 +168,12 @@ type BinaryFunction struct {
 	LHS    Type
 	RHS    Type
 	Return Type
-	Func   func(lhs, rhs Value) (Type, error)
+	Func   func(lhs, rhs Value) (Value, error)
 }
+
+var (
+	ErrUnexpectedReturnType = errors.New("function returns unexpected type")
+)
 
 // String Methods
 func (Int) String() string       { return "int" }
@@ -152,6 +185,7 @@ func (Timestamp) String() string { return "timestamp" }
 func (Float) String() string     { return "float" }
 func (t List) String() string    { return fmt.Sprintf("[]%v", t.ValueType) }
 func (t Map) String() string     { return fmt.Sprintf("map[%s]%s", t.KeyType, t.ValueType) }
+
 func (p Proto) String() string {
 	s, err := p.ProtoFullName()
 	if err != nil {
@@ -164,9 +198,17 @@ func (t BinaryFunction) String() string {
 	return fmt.Sprintf("(%s,%s) %s ", t.LHS, t.RHS, t.Return)
 }
 
-type Value interface {
-	Value() any
-}
+// Value Methods
+func (x Int) Value() any       { return x.Val }
+func (x Bool) Value() any      { return x.Val }
+func (x String) Value() any    { return x.Val }
+func (x Any) Value() any       { return x.Val }
+func (x Duration) Value() any  { return x.Val }
+func (x Timestamp) Value() any { return x.Val }
+func (x Float) Value() any     { return x.Val }
+
+// func (t List) Value() any    { return x.Val }
+// func (t Map) Value() any     { return x.Val }
 
 // ParseType parses a string that represents an Indigo type and returns the type.
 // The primitive types are their lower-case names (string, int, duration, etc.)

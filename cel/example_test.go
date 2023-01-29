@@ -1074,7 +1074,7 @@ func Example_customFunctionProto() {
 				LHS:    indigo.Proto{Message: &school.Student{}},
 				RHS:    indigo.Float{},
 				Return: indigo.Float{},
-				Func: func(student, factor indigo.Value) (indigo.Type, error) {
+				Func: func(student, factor indigo.Value) (indigo.Value, error) {
 					if student == nil {
 						return nil, fmt.Errorf("missing student")
 					}
@@ -1088,7 +1088,7 @@ func Example_customFunctionProto() {
 					if !ok {
 						return nil, fmt.Errorf("incorrect type for factor")
 					}
-					return indigo.Float{Value: s.Gpa * f}, nil
+					return indigo.Float{Val: s.Gpa * f}, nil
 				},
 			},
 			},
@@ -1139,7 +1139,7 @@ func Example_customFunctionProtoModifier() {
 				LHS:    indigo.Proto{Message: &school.Student{}},
 				RHS:    indigo.Float{},
 				Return: indigo.Proto{Message: &school.Student{}},
-				Func: func(student, factor indigo.Value) (indigo.Type, error) {
+				Func: func(student, factor indigo.Value) (indigo.Value, error) {
 					if student == nil {
 						return nil, fmt.Errorf("missing student")
 					}
@@ -1154,7 +1154,7 @@ func Example_customFunctionProtoModifier() {
 						return nil, fmt.Errorf("incorrect type for factor")
 					}
 					s.Gpa = s.Gpa * f
-					return indigo.Proto{Value: s}, nil
+					return indigo.Proto{Val: s}, nil
 				},
 			},
 			},
@@ -1185,11 +1185,10 @@ func Example_customFunctionProtoModifier() {
 		fmt.Println(err)
 		return
 	}
-
-	fmt.Println(results.Value)
-
+	s := results.Value.(*school.Student)
+	fmt.Printf("New GPA: %0.2f\n", s.Gpa)
 	// Output:
-	// 2.2
+	// New GPA: 2.20
 
 }
 

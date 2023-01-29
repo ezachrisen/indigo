@@ -9,7 +9,6 @@ package cel
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/ezachrisen/indigo"
 	celgo "github.com/google/cel-go/cel"
@@ -113,87 +112,49 @@ func exprType(t indigo.Type) (*gexpr.Type, error) {
 	}
 }
 
-func binaryWrapper(name string, f indigo.BinaryFunction) func(lhs, rhs ref.Val) ref.Val {
-
-	return func(lhs, rhs ref.Val) ref.Val {
-
-		// reg, err := types.NewRegistry(&gexpr.ParsedExpr{})
-		// if err != nil {
-		// 	return types.NewErr("cannot initialize type registry")
-		// }
-
-		// wantType, err := celType(f.Return)
-		// if err != nil {
-		// 	return types.NewErr("the expected return value from %s is not supported by CEL", name)
-		// }
-
-		x, err := f.Func(lhs, rhs)
-		if err != nil {
-			return types.NewErr(err.Error())
-		}
-
-		if reflect.TypeOf(f.Return) != reflect.TypeOf(x) {
-			return types.NewErr("expeted %s to return a %q, got a %q", name, f.Return, x)
-		}
-
-		ref, err := refVal(x)
-
-		return nil
-		// val, err := celType(x)
-		// if err != nil {
-		// 	return types.NewErr("return value (%#v) from %s could not be converted to CEL value: %w", x, name, err)
-		// }
-
-		// return
-		// return val
-	}
-
-}
-
-func refVal(t indigo.Type) (ref.Val, error) {
+func refVal(t indigo.Value) (ref.Val, error) {
 
 	switch v := t.(type) {
 	case indigo.String:
-		return ref.
+		return types.String(v.Val), nil
 	case indigo.Int:
-		return decls.Int, nil
+		return types.Int(v.Val), nil
 	case indigo.Float:
-		return decls.Double, nil
+		return types.Double(v.Val), nil
 	case indigo.Bool:
-		return decls.Bool, nil
+		return types.Bool(v.Val), nil
 	case indigo.Duration:
-		return decls.Duration, nil
+		return types.Duration{v.Val}, nil
 	case indigo.Timestamp:
-		return decls.Timestamp, nil
-	case indigo.Map:
-		key, err := exprType(v.KeyType)
-		if err != nil {
-			return nil, fmt.Errorf("setting key of %v map: %w", v.KeyType, err)
-		}
-		val, err := exprType(v.ValueType)
-		if err != nil {
-			return nil, fmt.Errorf("setting value of %v map: %w", v.ValueType, err)
-		}
-		return decls.NewMapType(key, val), nil
-	case indigo.List:
-		val, err := exprType(v.ValueType)
-		if err != nil {
-			return nil, fmt.Errorf("setting value of %v list: %w", v.ValueType, err)
-		}
-		return decls.NewListType(val), nil
+		return types.Timestamp{v.Val}, nil
+	// case indigo.Map:
+	// 	key, err := exprType(v.KeyType)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("setting key of %v map: %w", v.KeyType, err)
+	// 	}
+	// 	val, err := exprType(v.ValueType)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("setting value of %v map: %w", v.ValueType, err)
+	// 	}
+	// 	return decls.NewMapType(key, val), nil
+	// case indigo.List:
+	// 	val, err := exprType(v.ValueType)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("setting value of %v list: %w", v.ValueType, err)
+	// 	}
+	// 	return decls.NewListType(val), nil
 	case indigo.Proto:
-		n, err := v.ProtoFullName()
+		m := v.Val
+		tr, err := types.NewRegistry(m)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("couldn't initialize type registry to convert proto to ref.Val: %w", err)
 		}
-		return decls.NewObjectType(n), nil
+		nv := tr.NativeToValue(m)
+		return nv, nil
 	default:
-		return nil, nil
+		return nil, fmt.Errorf("unsupported Indigo type: %T", t)
 	}
 }
-
-
-
 
 func isError(val ref.Val) bool {
 	switch val.(type) {
@@ -225,33 +186,5 @@ func celType(t indigo.Type) (*celgo.Type, error) {
 		return nil, err
 	}
 	return y, nil
-
-}
-
-func binaryFunction(name string, v indigo.BinaryFunction) (celgo.EnvOption, error) {
-	if v.Func == nil {
-		return nil, fmt.Errorf("%q missing function", name)
-	}
-
-	lhs, err := celType(v.LHS)
-	if err != nil {
-		return nil, err
-	}
-
-	rhs, err := celType(v.RHS)
-	if err != nil {
-		return nil, err
-	}
-
-	ret, err := celType(v.Return)
-	if err != nil {
-		return nil, err
-	}
-
-	return celgo.Function(name,
-		celgo.Overload(fmt.Sprintf("%s_%s_%s", name, v.LHS, v.RHS),
-			[]*celgo.Type{lhs, rhs},
-			ret,
-			celgo.BinaryBinding(binaryWrapper(name, v)))), nil
 
 }
