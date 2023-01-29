@@ -98,7 +98,7 @@ func (u *Result) resultsToRows(n int) []table.Row {
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopFirstPositiveChild)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopFirstNegativeChild)),
 		trueFalse(fmt.Sprintf("%t", u.EvalOptions.DiscardPass)),
-		trueFalse(fmt.Sprintf("%t", u.EvalOptions.DiscardFail)),
+		trueFalse(fmt.Sprintf("%d", u.EvalOptions.FailAction)),
 	}
 
 	rows = append(rows, row)

@@ -119,10 +119,22 @@ done: // break out of inner switch
 				failCount++
 			}
 
-			// Decide if we should return the result or not.
-			if (!result.Pass && !o.DiscardFail) ||
-				(result.Pass && !o.DiscardPass) {
-				u.Results[cr.ID] = result
+			// Decide if we should return the child rule's result or not
+			switch result.Pass {
+			case true:
+				if o.DiscardPass == false {
+					u.Results[cr.ID] = result
+				}
+			case false:
+				switch o.FailAction {
+				case KeepFailures:
+					u.Results[cr.ID] = result
+				case DiscardFailures:
+				case DiscardOnlyIfExpressionFailed:
+					if result.ExpressionPass == true {
+						u.Results[cr.ID] = result
+					}
+				}
 			}
 
 			if o.StopFirstPositiveChild && result.Pass {
@@ -255,9 +267,9 @@ type EvalOptions struct {
 	// Default: all rules are returned
 	DiscardPass bool `json:"discard_pass"`
 
-	// Do not return rules that failed
+	// Decide what to do to rules that failed
 	// Default: all rules are returned
-	DiscardFail bool `json:"discard_fail"`
+	FailAction FailActionKind
 
 	// Include diagnostic information with the results.
 	// To enable this option, you must first turn on diagnostic
@@ -284,6 +296,27 @@ type EvalOptions struct {
 	overrideSort bool
 }
 
+// FailActionKind is used to tell Indigo what to do with the results of
+// rules that did not pass.
+type FailActionKind int
+
+const (
+	// KeepFailures means that all results, whether the rule passed or not,
+	// are returned by Indigo after evaluation.
+	KeepFailures FailActionKind = iota
+
+	// DiscardFailures means that the results of rules that failed are not
+	// returned by Indigo after evaluation, though their effect on a parent
+	// rule's pass/fail state is retained.
+	DiscardFailures
+
+	// DiscardOnlyIfExpressionFailed means that the result of a rule will
+	// not be discarded unless it's ExpressionPass result is false.
+	// Even if the rule itself has result of Pass = false, the rule will
+	// be returned in the result.
+	DiscardOnlyIfExpressionFailed
+)
+
 // EvalOption is a functional option for specifying how evaluations behave.
 type EvalOption func(f *EvalOptions)
 
@@ -306,10 +339,10 @@ func SortFunc(x func(rules []*Rule, i, j int) bool) EvalOption {
 	}
 }
 
-// DiscardFail specifies whether to omit failed rules from the results.
-func DiscardFail(b bool) EvalOption {
+// FailAction specifies whether to omit failed rules from the results.
+func FailAction(k FailActionKind) EvalOption {
 	return func(f *EvalOptions) {
-		f.DiscardFail = b
+		f.FailAction = k
 	}
 }
 
