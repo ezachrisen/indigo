@@ -1863,7 +1863,7 @@ Indigo will use this function to sort the rules during the ``Eval`` function. Ch
 
 
 
-## DiscardPass, DiscardFail 
+## DiscardPass, FailAction
 
 By default, results are returned for all rules, whether they pass or not. In our toy examples, this doesn't matter so much, but if you have thousands of rules, and you only care about the true ones, there's no reason to return the false rules, and vice versa. 
 
@@ -1871,7 +1871,7 @@ You set this option on the parent rule in ``indigo.Rule.EvalOptions``.
 
 Setting these options has **no effect** on the parent rule's ``Pass`` value. Recall that the ``Pass`` field takes into account the results of a rule's children. So if a rule has 3 children, 1 of them (A) is false and 2 are true (B,C), the parent (X) will be false as well. 
 
-If we set the ``DiscardFail`` on X, we will only get B and C (both positive) in the results, but not A. X.Pass will be false, even if there are no false results returned. 
+If we set the ``DiscardFailures`` on X, we will only get B and C (both positive) in the results, but not A. X.Pass will be false, even if there are no false results returned. 
 
 
 
@@ -1883,7 +1883,7 @@ In this section we'll use our understanding of rule organization and evaluation 
 
 In this example, we are going to monitor system metrics such as CPU and memory and issue alerts when metrics exceed certain thresholds. 
 
-The best way to do this is to have a rule for each alarm, and to set the evaluation option ```DiscardFail = true``, so that only ``true`` rules are returned. 
+The best way to do this is to have a rule for each alarm, and to set the evaluation option ```FailAction = DiscardFailures``, so that only ``true`` rules are returned. 
 
 
 > The sample code for this section is in [Example_alarms()](example_test.go)
@@ -1904,7 +1904,7 @@ rule := indigo.Rule{
 
 // Setting this option so we only get back 
 // rules that evaluate to 'true'
-rule.EvalOptions.DiscardFail = true
+rule.EvalOptions.FailAction = indigo.DiscardFailures
 
 rule.Rules["cpu_alarm"] = &indigo.Rule{
    ID:     "cpu_alarm",
@@ -1942,13 +1942,13 @@ This is the rule structure:
 ```mermaid
 graph TD;
 
-alarm_check[alarm_check<br>DiscardFail] --> cpu_alarm;
+alarm_check[alarm_check<br>DiscardFailures] --> cpu_alarm;
 alarm_check --> disk_alarm;
 alarm_check --> memory_alarm;
 ```
 
 
-Rather than setting the ``DiscardFail`` option, we could have iterated through all the results and checked the ``Pass`` flag, but here we don't have to. 
+Rather than setting the ``DiscardFailures`` option, we could have iterated through all the results and checked the ``Pass`` flag, but here we don't have to. 
 
 
 Now, let's modify the example so that there are multiple conditions that can trigger a memory alert: high utilization (>90%) or low remaining megabytes (<16). To do that we create a new "parent" memory alert rule and add the two conditions as child rules:
@@ -1961,7 +1961,7 @@ memory_alarm := &indigo.Rule{
 	ID:    "memory_alarm",
 	Rules: map[string]*indigo.Rule{},
 	EvalOptions: indigo.EvalOptions{
-		DiscardFail: false,
+		FailAction: indigo.KeepFailures,
 		TrueIfAny:   true,
 	},
 }
@@ -1983,7 +1983,7 @@ rule.Rules["memory_alarm"] = memory_alarm
 
 ```
 
-We want the memory alarm to trigger when either of the two conditions is true, so we set the ``TrueIfAny`` option as well as the ``DiscardFail`` option. 
+We want the memory alarm to trigger when either of the two conditions is true, so we set the ``TrueIfAny`` option as well as the ``KeepFailures`` option. 
 
 
 This is now the rule structure: 
@@ -1992,9 +1992,9 @@ This is now the rule structure:
 ```mermaid
 graph TD;
 
-alarm_check[alarm_check<br>DiscardFail] --> cpu_alarm;
+alarm_check[alarm_check<br>DiscardFailures] --> cpu_alarm;
 alarm_check --> disk_alarm;
-alarm_check --> memory_alarm[memory_alarm<br>DiscardFail<br>TrueIfAny];
+alarm_check --> memory_alarm[memory_alarm<br>DiscardFailures<br>TrueIfAny];
 memory_alarm --> memory_utilization_alarm;
 memory_alarm --> memory_remaining_alarm;
 ```

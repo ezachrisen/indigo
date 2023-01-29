@@ -847,7 +847,7 @@ func Example_protoConstructionConditional() {
 	// 0
 }
 
-// Example_alarms illustrates using the DiscardFail option to only return
+// Example_alarms illustrates using the FailAction option to only return
 // true rules from evaluation
 func Example_alarms() {
 
@@ -866,7 +866,7 @@ func Example_alarms() {
 
 	// Setting this option so we only get back
 	// rules that evaluate to 'true'
-	rule.EvalOptions.DiscardFail = true
+	rule.EvalOptions.FailAction = indigo.DiscardFailures
 
 	rule.Rules["cpu_alarm"] = &indigo.Rule{
 		ID:     "cpu_alarm",
@@ -912,7 +912,7 @@ func Example_alarms() {
 	// Unordered output: cpu_alarm
 }
 
-// Example_alarms illustrates using the DiscardFail option to only return
+// Example_alarms illustrates using the FailAction option to only return
 // true rules from evaluation with a multi-level hierarchy
 func Example_alarmsTwoLevel() {
 
@@ -932,7 +932,7 @@ func Example_alarmsTwoLevel() {
 
 	// Setting this option so we only get back
 	// rules that evaluate to 'true'
-	rule.EvalOptions.DiscardFail = true
+	rule.EvalOptions.FailAction = indigo.DiscardFailures
 
 	rule.Rules["cpu_alarm"] = &indigo.Rule{
 		ID:     "cpu_alarm",
@@ -950,8 +950,8 @@ func Example_alarmsTwoLevel() {
 		ID:    "memory_alarm",
 		Rules: map[string]*indigo.Rule{},
 		EvalOptions: indigo.EvalOptions{
-			DiscardFail: false,
-			TrueIfAny:   true,
+			FailAction: indigo.KeepFailures,
+			TrueIfAny:  true,
 		},
 	}
 
