@@ -866,7 +866,7 @@ func Example_alarms() {
 
 	// Setting this option so we only get back
 	// rules that evaluate to 'true'
-	rule.EvalOptions.FailAction = indigo.DiscardFailures
+	rule.EvalOptions.DiscardFail = indigo.Discard
 
 	rule.Rules["cpu_alarm"] = &indigo.Rule{
 		ID:     "cpu_alarm",
@@ -932,7 +932,7 @@ func Example_alarmsTwoLevel() {
 
 	// Setting this option so we only get back
 	// rules that evaluate to 'true'
-	rule.EvalOptions.FailAction = indigo.DiscardFailures
+	rule.EvalOptions.DiscardFail = indigo.Discard
 
 	rule.Rules["cpu_alarm"] = &indigo.Rule{
 		ID:     "cpu_alarm",
@@ -950,8 +950,8 @@ func Example_alarmsTwoLevel() {
 		ID:    "memory_alarm",
 		Rules: map[string]*indigo.Rule{},
 		EvalOptions: indigo.EvalOptions{
-			FailAction: indigo.KeepFailures,
-			TrueIfAny:  true,
+			DiscardFail: indigo.KeepAll,
+			TrueIfAny:   true,
 		},
 	}
 

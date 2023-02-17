@@ -126,10 +126,10 @@ done: // break out of inner switch
 					u.Results[cr.ID] = result
 				}
 			case false:
-				switch o.FailAction {
-				case KeepFailures:
+				switch o.DiscardFail {
+				case KeepAll:
 					u.Results[cr.ID] = result
-				case DiscardFailures:
+				case Discard:
 				case DiscardOnlyIfExpressionFailed:
 					if result.ExpressionPass == true {
 						u.Results[cr.ID] = result
@@ -269,7 +269,7 @@ type EvalOptions struct {
 
 	// Decide what to do to rules that failed
 	// Default: all rules are returned
-	FailAction FailActionKind
+	DiscardFail FailAction
 
 	// Include diagnostic information with the results.
 	// To enable this option, you must first turn on diagnostic
@@ -296,19 +296,19 @@ type EvalOptions struct {
 	overrideSort bool
 }
 
-// FailActionKind is used to tell Indigo what to do with the results of
+// FailAction is used to tell Indigo what to do with the results of
 // rules that did not pass.
-type FailActionKind int
+type FailAction int
 
 const (
-	// KeepFailures means that all results, whether the rule passed or not,
+	// KeepAll means that all results, whether the rule passed or not,
 	// are returned by Indigo after evaluation.
-	KeepFailures FailActionKind = iota
+	KeepAll FailAction = iota
 
-	// DiscardFailures means that the results of rules that failed are not
+	// Discard means that the results of rules that failed are not
 	// returned by Indigo after evaluation, though their effect on a parent
 	// rule's pass/fail state is retained.
-	DiscardFailures
+	Discard
 
 	// DiscardOnlyIfExpressionFailed means that the result of a rule will
 	// not be discarded unless it's ExpressionPass result is false.
@@ -339,10 +339,10 @@ func SortFunc(x func(rules []*Rule, i, j int) bool) EvalOption {
 	}
 }
 
-// FailAction specifies whether to omit failed rules from the results.
-func FailAction(k FailActionKind) EvalOption {
+// DiscardFail specifies whether to omit failed rules from the results.
+func DiscardFail(k FailAction) EvalOption {
 	return func(f *EvalOptions) {
-		f.FailAction = k
+		f.DiscardFail = k
 	}
 }
 

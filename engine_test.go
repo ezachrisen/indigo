@@ -296,7 +296,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 		},
 		"DiscardFailures": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.Discard
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b4", "b4-1", "b4-2") // b4-1 is elim. because b4 is
@@ -304,7 +304,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 		},
 		"DiscardPass & DiscardFailures": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.Discard
 				r.Rules["B"].EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
@@ -313,7 +313,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 		},
 		"DiscardPass & DiscardFailures on Root": {
 			prep: func(r *indigo.Rule) {
-				r.EvalOptions.FailAction = indigo.DiscardFailures
+				r.EvalOptions.DiscardFail = indigo.Discard
 				r.EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
@@ -474,13 +474,13 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].Expr = "true"
 				r.Rules["E"].Expr = "false"
-				r.EvalOptions.FailAction = indigo.DiscardFailures
-				r.EvalOptions.FailAction = indigo.DiscardOnlyIfExpressionFailed
+				r.EvalOptions.DiscardFail = indigo.Discard
+				r.EvalOptions.DiscardFail = indigo.DiscardOnlyIfExpressionFailed
 				//				r.EvalOptions.FailAction = indigo.KeepFailures
 				r.Rules["B"].EvalOptions.StopIfParentNegative = true
 				r.Rules["E"].EvalOptions.StopIfParentNegative = true
-				r.Rules["B"].EvalOptions.FailAction = indigo.KeepFailures
-				r.Rules["E"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.KeepAll
+				r.Rules["E"].EvalOptions.DiscardFail = indigo.Discard
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "E", "e1", "e2", "e3")
@@ -491,11 +491,11 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].Expr = "true"
 				r.Rules["E"].Expr = "false"
-				r.EvalOptions.FailAction = indigo.DiscardFailures
+				r.EvalOptions.DiscardFail = indigo.Discard
 				r.Rules["B"].EvalOptions.StopIfParentNegative = true
 				r.Rules["E"].EvalOptions.StopIfParentNegative = true
-				r.Rules["B"].EvalOptions.FailAction = indigo.KeepFailures
-				r.Rules["E"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.KeepAll
+				r.Rules["E"].EvalOptions.DiscardFail = indigo.Discard
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "B", "b2", "b3", "b4", "b4-1", "b4-2", "b1", "E", "e1", "e2", "e3")
@@ -506,11 +506,11 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].Expr = "true"
 				r.Rules["E"].Expr = "false"
-				r.EvalOptions.FailAction = indigo.KeepFailures
+				r.EvalOptions.DiscardFail = indigo.KeepAll
 				r.Rules["B"].EvalOptions.StopIfParentNegative = true
 				r.Rules["E"].EvalOptions.StopIfParentNegative = true
-				r.Rules["B"].EvalOptions.FailAction = indigo.KeepFailures
-				r.Rules["E"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.KeepAll
+				r.Rules["E"].EvalOptions.DiscardFail = indigo.Discard
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "e1", "e2", "e3")
@@ -519,7 +519,7 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 
 		"DiscardPass & DiscardFailures": {
 			prep: func(r *indigo.Rule) {
-				r.Rules["B"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.Discard
 				r.Rules["B"].EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
@@ -528,7 +528,7 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 		},
 		"DiscardPass & DiscardFailures on Root": {
 			prep: func(r *indigo.Rule) {
-				r.EvalOptions.FailAction = indigo.DiscardFailures
+				r.EvalOptions.DiscardFail = indigo.Discard
 				r.EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
@@ -723,7 +723,7 @@ func TestEvalTrueIfAny(t *testing.T) {
 				r.Rules["B"].EvalOptions.TrueIfAny = true
 				r.Rules["D"].EvalOptions.TrueIfAny = true
 				r.Rules["E"].EvalOptions.TrueIfAny = true
-				r.Rules["B"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.Discard
 			},
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b4", "b4-1", "b4-2") // b4-1 is elim. because b4 is
@@ -736,7 +736,7 @@ func TestEvalTrueIfAny(t *testing.T) {
 				r.Rules["D"].EvalOptions.TrueIfAny = true
 				r.Rules["E"].EvalOptions.TrueIfAny = true
 
-				r.Rules["B"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.Discard
 				r.Rules["B"].EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
@@ -750,7 +750,7 @@ func TestEvalTrueIfAny(t *testing.T) {
 				r.Rules["D"].EvalOptions.TrueIfAny = true
 				r.Rules["E"].EvalOptions.TrueIfAny = true
 
-				r.EvalOptions.FailAction = indigo.DiscardFailures
+				r.EvalOptions.DiscardFail = indigo.Discard
 				r.EvalOptions.DiscardPass = true
 			},
 			want: func() map[string]bool {
@@ -1006,7 +1006,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 				r.EvalOptions.StopIfParentNegative = true
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
 				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
-				r.Rules["B"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.Discard
 				// we'll check that the 2 true rules in B, b1 and b3,
 				// come back in the order we expect
 				// with indigo.SortRulesAlpha, we expect b1 to be returned,
@@ -1068,7 +1068,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 		},
 		{
 			// Check that global (true) overrides local option (false)
-			opts: []indigo.EvalOption{indigo.FailAction(indigo.DiscardFailures), indigo.DiscardPass(true)},
+			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.Discard), indigo.DiscardPass(true)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 0)
 			},
@@ -1106,7 +1106,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 				r.Rules["D"].Rules["d2"].Expr = "true" // make d2 pass -> D passes
 			},
 			// Check that global (true) overrides local option (false)
-			opts: []indigo.EvalOption{indigo.FailAction(indigo.DiscardFailures)},
+			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.Discard)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 1)
 				is.True(r.Results["D"].Pass)
@@ -1116,12 +1116,12 @@ func TestGlobalEvalOptions(t *testing.T) {
 		{
 			// Check that global (FALSE) overrides local option (true)
 			prep: func(r *indigo.Rule) {
-				r.EvalOptions.FailAction = indigo.DiscardFailures
-				r.Rules["B"].EvalOptions.FailAction = indigo.DiscardFailures
-				r.Rules["D"].EvalOptions.FailAction = indigo.DiscardFailures
-				r.Rules["E"].EvalOptions.FailAction = indigo.DiscardFailures
+				r.EvalOptions.DiscardFail = indigo.Discard
+				r.Rules["B"].EvalOptions.DiscardFail = indigo.Discard
+				r.Rules["D"].EvalOptions.DiscardFail = indigo.Discard
+				r.Rules["E"].EvalOptions.DiscardFail = indigo.Discard
 			},
-			opts: []indigo.EvalOption{indigo.FailAction(indigo.KeepFailures)},
+			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.KeepAll)},
 			chk: func(r *indigo.Result) {
 				is.Equal(len(r.Results), 3)
 			},
