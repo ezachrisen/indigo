@@ -51,8 +51,8 @@ func ExampleHelloWorld() {
 	}
 
 	// Step 5: Evaluate and check the results
-	results, err := engine.Evaluate(data, &rule)
-	fmt.Println(results.ExpressiongPass)
+	results, err := engine.Eval(context.Background(), &rule, data)
+	fmt.Println(results.ExpressionPass)
 	// Output: true
 }
 
