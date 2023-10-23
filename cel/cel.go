@@ -141,7 +141,7 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 
 func celEnv(schema indigo.Schema) (*celgo.Env, error) {
 
-	opts, err := convertIndigoSchemaToDeclarations(schema)
+	opts, err := ConvertIndigoSchemaToDeclarations(schema)
 	if err != nil {
 		return nil, err
 	}
