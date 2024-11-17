@@ -197,6 +197,8 @@ func ExampleIn() {
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
+
+			{Name: "x", Type: indigo.String{}},
 			{Name: "flights", Type: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.String{}}},
 			{Name: "holding", Type: indigo.List{ValueType: indigo.String{}}},
 		},
@@ -205,7 +207,8 @@ func ExampleIn() {
 	rule := indigo.Rule{
 		Schema:     schema,
 		ResultType: indigo.Bool{},
-		Expr:       `"UA1500" in flights && "SW123" in holding`,
+		Expr:       `x in ["UA1500", "ABC123"]`,
+		//		Expr:       `"UA1500" in flights && "SW123" in holding`,
 	}
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
@@ -217,6 +220,7 @@ func ExampleIn() {
 	}
 
 	data := map[string]interface{}{
+		"x":       "ABC123",
 		"flights": map[string]string{"UA1500": "On Time", "DL232": "Delayed", "AA1622": "Delayed"},
 		"holding": []string{"SW123", "BA355", "UA91"},
 	}
