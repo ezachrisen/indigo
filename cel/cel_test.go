@@ -12,9 +12,8 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 	"github.com/ezachrisen/indigo/testdata/school"
 	"github.com/google/cel-go/common/types/pb"
-
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/matryer/is"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func makeStudentData() map[string]interface{} {
@@ -28,9 +27,8 @@ func makeStudentData() map[string]interface{} {
 		"student.Adjustment":     2.1,
 		"isSummer":               false,
 		"now":                    "2019-08-03T16:00:00-07:00",
-		"specificTime":           &timestamp.Timestamp{Seconds: time.Now().Unix()},
+		"specificTime":           &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
-
 }
 
 func makeEducationSchema() indigo.Schema {
@@ -51,7 +49,6 @@ func makeEducationSchema() indigo.Schema {
 }
 
 func makeEducationRules1() *indigo.Rule {
-
 	rule1 := &indigo.Rule{
 		ID:     "student_actions",
 		Meta:   "d04ab6d9-f59d-9474-5c38-34d65380c612",
@@ -238,7 +235,6 @@ func makeEducationProtoRules(id string) *indigo.Rule {
 			},
 		},
 	}
-
 }
 
 func makeStudentProtoData() map[string]interface{} {
@@ -248,18 +244,16 @@ func makeStudentProtoData() map[string]interface{} {
 		Status:         school.Student_ENROLLED,
 		Grades:         []float64{4.0, 4.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
-		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
 	return map[string]interface{}{
 		"student": &s,
-		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
-
 }
 
 func TestBasicRules(t *testing.T) {
-
 	is := is.New(t)
 
 	e := indigo.NewEngine(cel.NewEvaluator())
@@ -276,12 +270,10 @@ func TestBasicRules(t *testing.T) {
 	is.True(!results.Results["honors_student"].ExpressionPass)
 	is.True(results.Results["at_risk"].ExpressionPass)
 	is.Equal(results.Results["at_risk"].Results["risk_factor"].Value.(float64), 8.0)
-
 }
 
 // Make sure that type mismatches between schema and rule are caught at compile time
 func TestCompileErrors(t *testing.T) {
-
 	is := is.New(t)
 
 	e := indigo.NewEngine(cel.NewEvaluator())
@@ -296,7 +288,6 @@ func TestCompileErrors(t *testing.T) {
 }
 
 func TestProtoMessage(t *testing.T) {
-
 	is := is.New(t)
 	e := indigo.NewEngine(cel.NewEvaluator())
 
@@ -313,7 +304,6 @@ func TestProtoMessage(t *testing.T) {
 }
 
 func TestDiagnosticOptions(t *testing.T) {
-
 	is := is.New(t)
 	e := indigo.NewEngine(cel.NewEvaluator())
 	r2 := makeEducationProtoRules("student_actions")
@@ -333,11 +323,9 @@ func TestDiagnosticOptions(t *testing.T) {
 		// 	fmt.Println(c.Diagnostics)
 		// }
 	}
-
 }
 
 func TestDiagnosticsWithEmptyRule(t *testing.T) {
-
 	is := is.New(t)
 	e := indigo.NewEngine(cel.NewEvaluator())
 	d := map[string]interface{}{"a": "a"} // dummy data, not important
@@ -352,11 +340,9 @@ func TestDiagnosticsWithEmptyRule(t *testing.T) {
 	u, err := e.Eval(context.Background(), r, d)
 	is.NoErr(err)
 	is.Equal(u.Diagnostics, nil)
-
 }
 
 func TestRuleResultTypes(t *testing.T) {
-
 	cases := []struct {
 		rule indigo.Rule
 		err  error
@@ -528,7 +514,6 @@ func TestDiagnosticGeneration(t *testing.T) {
 	is.NoErr(err)
 	_ = u.Diagnostics.String()
 	_ = indigo.DiagnosticsReport(u, makeStudentData())
-
 }
 
 // ------------------------------------------------------------------------------------------
@@ -540,7 +525,6 @@ func TestDiagnosticGeneration(t *testing.T) {
 //
 
 func BenchmarkSimpleRule(b *testing.B) {
-
 	education := makeEducationSchema()
 	data := makeStudentData()
 
@@ -570,7 +554,6 @@ func BenchmarkSimpleRule(b *testing.B) {
 }
 
 func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
-
 	e := indigo.NewEngine(cel.NewEvaluator())
 	education := makeEducationSchema()
 	data := makeStudentData()
@@ -601,7 +584,6 @@ func BenchmarkSimpleRuleWithDiagnostics(b *testing.B) {
 }
 
 func BenchmarkRuleWithArray(b *testing.B) {
-
 	e := indigo.NewEngine(cel.NewEvaluator())
 
 	education := makeEducationSchema()
@@ -676,12 +658,12 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 		Status:         school.Student_PROBATION,
 		Grades:         []float64{4.0, 4.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
-		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
 	data := map[string]interface{}{
 		"student": &s,
-		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
 	b.StartTimer()
 
@@ -692,11 +674,9 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 		}
 
 	}
-
 }
 
 func BenchmarkProtoWithoutSelf(b *testing.B) {
-
 	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
 	if err != nil {
 		b.Error(err)
@@ -734,12 +714,12 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 		Status:         school.Student_ENROLLED,
 		Grades:         []float64{4.0, 4.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
-		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
 	data := map[string]interface{}{
 		"student": &s,
-		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
 
 	for i := 0; i < b.N; i++ {
@@ -749,7 +729,6 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 		}
 
 	}
-
 }
 
 func BenchmarkProtoCreation(b *testing.B) {
@@ -787,7 +766,6 @@ func BenchmarkProtoCreation(b *testing.B) {
 		}
 
 	}
-
 }
 
 func BenchmarkEval2000Rules(b *testing.B) {
@@ -835,12 +813,12 @@ func BenchmarkEval2000Rules(b *testing.B) {
 		Status:         school.Student_PROBATION,
 		Grades:         []float64{2.0, 2.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
-		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
 	data := map[string]interface{}{
 		"student": &s,
-		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -898,12 +876,12 @@ func BenchmarkEval2000RulesWithSort(b *testing.B) {
 		Status:         school.Student_PROBATION,
 		Grades:         []float64{2.0, 2.0, 3.7},
 		Attrs:          map[string]string{"Nickname": "Joey"},
-		EnrollmentDate: &timestamp.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
 	data := map[string]interface{}{
 		"student": &s,
-		"now":     &timestamp.Timestamp{Seconds: time.Now().Unix()},
+		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {

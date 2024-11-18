@@ -1,16 +1,16 @@
 module github.com/ezachrisen/indigo
 
-go 1.18
+go 1.21
+
+toolchain go1.22.9
 
 require (
-	github.com/golang/protobuf v1.5.2
 
 	github.com/google/cel-go v0.13.0 //v0.6.0
 	github.com/jedib0t/go-pretty/v6 v6.4.4
 	github.com/matryer/is v1.4.0
-	github.com/mattn/go-sqlite3 v1.14.7
 	google.golang.org/genproto v0.0.0-20221027153422-115e99e71e1c
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.35.2
 )
 
 require (
