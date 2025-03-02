@@ -830,6 +830,60 @@ func BenchmarkEval2000Rules(b *testing.B) {
 	}
 }
 
+func BenchmarkEval2000RulesSimpleData(b *testing.B) {
+	b.StopTimer()
+	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
+	if err != nil {
+		b.Error(err)
+	}
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "gpa", Type: indigo.Float{}},
+			{Name: "minimum_gpa", Type: indigo.Float{}},
+			{Name: "status", Type: indigo.Int{}},
+		},
+	}
+
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	r := &indigo.Rule{
+		ID: "student_actions",
+
+		Schema: schema,
+		Rules:  map[string]*indigo.Rule{},
+	}
+
+	for i := 0; i < 2_000; i++ {
+		cr := &indigo.Rule{
+			ID:     fmt.Sprintf("at_risk_%d", i),
+			Expr:   `gpa < minimum_gpa && status == 1`,
+			Schema: schema,
+			Meta:   false,
+		}
+		r.Rules[cr.ID] = cr
+	}
+
+	err = e.Compile(r)
+	if err != nil {
+		log.Fatalf("Error adding ruleset: %v", err)
+	}
+
+	data := map[string]interface{}{
+		"gpa":         3.0,
+		"minimum_gpa": 3.7,
+		"status":      1,
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := e.Eval(context.Background(), r, data)
+		if err != nil {
+			b.Error(err)
+		}
+
+	}
+}
+
 func BenchmarkEval2000RulesWithSort(b *testing.B) {
 	b.StopTimer()
 	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
