@@ -193,7 +193,7 @@ func Example_map() {
 }
 
 // Demonstrates using the in operator on lists and maps
-func ExampleIn() {
+func Example_in() {
 
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
