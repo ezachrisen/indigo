@@ -38,7 +38,7 @@ func Example() {
 	}
 
 	// The data we wish to evaluate the rule on
-	data := map[string]interface{}{
+	data := map[string]any{
 		"message": "hello world",
 	}
 

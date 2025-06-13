@@ -5,6 +5,7 @@ package cel
 //    TO Go types
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -15,7 +16,7 @@ import (
 // convertDynamicMessageToProto converts a *dynamicpb.Message (represented by ref.Val)
 // to the wanted proto type represented as an indigo.Type.
 // Fails if the indigo.Type is not a proto, or the conversion to the wanted proto fails.
-func convertDynamicMessageToProto(r ref.Val, want indigo.Type) (interface{}, error) {
+func convertDynamicMessageToProto(r ref.Val, want indigo.Type) (any, error) {
 
 	msg, ok := want.(indigo.Proto)
 
@@ -24,7 +25,7 @@ func convertDynamicMessageToProto(r ref.Val, want indigo.Type) (interface{}, err
 	}
 
 	if msg.Message == nil {
-		return nil, fmt.Errorf("expected result protocol buffer is nil")
+		return nil, errors.New("expected result protocol buffer is nil")
 	}
 
 	pb, err := r.ConvertToNative(reflect.TypeOf(msg.Message))

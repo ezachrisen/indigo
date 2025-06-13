@@ -2,6 +2,7 @@ package indigo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -44,7 +45,7 @@ func NewEngine(e ExpressionCompilerEvaluator) *DefaultEngine {
 // evaluating. Options passed to this function will override the options set on the rules.
 // Eval uses the Evaluator provided to the engine to perform the expression evaluation.
 func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
-	d map[string]interface{}, opts ...EvalOption) (*Result, error) {
+	d map[string]any, opts ...EvalOption) (*Result, error) {
 
 	if err := validateEvalArguments(r, e, d); err != nil {
 		return nil, err
@@ -122,7 +123,7 @@ done: // break out of inner switch
 			// Decide if we should return the child rule's result or not
 			switch result.Pass {
 			case true:
-				if o.DiscardPass == false {
+				if !o.DiscardPass {
 					u.Results[cr.ID] = result
 				}
 			case false:
@@ -131,7 +132,7 @@ done: // break out of inner switch
 					u.Results[cr.ID] = result
 				case Discard:
 				case DiscardOnlyIfExpressionFailed:
-					if result.ExpressionPass == true {
+					if result.ExpressionPass {
 						u.Results[cr.ID] = result
 					}
 				}
@@ -288,8 +289,8 @@ type EvalOptions struct {
 	SortFunc func(rules []*Rule, i, j int) bool `json:"-"`
 
 	// this special field is updated by the SortFunc option. It is necessary
-	// because we need to know if the local rule-specific sort funtion
-	// is being overriden by the a global option.
+	// because we need to know if the local rule-specific sort function
+	// is being overridden by a global option.
 	//  (1) Rule supplied its own sort function, overriding with global
 	//  (2) Rule did not supply its own sort
 	// and was overridden by a global eval option,
@@ -385,23 +386,23 @@ func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
 }
 
 // validateEvalArguments checks the input parameters to engine.Eval
-func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]interface{}) error {
+func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]any) error {
 
 	switch {
 	case r == nil:
-		return fmt.Errorf("rule is nil")
+		return errors.New("rule is nil")
 	case e == nil:
-		return fmt.Errorf("engine is nil")
+		return errors.New("engine is nil")
 	case e.e == nil:
-		return fmt.Errorf("evaluator is nil")
+		return errors.New("evaluator is nil")
 	case d == nil:
-		return fmt.Errorf("data is nil")
+		return errors.New("data is nil")
 	default:
 		return nil
 	}
 }
 
-func setSelfKey(r *Rule, d map[string]interface{}) {
+func setSelfKey(r *Rule, d map[string]any) {
 	if d == nil {
 		return
 	}
@@ -434,11 +435,11 @@ func validateCompileArguments(r *Rule, e *DefaultEngine) error {
 
 	switch {
 	case r == nil:
-		return fmt.Errorf("rule is nil")
+		return errors.New("rule is nil")
 	case e == nil:
-		return fmt.Errorf("engine is nil")
+		return errors.New("engine is nil")
 	case e.e == nil:
-		return fmt.Errorf("evaluator is nil")
+		return errors.New("evaluator is nil")
 	default:
 		return nil
 	}

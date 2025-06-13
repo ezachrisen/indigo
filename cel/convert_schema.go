@@ -8,6 +8,7 @@ package cel
 // and perform type checking on it.
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/ezachrisen/indigo"
@@ -25,7 +26,7 @@ func convertIndigoSchemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, erro
 
 	// for protocol buffer types we also have to register the type separately
 	// we'll collect them in types
-	types := []interface{}{}
+	types := []any{}
 
 	for _, d := range s.Elements {
 		typ, err := convertIndigoToExprType(d.Type)
@@ -44,7 +45,7 @@ func convertIndigoSchemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, erro
 	opts = append(opts, celgo.Declarations(declarations...))
 	opts = append(opts, celgo.Types(types...))
 	if len(opts) == 0 {
-		return nil, fmt.Errorf("no valid schema")
+		return nil, errors.New("no valid schema")
 	}
 
 	return opts, nil

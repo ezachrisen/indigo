@@ -1,6 +1,7 @@
 package indigo
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -20,7 +21,7 @@ type Schema struct {
 	// A user-friendly description of the schema
 	Description string `json:"description,omitempty"`
 	// User-defined value
-	Meta interface{} `json:"-"`
+	Meta any `json:"-"`
 	// List of data elements supported by this schema
 	Elements []DataElement `json:"elements,omitempty"`
 }
@@ -103,17 +104,17 @@ type Proto struct {
 // proto type.
 func (p *Proto) ProtoFullName() (string, error) {
 	if p == nil || p.Message == nil {
-		return "", fmt.Errorf("indigo.Proto.Message is nil")
+		return "", errors.New("indigo.Proto.Message is nil")
 	}
 
 	pr := p.Message.ProtoReflect()
 	if pr == nil {
-		return "", fmt.Errorf("indigo.Proto.Message has nil proto reflect")
+		return "", errors.New("indigo.Proto.Message has nil proto reflect")
 	}
 
 	desc := pr.Descriptor()
 	if desc == nil {
-		return "", fmt.Errorf("indigo.Proto.Message is missing Descriptor")
+		return "", errors.New("indigo.Proto.Message is missing Descriptor")
 	}
 
 	return string(desc.FullName()), nil
@@ -255,7 +256,7 @@ func parseProto(t string) (Type, error) {
 	endParen := strings.Index(t, ")")
 
 	if startParen == -1 || endParen == -1 || startParen > endParen || endParen > len(t) || endParen-startParen == 1 {
-		return Any{}, fmt.Errorf("bad proto specification")
+		return Any{}, errors.New("bad proto specification")
 	}
 
 	name := t[startParen+1 : endParen]

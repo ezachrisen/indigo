@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,7 @@ func TestTrueIfAnyBehavior(t *testing.T) {
 	is := is.New(t)
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
-	data := map[string]interface{}{}
+	data := map[string]any{}
 	ctx := context.Background()
 
 	ruleL2 := &indigo.Rule{ID: "l2", Expr: `false`}
@@ -53,8 +54,8 @@ func TestTrueIfAnyBehavior(t *testing.T) {
 
 	// function to check the changes over the expected rules tree
 	check := func(l1, l2 bool) {
-		ruleL1_1.Expr = fmt.Sprintf("%t", l1) // assign the result of an Exp for the child rule
-		ruleL2.Expr = fmt.Sprintf("%t", l2)
+		ruleL1_1.Expr = strconv.FormatBool(l1) // assign the result of an Exp for the child rule
+		ruleL2.Expr = strconv.FormatBool(l2)
 
 		expectedResults[ruleL2.ID] = l2
 		expectedResults[ruleL1_1.ID] = l1       // change the expected value of the leaf
@@ -108,7 +109,7 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 	err := e.Compile(r)
 	is.NoErr(err)
 
-	result, err := e.Eval(context.Background(), r, map[string]interface{}{})
+	result, err := e.Eval(context.Background(), r, map[string]any{})
 	is.NoErr(err)
 	//	fmt.Println(m.rulesTested)
 	//	fmt.Println(result)
@@ -159,7 +160,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 		"e3":    true,
 	}
 
-	//If everything works, the rules were evaluated in this order
+	// If everything works, the rules were evaluated in this order
 	//	(alphabetically)
 	expectedOrder := []string{
 		"rule1",
@@ -180,10 +181,10 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 		"e3",
 	}
 
-	result, err := e.Eval(context.Background(), r, map[string]interface{}{}, indigo.ReturnDiagnostics(true))
+	result, err := e.Eval(context.Background(), r, map[string]any{}, indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 	//	fmt.Println(m.rulesTested)
-	//fmt.Println(result)
+	// fmt.Println(result)
 	is.NoErr(match(flattenResultsExprResult(result), expectedResults))
 	// fmt.Printf("Expected: %+v\n", expectedOrder)
 	// fmt.Printf("Got     : %+v\n", flattenResultsEvaluated(result))
@@ -210,7 +211,7 @@ func TestSelf(t *testing.T) {
 	_, err = e.Eval(context.Background(), r, nil)
 	is.True(err != nil) // should get an error if the data map is nil and we try to use 'self'
 
-	result, err := e.Eval(context.Background(), r, map[string]interface{}{"anything": "anything"})
+	result, err := e.Eval(context.Background(), r, map[string]any{"anything": "anything"})
 	is.NoErr(err)
 	is.Equal(result.Results["D"].Value.(int), 22)                     // D should return 'self', which is 22
 	is.Equal(result.Results["D"].Results["d1"].ExpressionPass, false) // d1 should not inherit D's self
@@ -228,12 +229,12 @@ func TestNilDataOrRule(t *testing.T) {
 	is.True(err != nil) // should get an error if the data map is nil
 	is.True(strings.Contains(err.Error(), "data is nil"))
 
-	_, err = e.Eval(context.Background(), nil, map[string]interface{}{})
+	_, err = e.Eval(context.Background(), nil, map[string]any{})
 	is.True(err != nil) // should get an error if the rule is nil
 	is.True(strings.Contains(err.Error(), "rule is nil"))
 
 	r.Rules["B"].Rules["oops"] = nil
-	_, err = e.Eval(context.Background(), r, map[string]interface{}{})
+	_, err = e.Eval(context.Background(), r, map[string]any{})
 	is.True(err != nil) // should get an error if the rule is nil
 	is.True(strings.Contains(err.Error(), "rule is nil"))
 
@@ -246,7 +247,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
-	d := map[string]interface{}{"a": "a"} // dummy data, not important
+	d := map[string]any{"a": "a"} // dummy data, not important
 	w := map[string]bool{                 // the wanted expression evaluation results with no options in effect
 		"rule1": true,
 		"D":     true,
@@ -418,7 +419,7 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
-	d := map[string]interface{}{"a": "a"} // dummy data, not important
+	d := map[string]any{"a": "a"} // dummy data, not important
 	// the wanted rule evaluation results with no options in effect
 	// Note that the rule produced by make_rule is manipulated in the loop before
 	// running the test cases
@@ -654,7 +655,7 @@ func TestEvalTrueIfAny(t *testing.T) {
 	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
-	d := map[string]interface{}{"a": "a"} // dummy data, not important
+	d := map[string]any{"a": "a"} // dummy data, not important
 	// the wanted rule evaluation results with no options in effect
 	// Note that the rule produced by make_rule is manipulated in the loop before
 	// running the test cases
@@ -820,7 +821,7 @@ func TestDiagnosticOptions(t *testing.T) {
 	is := is.New(t)
 	m := newMockEvaluator()
 	e := indigo.NewEngine(m)
-	d := map[string]interface{}{"a": "a"} // dummy data, not important
+	d := map[string]any{"a": "a"} // dummy data, not important
 
 	cases := map[string]struct {
 		engineDiagnosticCompileRequired bool // whether engine should require compile-time diagnostics
@@ -860,7 +861,7 @@ func TestDiagnosticOptions(t *testing.T) {
 
 		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(c.evalDiagnostics))
 		is.NoErr(err)
-		//fmt.Println(k)
+		// fmt.Println(k)
 		//fmt.Println(indigo.DiagnosticsReport(u, nil))
 		switch c.wantDiagnostics {
 		case true:
@@ -898,7 +899,7 @@ func TestPartialDiagnostics(t *testing.T) {
 	// Set the mock engine to require that diagnostics must be turned on at compile time,
 	// or not. This is a special feature of the mock engine, useful for testing.
 	m.diagnosticCompileRequired = true
-	d := map[string]interface{}{"a": "a"} // dummy data, not important
+	d := map[string]any{"a": "a"} // dummy data, not important
 	r := makeRule()
 
 	// first, compile all the rules WITHOUT diagnostics
@@ -1138,7 +1139,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 		err := e.Compile(r)
 		is.NoErr(err)
 
-		result, err := e.Eval(context.Background(), r, map[string]interface{}{}, c.opts...)
+		result, err := e.Eval(context.Background(), r, map[string]any{}, c.opts...)
 		is.NoErr(err)
 		c.chk(result)
 	}
@@ -1155,6 +1156,6 @@ func TestTimeout(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
-	_, err := e.Eval(ctx, r, map[string]interface{}{})
+	_, err := e.Eval(ctx, r, map[string]any{})
 	is.True(errors.Is(err, context.DeadlineExceeded))
 }

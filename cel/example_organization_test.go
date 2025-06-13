@@ -22,7 +22,7 @@ func Example_manual() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			Id:      927312,
 			Age:     21,
@@ -34,17 +34,17 @@ func Example_manual() {
 		},
 	}
 
-	accounting_honors := indigo.Rule{
+	accountingHonors := indigo.Rule{
 		Schema: education,
 		Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") && s.gpa > 3`,
 	}
 
-	arts_honors := indigo.Rule{
+	artsHonors := indigo.Rule{
 		Schema: education,
 		Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") && s.gpa > 3`,
 	}
 
-	last_3_grades_3_or_above := indigo.Rule{
+	last3Grades3OrAbove := indigo.Rule{
 		Schema: education,
 		Expr: `size(s.grades) >=3 
                  && s.grades[size(s.grades)-1] >= 3.0 
@@ -54,39 +54,39 @@ func Example_manual() {
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
-	err := engine.Compile(&accounting_honors)
+	err := engine.Compile(&accountingHonors)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
 
-	results, err := engine.Eval(context.Background(), &accounting_honors, data)
+	results, err := engine.Eval(context.Background(), &accountingHonors, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
 	fmt.Println("accounting_honors?", results.ExpressionPass)
 
-	err = engine.Compile(&arts_honors)
+	err = engine.Compile(&artsHonors)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
 
-	results, err = engine.Eval(context.Background(), &arts_honors, data)
+	results, err = engine.Eval(context.Background(), &artsHonors, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
 	}
 	fmt.Println("arts_honors?", results.ExpressionPass)
 
-	err = engine.Compile(&last_3_grades_3_or_above)
+	err = engine.Compile(&last3Grades3OrAbove)
 	if err != nil {
 		fmt.Printf("Error adding rule %v", err)
 		return
 	}
 
-	results, err = engine.Eval(context.Background(), &last_3_grades_3_or_above, data)
+	results, err = engine.Eval(context.Background(), &last3Grades3OrAbove, data)
 	if err != nil {
 		fmt.Printf("Error evaluating: %v", err)
 		return
@@ -109,7 +109,7 @@ func Example_indigo() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			Id:      927312,
 			Age:     21,
@@ -176,7 +176,7 @@ func Example_stopIfParentNegative() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			Id:      927312,
 			Age:     21,

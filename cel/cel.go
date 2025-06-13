@@ -1,6 +1,7 @@
 package cel
 
 import (
+	"errors"
 	"fmt" // required by CEL to construct a proto from an expression
 	"strings"
 	"sync"
@@ -57,7 +58,7 @@ func FixedSchema(schema *indigo.Schema) CelOption {
 // type and symbol information in diagnostics.
 //
 // Any errors in compilation are returned with a nil program
-func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, _ bool) (interface{}, error) {
+func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, _ bool) (any, error) {
 
 	// A blank expression is ok, but it won't pass through the compilation
 	if expr == "" {
@@ -77,7 +78,6 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 			return
 		}
 		e.fixedEnv = env
-		return
 	})
 
 	if err != nil {
@@ -95,7 +95,7 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 	}
 
 	if env == nil {
-		return nil, fmt.Errorf("no valid CEL environment")
+		return nil, errors.New("no valid CEL environment")
 	}
 
 	// Parse the rule expression to an AST
@@ -148,8 +148,8 @@ func celEnv(schema indigo.Schema) (*celgo.Env, error) {
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
-func (*Evaluator) Evaluate(data map[string]interface{}, expr string, _ indigo.Schema, _ interface{},
-	evalData interface{}, expectedResultType indigo.Type, returnDiagnostics bool) (interface{}, *indigo.Diagnostics, error) {
+func (*Evaluator) Evaluate(data map[string]any, expr string, _ indigo.Schema, _ any,
+	evalData any, expectedResultType indigo.Type, returnDiagnostics bool) (any, *indigo.Diagnostics, error) {
 
 	program, ok := evalData.(celProgram)
 
@@ -161,7 +161,7 @@ func (*Evaluator) Evaluate(data map[string]interface{}, expr string, _ indigo.Sc
 		if expr == "" {
 			return true, nil, nil
 		}
-		return nil, nil, fmt.Errorf("missing program")
+		return nil, nil, errors.New("missing program")
 	}
 
 	rawValue, details, err := program.program.Eval(data)
