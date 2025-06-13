@@ -7,8 +7,8 @@ package indigo
 // Evaluate should check the result against the expected resultType and return an error if the
 // result does not match.
 type ExpressionEvaluator interface {
-	Evaluate(data map[string]interface{}, expr string, s Schema,
-		self interface{}, evalData interface{}, resultType Type, returnDiagnostics bool) (interface{}, *Diagnostics, error)
+	Evaluate(data map[string]any, expr string, s Schema,
+		self any, evalData any, resultType Type, returnDiagnostics bool) (any, *Diagnostics, error)
 }
 
 // ExpressionCompiler is the interface that wraps the Compile method.
@@ -21,7 +21,7 @@ type ExpressionEvaluator interface {
 // dryRun performs the compilation, but doesn't store the results, mainly
 // for the purpose of checking rule correctness.
 type ExpressionCompiler interface {
-	Compile(expr string, s Schema, resultType Type, collectDiagnostics, dryRun bool) (interface{}, error)
+	Compile(expr string, s Schema, resultType Type, collectDiagnostics, dryRun bool) (any, error)
 }
 
 // ExpressionCompilerEvaluator is the interface that groups the ExpressionCompiler

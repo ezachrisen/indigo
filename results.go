@@ -2,6 +2,7 @@ package indigo
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -29,7 +30,7 @@ type Result struct {
 	// The raw result of evaluating the expression. Boolean for logical expressions.
 	// Calculations, object constructions or string manipulations will return the appropriate Go type.
 	// This value is never affected by child rules.
-	Value interface{}
+	Value any
 
 	// Results of evaluating the child rules.
 	Results map[string]*Result
@@ -90,15 +91,15 @@ func (u *Result) resultsToRows(n int) []table.Row {
 		fmt.Sprintf("%s%s", indent, u.Rule.ID),
 		boolString(u.Pass),
 		boolString(u.ExpressionPass),
-		fmt.Sprintf("%d", len(u.Results)),
+		strconv.Itoa(len(u.Results)),
 		fmt.Sprintf("%v", u.Value),
-		trueFalse(fmt.Sprintf("%t", diag)),
-		trueFalse(fmt.Sprintf("%t", u.EvalOptions.TrueIfAny)),
-		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopIfParentNegative)),
-		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopFirstPositiveChild)),
-		trueFalse(fmt.Sprintf("%t", u.EvalOptions.StopFirstNegativeChild)),
-		trueFalse(fmt.Sprintf("%t", u.EvalOptions.DiscardPass)),
-		trueFalse(fmt.Sprintf("%d", u.EvalOptions.DiscardFail)),
+		trueFalse(strconv.FormatBool(diag)),
+		trueFalse(strconv.FormatBool(u.EvalOptions.TrueIfAny)),
+		trueFalse(strconv.FormatBool(u.EvalOptions.StopIfParentNegative)),
+		trueFalse(strconv.FormatBool(u.EvalOptions.StopFirstPositiveChild)),
+		trueFalse(strconv.FormatBool(u.EvalOptions.StopFirstNegativeChild)),
+		trueFalse(strconv.FormatBool(u.EvalOptions.DiscardPass)),
+		trueFalse(strconv.Itoa(int(u.EvalOptions.DiscardFail))),
 	}
 
 	rows = append(rows, row)

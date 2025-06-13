@@ -249,7 +249,7 @@ func TestNils(t *testing.T) {
 	_, err = collectDiagnostics(nil, &celgo.EvalDetails{}, nil)
 	is.True(err != nil)
 
-	_, err = collectDiagnostics(nil, nil, map[string]interface{}{})
+	_, err = collectDiagnostics(nil, nil, map[string]any{})
 	is.True(err != nil)
 
 	_, err = printAST(nil, 0, nil, nil, nil)
@@ -264,7 +264,7 @@ func TestNils(t *testing.T) {
 	_, err = printAST(nil, 0, nil, &celgo.Ast{}, nil)
 	is.True(err != nil)
 
-	_, err = printAST(nil, 0, nil, nil, map[string]interface{}{})
+	_, err = printAST(nil, 0, nil, nil, map[string]any{})
 	is.True(err != nil)
 
 }

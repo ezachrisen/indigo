@@ -34,7 +34,7 @@ const (
 // The children represent elements of the expression evaluated.
 type Diagnostics struct {
 	Expr      string // the part of the rule expression evaluated
-	Interface interface{}
+	Interface any
 	Source    ValueSource   // where the value came from: input data, or evaluted by the engine
 	Line      int           // the 1-based line number in the original source expression
 	Column    int           // the 0-based column number in the original source expression
@@ -73,7 +73,7 @@ func (d *Diagnostics) String() string {
 
 // DiagnosticsReport produces an ASCII report of the input rules, input data,
 // the evaluation diagnostics and the results.
-func DiagnosticsReport(u *Result, data map[string]interface{}) string {
+func DiagnosticsReport(u *Result, data map[string]any) string {
 
 	// b := box.New(box.Config{Px: 2, Py: 1, Type: "Double", Color: "Cyan", TitlePos: "Top", ContentAlign: "Left"})
 	s := strings.Builder{}
@@ -83,7 +83,7 @@ func DiagnosticsReport(u *Result, data map[string]interface{}) string {
 }
 
 // Descend recursively though the results
-func diagnosticsRecursive(u *Result, data map[string]interface{}) string {
+func diagnosticsRecursive(u *Result, data map[string]any) string {
 
 	s := strings.Builder{}
 	if u == nil {
@@ -163,7 +163,7 @@ func rulesEvaluated(u *Result, n int) string {
 }
 
 // dataTable renders a table of the input data to a rule
-func dataTable(data map[string]interface{}) table.Writer {
+func dataTable(data map[string]any) table.Writer {
 	tw := table.NewWriter()
 	tw.AppendHeader(table.Row{"Name", "Value"})
 	for k, v := range data {
