@@ -2,9 +2,6 @@ protofiles = ./proto/*.proto
 outputdir=./school
 protodir=./proto
 pbfiles =  ./school/*.pb.go
-descriptor = ../examples/dynamic_schema/school.descriptor
-
-
 
 all: $(pbfiles) $(descriptor) test
 	go test -v ./...
@@ -12,10 +9,7 @@ all: $(pbfiles) $(descriptor) test
 $(pbfiles) $(descriptor): $(protofiles)
 	protoc --go_out=$(outputdir) --go_opt=paths=source_relative \
 	--go-grpc_out=$(outputdir) --go-grpc_opt=paths=source_relative,require_unimplemented_servers=false \
-	-I=$(protodir) \
-	--descriptor_set_out $(descriptor) \
-        --include_imports \
-        $(protodir)/*.proto
+	-I=$(protodir)
 
 
 clean:
