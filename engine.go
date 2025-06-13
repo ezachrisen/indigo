@@ -44,7 +44,7 @@ func NewEngine(e ExpressionCompilerEvaluator) *DefaultEngine {
 // evaluating. Options passed to this function will override the options set on the rules.
 // Eval uses the Evaluator provided to the engine to perform the expression evaluation.
 func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
-	d map[string]interface{}, opts ...EvalOption) (*Result, error) {
+	d map[string]any, opts ...EvalOption) (*Result, error) {
 
 	if err := validateEvalArguments(r, e, d); err != nil {
 		return nil, err
@@ -385,7 +385,7 @@ func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
 }
 
 // validateEvalArguments checks the input parameters to engine.Eval
-func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]interface{}) error {
+func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]any) error {
 
 	switch {
 	case r == nil:
@@ -401,7 +401,7 @@ func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]interface{}) 
 	}
 }
 
-func setSelfKey(r *Rule, d map[string]interface{}) {
+func setSelfKey(r *Rule, d map[string]any) {
 	if d == nil {
 		return
 	}

@@ -57,7 +57,7 @@ func FixedSchema(schema *indigo.Schema) CelOption {
 // type and symbol information in diagnostics.
 //
 // Any errors in compilation are returned with a nil program
-func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, _ bool) (interface{}, error) {
+func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, _ bool) (any, error) {
 
 	// A blank expression is ok, but it won't pass through the compilation
 	if expr == "" {
@@ -148,8 +148,8 @@ func celEnv(schema indigo.Schema) (*celgo.Env, error) {
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
-func (*Evaluator) Evaluate(data map[string]interface{}, expr string, _ indigo.Schema, _ interface{},
-	evalData interface{}, expectedResultType indigo.Type, returnDiagnostics bool) (interface{}, *indigo.Diagnostics, error) {
+func (*Evaluator) Evaluate(data map[string]any, expr string, _ indigo.Schema, _ any,
+	evalData any, expectedResultType indigo.Type, returnDiagnostics bool) (any, *indigo.Diagnostics, error) {
 
 	program, ok := evalData.(celProgram)
 

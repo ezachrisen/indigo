@@ -41,7 +41,7 @@ func Example() {
 		return
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"message": "hello world",
 	}
 
@@ -83,7 +83,7 @@ func Example_basic() {
 		return
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"x": 11,
 		"y": "red",
 	}
@@ -126,7 +126,7 @@ func Example_list() {
 		return
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"grades": []float64{3.4, 3.6, 3.8, 2.9},
 	}
 
@@ -177,7 +177,7 @@ func Example_map() {
 		return
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"flights": map[string]string{"UA1500": "On Time", "DL232": "Delayed", "AA1622": "Delayed"},
 	}
 
@@ -219,7 +219,7 @@ func Example_in() {
 		return
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"x":       "ABC123",
 		"flights": map[string]string{"UA1500": "On Time", "DL232": "Delayed", "AA1622": "Delayed"},
 		"holding": []string{"SW123", "BA355", "UA91"},
@@ -245,7 +245,7 @@ func Example_nativeTimestampComparison() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"then": "1972-01-01T10:00:20.021-05:00", //"2018-08-03T16:00:00-07:00",
 		"now":  timestamppb.Now(),
 	}
@@ -281,7 +281,7 @@ func Example_protoBasic() {
 			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 		},
 	}
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &school.Student{
 			Age: 21,
 		},
@@ -317,7 +317,7 @@ func Example_protoEnum() {
 			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 		},
 	}
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &school.Student{
 			Status: school.Student_ENROLLED,
 		},
@@ -353,7 +353,7 @@ func Example_protoOneof() {
 			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 		},
 	}
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &school.Student{
 			Status: school.Student_ENROLLED,
 			HousingAddress: &school.Student_OnCampus{
@@ -395,7 +395,7 @@ func Example_protoExistsOperator() {
 			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 		},
 	}
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 		},
@@ -434,7 +434,7 @@ func Example_protoTimestampComparison() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &school.Student{
 			// Make a protobuf timestamp from a time.Time
 			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
@@ -487,7 +487,7 @@ func Example_protoDurationComparison() {
 
 	godur, _ := time.ParseDuration("10h")
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"smry": &school.StudentSummary{
 			Tenure: durationpb.New(godur),
 		},
@@ -527,7 +527,7 @@ func Example_protoTimestampAndDurationComparison() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
 		},
@@ -574,7 +574,7 @@ func Example_protoTimestampPart() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
 		},
@@ -614,7 +614,7 @@ func Example_protoTimestampPartTZ() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
 		},
@@ -656,7 +656,7 @@ func Example_protoDurationCalculation() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
 		},
@@ -697,7 +697,7 @@ func Example_protoNestedMessages() {
 			{Name: "x", Type: indigo.Proto{Message: &school.Student{}}}},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"x": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
@@ -742,7 +742,7 @@ func Example_protoConstruction() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
 			Suspensions: []*school.Student_Suspension{
@@ -798,7 +798,7 @@ func Example_protoConstructionConditional() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &school.Student{
 			Gpa:    4.0,
 			Grades: []float64{3.0, 2.9, 4.0, 2.1},
@@ -898,7 +898,7 @@ func Example_alarms() {
 		return
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"cpu_utilization":    99,
 		"disk_free_space":    85,
 		"memory_utilization": 89,
@@ -981,7 +981,7 @@ func Example_alarmsTwoLevel() {
 		return
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"cpu_utilization":     99,
 		"disk_free_space":     85,
 		"memory_utilization":  89,

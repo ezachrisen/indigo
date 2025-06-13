@@ -61,17 +61,17 @@ type Rule struct {
 	// Add the corresponding object in the data with the reserved key name selfKey
 	// (see constants).
 	// Child rules do not inherit the self value.
-	Self interface{} `json:"-"`
+	Self any `json:"-"`
 
 	// A set of child rules.
 	Rules map[string]*Rule `json:"rules,omitempty"`
 
 	// Reference to intermediate compilation / evaluation data.
-	Program interface{} `json:"-"`
+	Program any `json:"-"`
 
 	// A reference to any object.
 	// Not used by the rules engine.
-	Meta interface{} `json:"-"`
+	Meta any `json:"-"`
 
 	// Options determining how the child rules should be handled.
 	EvalOptions EvalOptions `json:"eval_options"`

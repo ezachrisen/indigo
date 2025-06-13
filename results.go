@@ -29,7 +29,7 @@ type Result struct {
 	// The raw result of evaluating the expression. Boolean for logical expressions.
 	// Calculations, object constructions or string manipulations will return the appropriate Go type.
 	// This value is never affected by child rules.
-	Value interface{}
+	Value any
 
 	// Results of evaluating the child rules.
 	Results map[string]*Result

@@ -15,7 +15,7 @@ import (
 // convertDynamicMessageToProto converts a *dynamicpb.Message (represented by ref.Val)
 // to the wanted proto type represented as an indigo.Type.
 // Fails if the indigo.Type is not a proto, or the conversion to the wanted proto fails.
-func convertDynamicMessageToProto(r ref.Val, want indigo.Type) (interface{}, error) {
+func convertDynamicMessageToProto(r ref.Val, want indigo.Type) (any, error) {
 
 	msg, ok := want.(indigo.Proto)
 

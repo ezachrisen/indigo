@@ -1,8 +1,6 @@
 module github.com/ezachrisen/indigo
 
-go 1.22.0
-
-toolchain go1.24.0
+go 1.24.0
 
 require (
 	github.com/google/cel-go v0.25.0

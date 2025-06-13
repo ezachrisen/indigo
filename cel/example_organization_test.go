@@ -22,7 +22,7 @@ func Example_manual() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			Id:      927312,
 			Age:     21,
@@ -109,7 +109,7 @@ func Example_indigo() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			Id:      927312,
 			Age:     21,
@@ -176,7 +176,7 @@ func Example_stopIfParentNegative() {
 		},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"s": &school.Student{
 			Id:      927312,
 			Age:     21,

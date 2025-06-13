@@ -20,7 +20,7 @@ type Schema struct {
 	// A user-friendly description of the schema
 	Description string `json:"description,omitempty"`
 	// User-defined value
-	Meta interface{} `json:"-"`
+	Meta any `json:"-"`
 	// List of data elements supported by this schema
 	Elements []DataElement `json:"elements,omitempty"`
 }

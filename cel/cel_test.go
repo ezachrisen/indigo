@@ -16,13 +16,13 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func makeStudentData() map[string]interface{} {
-	return map[string]interface{}{
+func makeStudentData() map[string]any {
+	return map[string]any{
 		"student.ID":             "12312",
 		"student.Age":            16,
 		"student.GPA":            2.2,
 		"student.Status":         "Enrolled",
-		"student.Grades":         []interface{}{"A", "B", "A"},
+		"student.Grades":         []any{"A", "B", "A"},
 		"student.EnrollmentDate": "2018-08-03T16:00:00-07:00",
 		"student.Adjustment":     2.1,
 		"isSummer":               false,
@@ -237,7 +237,7 @@ func makeEducationProtoRules(id string) *indigo.Rule {
 	}
 }
 
-func makeStudentProtoData() map[string]interface{} {
+func makeStudentProtoData() map[string]any {
 	s := school.Student{
 		Age:            16,
 		Gpa:            3.76,
@@ -247,7 +247,7 @@ func makeStudentProtoData() map[string]interface{} {
 		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		"student": &s,
 		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
@@ -328,7 +328,7 @@ func TestDiagnosticOptions(t *testing.T) {
 func TestDiagnosticsWithEmptyRule(t *testing.T) {
 	is := is.New(t)
 	e := indigo.NewEngine(cel.NewEvaluator())
-	d := map[string]interface{}{"a": "a"} // dummy data, not important
+	d := map[string]any{"a": "a"} // dummy data, not important
 
 	r := &indigo.Rule{
 		ID: "root",
@@ -661,7 +661,7 @@ func BenchmarkProtoWithSelfX(b *testing.B) {
 		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &s,
 		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
@@ -717,7 +717,7 @@ func BenchmarkProtoWithoutSelf(b *testing.B) {
 		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &s,
 		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
@@ -816,7 +816,7 @@ func BenchmarkEval2000Rules(b *testing.B) {
 		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &s,
 		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}
@@ -879,7 +879,7 @@ func BenchmarkEval2000RulesWithSort(b *testing.B) {
 		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"student": &s,
 		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
 	}

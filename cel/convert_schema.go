@@ -25,7 +25,7 @@ func convertIndigoSchemaToDeclarations(s indigo.Schema) ([]celgo.EnvOption, erro
 
 	// for protocol buffer types we also have to register the type separately
 	// we'll collect them in types
-	types := []interface{}{}
+	types := []any{}
 
 	for _, d := range s.Elements {
 		typ, err := convertIndigoToExprType(d.Type)
