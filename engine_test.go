@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -53,8 +54,8 @@ func TestTrueIfAnyBehavior(t *testing.T) {
 
 	// function to check the changes over the expected rules tree
 	check := func(l1, l2 bool) {
-		ruleL1_1.Expr = fmt.Sprintf("%t", l1) // assign the result of an Exp for the child rule
-		ruleL2.Expr = fmt.Sprintf("%t", l2)
+		ruleL1_1.Expr = strconv.FormatBool(l1) // assign the result of an Exp for the child rule
+		ruleL2.Expr = strconv.FormatBool(l2)
 
 		expectedResults[ruleL2.ID] = l2
 		expectedResults[ruleL1_1.ID] = l1       // change the expected value of the leaf
@@ -159,7 +160,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 		"e3":    true,
 	}
 
-	//If everything works, the rules were evaluated in this order
+	// If everything works, the rules were evaluated in this order
 	//	(alphabetically)
 	expectedOrder := []string{
 		"rule1",
@@ -183,7 +184,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	result, err := e.Eval(context.Background(), r, map[string]any{}, indigo.ReturnDiagnostics(true))
 	is.NoErr(err)
 	//	fmt.Println(m.rulesTested)
-	//fmt.Println(result)
+	// fmt.Println(result)
 	is.NoErr(match(flattenResultsExprResult(result), expectedResults))
 	// fmt.Printf("Expected: %+v\n", expectedOrder)
 	// fmt.Printf("Got     : %+v\n", flattenResultsEvaluated(result))
@@ -860,7 +861,7 @@ func TestDiagnosticOptions(t *testing.T) {
 
 		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(c.evalDiagnostics))
 		is.NoErr(err)
-		//fmt.Println(k)
+		// fmt.Println(k)
 		//fmt.Println(indigo.DiagnosticsReport(u, nil))
 		switch c.wantDiagnostics {
 		case true:

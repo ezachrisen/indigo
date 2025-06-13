@@ -7,6 +7,7 @@ package cel
 //
 
 import (
+	"errors"
 	"fmt" // required by CEL to construct a proto from an expression
 
 	"github.com/ezachrisen/indigo"
@@ -45,7 +46,7 @@ func doTypesMatch(cel *gexpr.Type, igo indigo.Type) error {
 func indigoType(t *gexpr.Type) (indigo.Type, error) {
 
 	if t == nil {
-		return nil, fmt.Errorf("attempt to convert nil to indigo type")
+		return nil, errors.New("attempt to convert nil to indigo type")
 	}
 
 	switch v := t.TypeKind.(type) {

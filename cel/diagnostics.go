@@ -4,6 +4,7 @@ package cel
 // The diagnostic data is returned to the Indigo user if requested.
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -13,11 +14,11 @@ import (
 )
 
 // collectDiagnostics walks the CEL AST and annotates it with the result of the evaluation, returning
-// a Diagnositc node.
+// a Diagnostic node.
 func collectDiagnostics(ast *celgo.Ast, d *celgo.EvalDetails, data map[string]any) (*indigo.Diagnostics, error) {
 
 	if ast == nil {
-		return nil, fmt.Errorf("ast is nil")
+		return nil, errors.New("ast is nil")
 	}
 
 	diag, err := printAST(ast.Expr(), 0, d, ast, data)
@@ -35,7 +36,7 @@ func printAST(ex *gexpr.Expr, n int, details *celgo.EvalDetails, ast *celgo.Ast,
 	d := indigo.Diagnostics{}
 
 	if details == nil || details.State() == nil {
-		return d, fmt.Errorf("details or details.State is nil")
+		return d, errors.New("details or details.State is nil")
 	}
 
 	if ex == nil {

@@ -1,6 +1,7 @@
 package indigo_test
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,7 +30,7 @@ func newMockEvaluator() *mockEvaluator {
 	return &mockEvaluator{}
 }
 
-func (m *mockEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics, dryRun bool) (any, error) {
+func (m *mockEvaluator) Compile(_ string, _ indigo.Schema, _ indigo.Type, collectDiagnostics, _ bool) (any, error) {
 
 	p := program{}
 	if collectDiagnostics {
@@ -48,10 +49,9 @@ func (m *mockEvaluator) Evaluate(data map[string]any, expr string, s indigo.Sche
 	p, ok := prog.(program)
 	if m.diagnosticCompileRequired {
 		if !ok {
-			return false, nil, fmt.Errorf("compiled data type assertion failed")
-		} else {
-			prg = p
+			return false, nil, errors.New("compiled data type assertion failed")
 		}
+		prg = p
 	}
 
 	var diagnostics *indigo.Diagnostics
@@ -87,8 +87,8 @@ func (m *mockEvaluator) Reset() {
 	m.rules = []string{}
 }
 
-func (e *mockEvaluator) PrintInternalStructure() {
-	for _, v := range e.rules {
+func (m *mockEvaluator) PrintInternalStructure() {
+	for _, v := range m.rules {
 		fmt.Println("Rule id", v)
 	}
 }

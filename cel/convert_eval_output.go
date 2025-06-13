@@ -5,6 +5,7 @@ package cel
 //    TO Go types
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -24,7 +25,7 @@ func convertDynamicMessageToProto(r ref.Val, want indigo.Type) (any, error) {
 	}
 
 	if msg.Message == nil {
-		return nil, fmt.Errorf("expected result protocol buffer is nil")
+		return nil, errors.New("expected result protocol buffer is nil")
 	}
 
 	pb, err := r.ConvertToNative(reflect.TypeOf(msg.Message))

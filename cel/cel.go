@@ -1,6 +1,7 @@
 package cel
 
 import (
+	"errors"
 	"fmt" // required by CEL to construct a proto from an expression
 	"strings"
 	"sync"
@@ -77,7 +78,6 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 			return
 		}
 		e.fixedEnv = env
-		return
 	})
 
 	if err != nil {
@@ -95,7 +95,7 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 	}
 
 	if env == nil {
-		return nil, fmt.Errorf("no valid CEL environment")
+		return nil, errors.New("no valid CEL environment")
 	}
 
 	// Parse the rule expression to an AST
@@ -161,7 +161,7 @@ func (*Evaluator) Evaluate(data map[string]any, expr string, _ indigo.Schema, _ 
 		if expr == "" {
 			return true, nil, nil
 		}
-		return nil, nil, fmt.Errorf("missing program")
+		return nil, nil, errors.New("missing program")
 	}
 
 	rawValue, details, err := program.program.Eval(data)

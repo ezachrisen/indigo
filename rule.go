@@ -36,7 +36,7 @@ import (
 //    boolean, all the children and their resulsts are returned
 //
 type Rule struct {
-	// A rule identifer. (required)
+	// A rule identifier. (required)
 	ID string `json:"id"`
 
 	// The expression to evaluate (optional)
@@ -162,9 +162,9 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 	maxExprLength := len(r.Expr)
 
 	for _, c := range r.Rules {
-		cr, max := c.rulesToRows(n + 1)
-		if max > maxExprLength {
-			maxExprLength = max
+		cr, maxLen := c.rulesToRows(n + 1)
+		if maxLen > maxExprLength {
+			maxExprLength = maxLen
 		}
 		rows = append(rows, cr...)
 	}
@@ -186,7 +186,7 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool)
 	}
 
 	//	fmt.Println("  ", op, force, "getting keys for ", r.ID)
-	keys := make([]*Rule, len(r.Rules), len(r.Rules))
+	keys := make([]*Rule, len(r.Rules))
 	var i int
 	for k := range r.Rules {
 		keys[i] = r.Rules[k]
