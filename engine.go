@@ -4,7 +4,192 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 )
+
+// batchResult holds the results from evaluating a batch of rules
+type batchResult struct {
+	batchIndex int
+	results    map[string]*Result
+	passCount  int
+	failCount  int
+	err        error
+	stopped    bool // indicates if batch stopped early due to evaluation options
+}
+
+// evaluateRuleBatch evaluates a batch of rules sequentially, respecting all evaluation options
+func (e *DefaultEngine) evaluateRuleBatch(
+	ctx context.Context,
+	rules []*Rule,
+	batchIndex int,
+	data map[string]any,
+	opts []EvalOption,
+	evalOpts *EvalOptions,
+	rulesEvaluated *[]*Rule,
+	errorFlag *int64,
+) batchResult {
+	result := batchResult{
+		batchIndex: batchIndex,
+		results:    make(map[string]*Result),
+	}
+
+	for _, cr := range rules {
+		// Check if another batch encountered an error
+		if atomic.LoadInt64(errorFlag) != 0 {
+			result.stopped = true
+			return result
+		}
+
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			result.err = ctx.Err()
+			atomic.StoreInt64(errorFlag, 1)
+			return result
+		default:
+		}
+
+		if evalOpts.ReturnDiagnostics && rulesEvaluated != nil {
+			*rulesEvaluated = append(*rulesEvaluated, cr)
+		}
+
+		childResult, err := e.Eval(ctx, cr, data, opts...)
+		if err != nil {
+			result.err = err
+			atomic.StoreInt64(errorFlag, 1)
+			return result
+		}
+
+		// Count passes and failures
+		switch childResult.Pass {
+		case true:
+			result.passCount++
+		case false:
+			result.failCount++
+		}
+
+		// Decide if we should return the child rule's result or not
+		switch childResult.Pass {
+		case true:
+			if !evalOpts.DiscardPass {
+				result.results[cr.ID] = childResult
+			}
+		case false:
+			switch evalOpts.DiscardFail {
+			case KeepAll:
+				result.results[cr.ID] = childResult
+			case Discard:
+			case DiscardOnlyIfExpressionFailed:
+				if childResult.ExpressionPass {
+					result.results[cr.ID] = childResult
+				}
+			}
+		}
+
+		// Check early stopping conditions
+		if evalOpts.StopFirstPositiveChild && childResult.Pass {
+			result.stopped = true
+			return result
+		}
+
+		if evalOpts.StopFirstNegativeChild && !childResult.Pass {
+			result.stopped = true
+			return result
+		}
+	}
+
+	return result
+}
+
+// evaluateRulesInParallel evaluates child rules in parallel batches
+func (e *DefaultEngine) evaluateRulesInParallel(
+	ctx context.Context,
+	childRules []*Rule,
+	data map[string]any,
+	opts []EvalOption,
+	evalOpts *EvalOptions,
+) (map[string]*Result, int, int, []*Rule, error) {
+	if len(childRules) == 0 {
+		return make(map[string]*Result), 0, 0, nil, nil
+	}
+
+	batchSize := evalOpts.ParallelBatchSize
+	if batchSize <= 0 {
+		batchSize = 10
+	}
+
+	// Calculate number of batches
+	numBatches := (len(childRules) + batchSize - 1) / batchSize
+
+	// Create channels for coordination
+	results := make(chan batchResult, numBatches)
+	var wg sync.WaitGroup
+	var errorFlag int64
+
+	// Launch batches
+	for i := 0; i < numBatches; i++ {
+		start := i * batchSize
+		end := start + batchSize
+		if end > len(childRules) {
+			end = len(childRules)
+		}
+
+		batch := childRules[start:end]
+		wg.Add(1)
+
+		go func(batchIdx int, batchRules []*Rule) {
+			defer wg.Done()
+
+			var rulesEvaluated []*Rule
+			var rulesEvaluatedPtr *[]*Rule
+			if evalOpts.ReturnDiagnostics {
+				rulesEvaluatedPtr = &rulesEvaluated
+			}
+
+			result := e.evaluateRuleBatch(
+				ctx, batchRules, batchIdx, data, opts, evalOpts,
+				rulesEvaluatedPtr, &errorFlag,
+			)
+			results <- result
+		}(i, batch)
+	}
+
+	// Wait for all batches to complete
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Collect results
+	allResults := make(map[string]*Result)
+	var totalPassCount, totalFailCount int
+	var allRulesEvaluated []*Rule
+	var firstError error
+
+	for batchResult := range results {
+		if batchResult.err != nil && firstError == nil {
+			firstError = batchResult.err
+		}
+
+		// Merge results from this batch
+		for id, result := range batchResult.results {
+			allResults[id] = result
+		}
+
+		totalPassCount += batchResult.passCount
+		totalFailCount += batchResult.failCount
+
+		// If any batch stopped early due to evaluation options, we need to handle it
+		if batchResult.stopped {
+			// For early stopping conditions, we only want results from batches
+			// that completed before the stopping condition was met
+			break
+		}
+	}
+
+	return allResults, totalPassCount, totalFailCount, allRulesEvaluated, firstError
+}
 
 // Compiler is the interface that wraps the Compile method.
 // Compile pre-processes the rule recursively using an ExpressionCompiler, which
@@ -94,56 +279,85 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	var failCount int
 	var passCount int
 
-done: // break out of inner switch
-	for _, cr := range r.sortChildRules(o.SortFunc, o.overrideSort) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			if o.ReturnDiagnostics {
-				u.RulesEvaluated = append(u.RulesEvaluated, cr)
-			}
+	// Get sorted child rules
+	childRules := r.sortChildRules(o.SortFunc, o.overrideSort)
 
-			result, err := e.Eval(ctx, cr, d, opts...)
-			if err != nil {
-				return nil, err
-			}
+	// Choose between parallel and sequential evaluation
+	// Note: For early stopping conditions (StopFirstPositiveChild, StopFirstNegativeChild),
+	// parallel evaluation may not stop at exactly the first matching rule due to concurrent
+	// batch processing, but will still produce correct final results.
+	if o.EnableParallel && len(childRules) > 1 {
+		// Use parallel evaluation
+		results, pCount, fCount, rulesEvaluated, err := e.evaluateRulesInParallel(ctx, childRules, d, opts, &o)
+		if err != nil {
+			return nil, err
+		}
 
-			// If the child rule failed, either due to its own expression evaluation
-			// or its children, we have encountered a failure, and we'll count it
-			// The reason to keep this count, rather than look at the child results,
-			// is that we may be discarding passes or failures.
-			switch result.Pass {
-			case true:
-				passCount++
-			case false:
-				failCount++
-			}
+		passCount = pCount
+		failCount = fCount
 
-			// Decide if we should return the child rule's result or not
-			switch result.Pass {
-			case true:
-				if !o.DiscardPass {
-					u.Results[cr.ID] = result
+		// Merge results into the main result
+		for id, result := range results {
+			u.Results[id] = result
+		}
+
+		// Add evaluated rules for diagnostics
+		if o.ReturnDiagnostics {
+			u.RulesEvaluated = append(u.RulesEvaluated, rulesEvaluated...)
+		}
+	} else {
+		// Use sequential evaluation (original logic)
+	done: // break out of inner switch
+		for _, cr := range childRules {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+				if o.ReturnDiagnostics {
+					u.RulesEvaluated = append(u.RulesEvaluated, cr)
 				}
-			case false:
-				switch o.DiscardFail {
-				case KeepAll:
-					u.Results[cr.ID] = result
-				case Discard:
-				case DiscardOnlyIfExpressionFailed:
-					if result.ExpressionPass {
+
+				result, err := e.Eval(ctx, cr, d, opts...)
+				if err != nil {
+					return nil, err
+				}
+
+				// If the child rule failed, either due to its own expression evaluation
+				// or its children, we have encountered a failure, and we'll count it
+				// The reason to keep this count, rather than look at the child results,
+				// is that we may be discarding passes or failures.
+				switch result.Pass {
+				case true:
+					passCount++
+				case false:
+					failCount++
+				}
+
+				// Decide if we should return the child rule's result or not
+				switch result.Pass {
+				case true:
+					if !o.DiscardPass {
 						u.Results[cr.ID] = result
 					}
+				case false:
+					switch o.DiscardFail {
+					case KeepAll:
+						u.Results[cr.ID] = result
+					case Discard:
+					case DiscardOnlyIfExpressionFailed:
+						if result.ExpressionPass {
+							u.Results[cr.ID] = result
+						}
+					}
 				}
-			}
 
-			if o.StopFirstPositiveChild && result.Pass {
-				break done
-			}
+				if o.StopFirstPositiveChild && result.Pass {
+					break done
+				}
 
-			if o.StopFirstNegativeChild && !result.Pass {
-				break done
+				if o.StopFirstNegativeChild && !result.Pass {
+					break done
+				}
 			}
 		}
 	}
@@ -295,6 +509,19 @@ type EvalOptions struct {
 	//  (2) Rule did not supply its own sort
 	// and was overridden by a global eval option,
 	overrideSort bool
+
+	// EnableParallel enables parallel evaluation of child rules.
+	// When enabled, child rules are divided into batches and evaluated concurrently.
+	// This can significantly improve performance for rules with many children.
+	// Default: false (sequential evaluation)
+	EnableParallel bool `json:"enable_parallel"`
+
+	// ParallelBatchSize specifies the number of child rules to process in each batch
+	// when parallel evaluation is enabled. Larger batch sizes reduce coordination
+	// overhead but may reduce parallelism. Smaller batch sizes increase parallelism
+	// but add coordination overhead.
+	// Default: 10 (if EnableParallel is true and this is 0)
+	ParallelBatchSize int `json:"parallel_batch_size"`
 }
 
 // FailAction is used to tell Indigo what to do with the results of
@@ -375,6 +602,27 @@ func StopFirstNegativeChild(b bool) EvalOption {
 func StopFirstPositiveChild(b bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.StopFirstPositiveChild = b
+	}
+}
+
+// EnableParallel enables parallel evaluation of child rules with the specified batch size.
+// If batchSize is 0, a default batch size of 10 will be used.
+func EnableParallel(batchSize int) EvalOption {
+	return func(f *EvalOptions) {
+		f.EnableParallel = true
+		if batchSize > 0 {
+			f.ParallelBatchSize = batchSize
+		} else {
+			f.ParallelBatchSize = 10
+		}
+	}
+}
+
+// DisableParallel disables parallel evaluation, forcing sequential evaluation.
+func DisableParallel() EvalOption {
+	return func(f *EvalOptions) {
+		f.EnableParallel = false
+		f.ParallelBatchSize = 0
 	}
 }
 

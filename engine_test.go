@@ -248,7 +248,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 
 	e := indigo.NewEngine(newMockEvaluator())
 	d := map[string]any{"a": "a"} // dummy data, not important
-	w := map[string]bool{                 // the wanted expression evaluation results with no options in effect
+	w := map[string]bool{         // the wanted expression evaluation results with no options in effect
 		"rule1": true,
 		"D":     true,
 		"d1":    true,
