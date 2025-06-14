@@ -11,6 +11,7 @@ import (
 
 // Test converting between CEL and Indigo types, and whether expected
 // type matches work.
+//
 //revive:disable
 func TestTypeConversion(t *testing.T) {
 

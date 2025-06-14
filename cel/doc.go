@@ -8,7 +8,7 @@
 //
 // Google has a nice tutorial here: https://codelabs.developers.google.com/codelabs/cel-go/index.html#0
 //
-// Working with Protocol Buffers
+// # Working with Protocol Buffers
 //
 // While it is possible to use CEL with "native" simple types, it is built on protocol buffers. CEL does not
 // support Go structs, so if you need to use native types to access fields in a struct, you must first
@@ -21,7 +21,7 @@
 // They use the protocol buffer definitions in indigo/testdata/proto, and there's a Makefile in that directory
 // that shows how to generate the Go types.
 //
-// Protocol Buffer Fields in Expressions
+// # Protocol Buffer Fields in Expressions
 //
 // When refererring to fields of a protocol buffer in an expression, the field names are the proto names, NOT the
 // generated Go names.
@@ -31,81 +31,79 @@
 //
 // In student.proto:
 //
-//     message Student {
-//       google.protobuf.Timestamp enrollment_date = 7;
-//     }
+//	message Student {
+//	  google.protobuf.Timestamp enrollment_date = 7;
+//	}
 //
 // In Go code:
 //
-//     s := school.Student{}
-//     s.EnrollmentDate = &timestamp.Timestamp{
-//         Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()
-//     }
+//	s := school.Student{}
+//	s.EnrollmentDate = &timestamp.Timestamp{
+//	    Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()
+//	}
 //
 // In the CEL expression:
 //
-//     rule.Expr = ` now - student.enrollment_date > duration("4320h")`
+//	rule.Expr = ` now - student.enrollment_date > duration("4320h")`
 //
-//
-// Protocol Buffer Enums
+// # Protocol Buffer Enums
 //
 // The student protocol buffer definition includes an enum type for a student's status. When referring to enum values
 // in the CEL expression, use the full protocol buffer name:
 //
 // In student.proto:
 //
-//  message Student {
-//   status_type status = 4;
-//   ...
-//    enum status_type {
-//     ENROLLED=0;
-//     PROBATION=1;
-//   }
-//   ...
-//  }
+//	message Student {
+//	 status_type status = 4;
+//	 ...
+//	  enum status_type {
+//	   ENROLLED=0;
+//	   PROBATION=1;
+//	 }
+//	 ...
+//	}
 //
 // In Go Code:
 //
-//  s:= school.Student{}
-//  s.Status = school.Student_PROBATION
+//	s:= school.Student{}
+//	s.Status = school.Student_PROBATION
 //
 // In the CEL expression:
 //
-//  rule.Expr = `student.Status == testdata.school.Student.status_type.PROBATION`
+//	rule.Expr = `student.Status == testdata.school.Student.status_type.PROBATION`
 //
-// Protocol Buffer Timestamps
+// # Protocol Buffer Timestamps
 //
 // The examples demonstrate how to convert to/from the Go time.Time type and
 // the protocol buffer timestamp.
 //
 // This package has generated types for google/protobuf/timestamp.proto:
 //
-//  import	"google.golang.org/protobuf/types/known/timestamppb"
+//	import	"google.golang.org/protobuf/types/known/timestamppb"
 //
 // To create a new timestamp:
 //
-//  now := timestamppb.Now()
+//	now := timestamppb.Now()
 //
 // To convert a Go time.Time to a proto timestamp:
 //
-//  prototime := timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC))
+//	prototime := timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC))
 //
 // To convert from a proto time to Go time:
 //
-//  goTime := pbtime.AsTime()
+//	goTime := pbtime.AsTime()
 //
-// Protocol Buffer Durations
+// # Protocol Buffer Durations
 //
 // This package has generated types for google/protobuf/duration.proto:
 //
-//  import	"google.golang.org/protobuf/types/known/durationpb"
+//	import	"google.golang.org/protobuf/types/known/durationpb"
 //
 // To convert a Go duration to a proto duration:
 //
-//  protodur := durationpb.New(godur)
+//	protodur := durationpb.New(godur)
 //
 // To convert back from a protocol buffer duration to a Go duration:
 //
-//  goDur := protodur.AsDuration()
-//
+//	goDur := protodur.AsDuration()
 package cel

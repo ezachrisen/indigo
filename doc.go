@@ -8,16 +8,14 @@
 // The default rule evaluator (in the cel package) is the Common Expression Language from Google
 // (https://github.com/google/cel-go).
 //
-//
-// Compilation and Evaluation
+// # Compilation and Evaluation
 //
 // Indigo provides methods to compile and evaluate rules. The compilation step gives
 // the evaluator a chance to pre-process the rule, provide feedback on rule correctness, and store an intermediate form
 // of the rule for evaluation efficiency. The evaluation evaluates the rule against
 // input data and provides the output.
 //
-//
-// Basic Structure
+// # Basic Structure
 //
 // Indigo organizes rules in hierarchies. A parent rule can have 0 or many child
 // rules. You do not have to organize rules in a complex tree; a single parent with 1,000s of child rules is OK.
@@ -29,8 +27,7 @@
 //     results (such as returning true or false results, or both)
 //  4. Logically separate disparate groups of rules
 //
-//
-// Rule Ownership
+// # Rule Ownership
 //
 // The calling application is responsible for managing the lifecycle of rules, including ensuring
 // concurrency safety. Some things to keep in mind:
@@ -40,24 +37,26 @@
 //  4. You should not modify a rule after it's been evaluated and before the results have been consumed.
 //  5. A rule must not be a child rule of more than one parent.
 //
-// Updating Rules
+// # Updating Rules
 //
 // To add or remove rules, you do so by modifying the parent rule's map of Rules
-//   delete(parent.Rules, "child-id-to-delete")
+//
+//	delete(parent.Rules, "child-id-to-delete")
+//
 // and
-//   myNewRule.Compile(myCompiler)
-//   parent.Rules["my-new-rule"] = myNewRule
+//
+//	myNewRule.Compile(myCompiler)
+//	parent.Rules["my-new-rule"] = myNewRule
 //
 // It is not recommended to update a rule IN PLACE, unless you
 // manage the rule lifecycle beyond evaluation and use of the rule in interpreting
 // the results. Users of your result should expect that the definition of the rule stays constant.
 // Instead, we recommend creating a new rule with a new version number in the ID to separate updates.
 //
-//    WARNING! YOU **MUST** COMPILE THE RULE AFTER MAKING MODIFICATIONS TO THE RULE, INCLUDING
-//    THE LIST OF CHILD RULES.
+//	WARNING! YOU **MUST** COMPILE THE RULE AFTER MAKING MODIFICATIONS TO THE RULE, INCLUDING
+//	THE LIST OF CHILD RULES.
 //
-//
-// Structuring Rule Hierarchies for Updates
+// # Structuring Rule Hierarchies for Updates
 //
 // The ability to organize rules in a hierarchy is useful to ensure that rule updates are atomic and consistent.
 //
@@ -68,17 +67,17 @@
 // to update ALL firewall rules as a group, rather than one by one (where one update may fail)
 // is important.
 //
-//   Firewall Rules (parent)
-//     "Deny all traffic" (child 1)
-//     "Allow traffic from known_IPs" (child 2)
+//	Firewall Rules (parent)
+//	  "Deny all traffic" (child 1)
+//	  "Allow traffic from known_IPs" (child 2)
 //
 // If the user changes child 1 to be "Allow all traffic" and changes child 2 to "Deny all traffic,
 // except for known_IPs",
 // there's a risk that child 1 is changed first, without the child 2 change happening. This would leave us with this:
 //
-//   Firewall Rules (parent)
-//     "Allow all traffic" (child 1)
-//     "Allow traffic from known_IPs" (child 2)
+//	Firewall Rules (parent)
+//	  "Allow all traffic" (child 1)
+//	  "Allow traffic from known_IPs" (child 2)
 //
 // This is clearly bad!
 //
@@ -89,5 +88,4 @@
 // parent and
 // children BEFORE adding it to its eventual parent. That way you ensure that if compilation of Firewall Rules fails,
 // the "production" firewall rules are still intact.
-//
 package indigo
