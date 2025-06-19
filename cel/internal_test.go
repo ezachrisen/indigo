@@ -5,7 +5,6 @@ import (
 
 	"github.com/ezachrisen/indigo"
 	celgo "github.com/google/cel-go/cel"
-	"github.com/matryer/is"
 	gexpr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 )
 
@@ -216,55 +215,86 @@ func TestTypeConversion(t *testing.T) {
 //revive:enable
 
 func TestNils(t *testing.T) {
-	is := is.New(t)
-
 	i, err := convertDynamicMessageToProto(nil, nil)
-	is.True(err != nil)
-	is.True(i == nil)
+	if err == nil {
+		t.Error("expected error for nil inputs")
+	}
+	if i != nil {
+		t.Error("expected nil result")
+	}
 
 	err = doTypesMatch(nil, nil)
-	is.NoErr(err) // comparing 2 nils is OK
+	if err != nil {
+		t.Fatalf("unexpected error comparing nil types: %v", err)
+	}
 
 	err = doTypesMatch(nil, indigo.Bool{})
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil cel type")
+	}
 
 	err = doTypesMatch(&gexpr.Type{}, nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil indigo type")
+	}
 
 	_, err = indigoType(nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil type")
+	}
 
 	_, err = convertIndigoSchemaToDeclarations(indigo.Schema{})
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	_, err = convertIndigoToExprType(nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil type")
+	}
 
 	_, err = collectDiagnostics(nil, nil, nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil inputs")
+	}
 
 	_, err = collectDiagnostics(&celgo.Ast{}, nil, nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil eval details")
+	}
 
 	_, err = collectDiagnostics(nil, &celgo.EvalDetails{}, nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil ast")
+	}
 
 	_, err = collectDiagnostics(nil, nil, map[string]any{})
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil ast and eval details")
+	}
 
 	_, err = printAST(nil, 0, nil, nil, nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil expr")
+	}
 
 	_, err = printAST(&gexpr.Expr{}, 0, nil, nil, nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil eval details")
+	}
 
 	_, err = printAST(nil, 0, &celgo.EvalDetails{}, nil, nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil expr")
+	}
 
 	_, err = printAST(nil, 0, nil, &celgo.Ast{}, nil)
-	is.True(err != nil)
+	if err == nil {
+		t.Error("expected error for nil expr")
+	}
 
 	_, err = printAST(nil, 0, nil, nil, map[string]any{})
-	is.True(err != nil)
-
+	if err == nil {
+		t.Error("expected error for nil expr")
+	}
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 	"github.com/ezachrisen/indigo/testdata/school"
 	"github.com/google/cel-go/common/types/pb"
-	"github.com/matryer/is"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -254,64 +253,88 @@ func makeStudentProtoData() map[string]any {
 }
 
 func TestBasicRules(t *testing.T) {
-	is := is.New(t)
-
 	e := indigo.NewEngine(cel.NewEvaluator())
 	r := makeEducationRules1()
 	err := e.Compile(r, indigo.CollectDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	sa := r.Rules["student_actions"]
 
 	results, err := e.Eval(context.Background(), sa, makeStudentData(), indigo.ReturnDiagnostics(true))
-	is.NoErr(err)
-	is.Equal(results.Rule, sa)
-	is.True(results.ExpressionPass)
-	is.True(!results.Results["honors_student"].ExpressionPass)
-	is.True(results.Results["at_risk"].ExpressionPass)
-	is.Equal(results.Results["at_risk"].Results["risk_factor"].Value.(float64), 8.0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if results.Rule != sa {
+		t.Errorf("expected %v, got %v", sa, results.Rule)
+	}
+	if !results.ExpressionPass {
+		t.Error("condition should be true")
+	}
+	if results.Results["honors_student"].ExpressionPass {
+		t.Error("condition should be true")
+	}
+	if !results.Results["at_risk"].ExpressionPass {
+		t.Error("condition should be true")
+	}
+	if results.Results["at_risk"].Results["risk_factor"].Value.(float64) != 8.0 {
+		t.Errorf("expected %v, got %v", 8.0, results.Results["at_risk"].Results["risk_factor"].Value.(float64))
+	}
 }
 
 // Make sure that type mismatches between schema and rule are caught at compile time
 func TestCompileErrors(t *testing.T) {
-	is := is.New(t)
-
 	e := indigo.NewEngine(cel.NewEvaluator())
 	r := makeEducationRulesWithIncorrectTypes()
 
 	err := e.Compile(r)
 	if err == nil {
-		is.Fail() // expected compile error here
+		t.Fatal("test should fail") // expected compile error here
 	}
-	is.True(strings.Contains(err.Error(), "1:13: found no matching overload for '_!=_' applied to '(double, string)'"))
-	is.True(strings.Contains(err.Error(), "1:40: found no matching overload for '_>_' applied to '(string, double)'"))
+	if !strings.Contains(err.Error(), "1:13: found no matching overload for '_!=_' applied to '(double, string)'") {
+		t.Error("condition should be true")
+	}
+	if !strings.Contains(err.Error(), "1:40: found no matching overload for '_>_' applied to '(string, double)'") {
+		t.Error("condition should be true")
+	}
 }
 
 func TestProtoMessage(t *testing.T) {
-	is := is.New(t)
 	e := indigo.NewEngine(cel.NewEvaluator())
 
 	r := makeEducationProtoRules("student_actions")
 	err := e.Compile(r)
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	results, err := e.Eval(context.Background(), r, makeStudentProtoData())
-	is.NoErr(err)
-	is.Equal(len(results.Results), 3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results.Results) != 3 {
+		t.Errorf("expected %v, got %v", 3, len(results.Results))
+	}
 	for _, v := range results.Results {
-		is.Equal(v.Rule.Meta, v.ExpressionPass)
+		if v.Rule.Meta != v.ExpressionPass {
+			t.Errorf("expected %v, got %v", v.Rule.Meta, v.ExpressionPass)
+		}
 	}
 }
 
 func TestDiagnosticOptions(t *testing.T) {
-	is := is.New(t)
 	e := indigo.NewEngine(cel.NewEvaluator())
 	r2 := makeEducationProtoRules("student_actions")
 	err := e.Compile(r2, indigo.CollectDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	u, err := e.Eval(context.Background(), r2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	//	fmt.Println(r2)
 	//	fmt.Println(indigo.DiagnosticsReport(u, makeStudentProtoData()))
 	//	fmt.Println(u.Diagnostics.String())
@@ -326,7 +349,6 @@ func TestDiagnosticOptions(t *testing.T) {
 }
 
 func TestDiagnosticsWithEmptyRule(t *testing.T) {
-	is := is.New(t)
 	e := indigo.NewEngine(cel.NewEvaluator())
 	d := map[string]any{"a": "a"} // dummy data, not important
 
@@ -335,11 +357,17 @@ func TestDiagnosticsWithEmptyRule(t *testing.T) {
 	}
 
 	err := e.Compile(r)
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	u, err := e.Eval(context.Background(), r, d)
-	is.NoErr(err)
-	is.Equal(u.Diagnostics, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if u.Diagnostics != nil {
+		t.Errorf("expected %v, got %v", nil, u.Diagnostics)
+	}
 }
 
 func TestRuleResultTypes(t *testing.T) {
@@ -495,23 +523,30 @@ func TestRuleResultTypes(t *testing.T) {
 // Generate all diagnostics for both sets of rules to make sure
 // no panics
 func TestDiagnosticGeneration(t *testing.T) {
-	is := is.New(t)
 	e := indigo.NewEngine(cel.NewEvaluator())
 
 	red1 := makeEducationRules1()
 	err := e.Compile(red1, indigo.CollectDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	u, err := e.Eval(context.Background(), red1, makeStudentData(), indigo.ReturnDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	//	fmt.Println(indigo.DiagnosticsReport(u, nil))
 	_ = u.Diagnostics.String()
 
 	red2 := makeEducationProtoRules("red2")
 	err = e.Compile(red2, indigo.CollectDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	u, err = e.Eval(context.Background(), red2, makeStudentProtoData(), indigo.ReturnDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	_ = u.Diagnostics.String()
 	_ = indigo.DiagnosticsReport(u, makeStudentData())
 }
@@ -895,24 +930,26 @@ func BenchmarkEval2000RulesWithSort(b *testing.B) {
 
 func BenchmarkCompileRule(b *testing.B) {
 	b.StopTimer()
-	is := is.New(b)
 	e := indigo.NewEngine(cel.NewEvaluator())
 	r := makeEducationProtoRules("rule")
 	b.StartTimer()
 	for i := 1; i < b.N; i++ {
 		err := e.Compile(r)
-		is.NoErr(err)
+		if err != nil {
+			b.Fatalf("unexpected error: %v", err)
+		}
 	}
 }
 
 func BenchmarkCompileRuleWithFixedSchema(b *testing.B) {
 	b.StopTimer()
-	is := is.New(b)
 	r := makeEducationProtoRules("rule")
 	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(&r.Schema)))
 	b.StartTimer()
 	for i := 1; i < b.N; i++ {
 		err := e.Compile(r)
-		is.NoErr(err)
+		if err != nil {
+			b.Fatalf("unexpected error: %v", err)
+		}
 	}
 }
