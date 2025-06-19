@@ -6,24 +6,28 @@ import (
 
 	"github.com/ezachrisen/indigo"
 	"github.com/ezachrisen/indigo/testdata/school"
-	"github.com/matryer/is"
 )
 
 func TestProto(t *testing.T) {
-	is := is.New(t)
-
 	// Nil message
 	a := indigo.Proto{Message: nil}
 	_, e := a.ProtoFullName()
-	is.True(e != nil)
-	is.Equal(e.Error(), "indigo.Proto.Message is nil")
+	if e == nil {
+		t.Fatal("expected error for nil message")
+	}
+	if e.Error() != "indigo.Proto.Message is nil" {
+		t.Errorf("expected error 'indigo.Proto.Message is nil', got %q", e.Error())
+	}
 
 	// Success
 	c := indigo.Proto{Message: &school.Student{}}
 	s, e := c.ProtoFullName()
-	is.NoErr(e)
-	is.Equal(s, "testdata.school.Student")
-
+	if e != nil {
+		t.Fatalf("unexpected error: %v", e)
+	}
+	if s != "testdata.school.Student" {
+		t.Errorf("expected 'testdata.school.Student', got %q", s)
+	}
 }
 
 func TestString(t *testing.T) {
