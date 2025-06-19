@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 )
 
 // Compiler is the interface that wraps the Compile method.
@@ -85,13 +86,13 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	if o.StopIfParentNegative && !u.ExpressionPass {
 		return u, nil
 	}
-	var passCount, failCount int
 
-	passCount, failCount, u.Results, u.RulesEvaluated, err = e.evalChildren(ctx,
-		r.sortChildRules(o.SortFunc, o.overrideSort), d, o, opts...)
+	eu, err := e.evalChildren(ctx, r.sortChildRules(o.SortFunc, o.overrideSort), d, o, opts...)
 	if err != nil {
 		return nil, err
 	}
+	u.Results = eu.results
+	u.RulesEvaluated = eu.evaluated
 
 	// Based on the results of the child rules, determine the result of the parent rule
 	switch r.EvalOptions.TrueIfAny {
@@ -100,13 +101,13 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 			// If none of the child rules passed AND the parent's expression passed, the rule
 			// shouldn't pass
 			hasChildren := len(r.Rules) > 0
-			if hasChildren && passCount == 0 {
+			if hasChildren && eu.passCount == 0 {
 				u.Pass = false
 			}
 		}
 	case false:
 		// If one or more of child rules failed, we will fail also, regardless of the parent rule's result
-		if failCount > 0 {
+		if eu.failCount > 0 {
 			u.Pass = false
 		}
 	}
@@ -114,30 +115,42 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	return u, nil
 }
 
-func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[string]any, o EvalOptions, opts ...EvalOption) (passCount, failCount int,
-	results map[string]*Result, evaluated []*Rule, err error) {
+func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[string]any, o EvalOptions, opts ...EvalOption) (r evalResult, err error) {
 
-	return e.evalRuleSlice(ctx, rules, d, o, opts...)
+	if o.Parallel.BatchSize <= 1 || o.Parallel.MaxParallel <= 1 {
+		return e.evalRuleSlice(ctx, rules, d, o, opts...)
+	}
+
+	if o.Parallel.BatchSize > math.MaxInt/2 || o.Parallel.MaxParallel > math.MaxInt/2 {
+		return r, errors.New("batch size or parallel out of range")
+	}
+	return
+}
+
+type evalResult struct {
+	passCount int
+	failCount int
+	results   map[string]*Result
+	evaluated []*Rule
 }
 
 func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[string]any,
-	o EvalOptions, opts ...EvalOption) (passCount, failCount int, results map[string]*Result,
-	evaluated []*Rule, err error) {
+	o EvalOptions, opts ...EvalOption) (r evalResult, err error) {
 
-	results = make(map[string]*Result, len(rules))
+	r.results = make(map[string]*Result, len(rules))
 
 	for _, cr := range rules {
 		select {
 		case <-ctx.Done():
-			return 0, 0, nil, nil, ctx.Err()
+			return r, ctx.Err()
 		default:
 			if o.ReturnDiagnostics {
-				evaluated = append(evaluated, cr)
+				r.evaluated = append(r.evaluated, cr)
 			}
 			var result *Result
 			result, err = e.Eval(ctx, cr, d, opts...)
 			if err != nil {
-				return 0, 0, nil, nil, err
+				return r, err
 			}
 
 			// If the child rule failed, either due to its own expression evaluation
@@ -146,25 +159,25 @@ func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[
 			// is that we may be discarding passes or failures.
 			switch result.Pass {
 			case true:
-				passCount++
+				r.passCount++
 			case false:
-				failCount++
+				r.failCount++
 			}
 
 			// Decide if we should return the child rule's result or not
 			switch result.Pass {
 			case true:
 				if !o.DiscardPass {
-					results[cr.ID] = result
+					r.results[cr.ID] = result
 				}
 			case false:
 				switch o.DiscardFail {
 				case KeepAll:
-					results[cr.ID] = result
+					r.results[cr.ID] = result
 				case Discard:
 				case DiscardOnlyIfExpressionFailed:
 					if result.ExpressionPass {
-						results[cr.ID] = result
+						r.results[cr.ID] = result
 					}
 				}
 			}
