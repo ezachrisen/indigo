@@ -17,7 +17,7 @@ type Compiler interface {
 // Evaluate tests the rule recursively against the input data using an ExpressionEvaluator,
 // which is applied to each rule.
 type Evaluator interface {
-	Eval(ctx context.Context, r *Rule, d map[string]interface{}, opts ...EvalOption) (*Result, error)
+	Eval(ctx context.Context, r *Rule, d map[string]any, opts ...EvalOption) (*Result, error)
 }
 
 // Engine is the interface that groups the Compiler and Evaluator interfaces.
@@ -56,7 +56,8 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	setSelfKey(r, d)
 
 	// Evaluate the rule's expression using the engine's ExpressionEvaluator
-	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, defaultResultType(r), o.ReturnDiagnostics)
+	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program,
+		defaultResultType(r), o.ReturnDiagnostics)
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
 	}
@@ -86,7 +87,8 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	}
 	var passCount, failCount int
 
-	passCount, failCount, u.Results, u.RulesEvaluated, err = e.evalRuleSlice(ctx, r.sortChildRules(o.SortFunc, o.overrideSort), d, o, opts...)
+	passCount, failCount, u.Results, u.RulesEvaluated, err = e.evalChildren(ctx,
+		r.sortChildRules(o.SortFunc, o.overrideSort), d, o, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +114,15 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	return u, nil
 }
 
-func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[string]any, o EvalOptions, opts ...EvalOption) (passCount, failCount int, results map[string]*Result, evaluated []*Rule, err error) {
+func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[string]any, o EvalOptions, opts ...EvalOption) (passCount, failCount int,
+	results map[string]*Result, evaluated []*Rule, err error) {
+
+	return e.evalRuleSlice(ctx, rules, d, o, opts...)
+}
+
+func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[string]any,
+	o EvalOptions, opts ...EvalOption) (passCount, failCount int, results map[string]*Result,
+	evaluated []*Rule, err error) {
 
 	results = make(map[string]*Result, len(rules))
 
