@@ -13,12 +13,10 @@ import (
 
 	"github.com/ezachrisen/indigo"
 	"github.com/ezachrisen/indigo/cel"
-	"github.com/matryer/is"
 )
 
 // Test the scenario where the rule has childs and exists (or not) childs with true as their results
 func TestTrueIfAnyBehavior(t *testing.T) {
-	is := is.New(t)
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 	data := map[string]any{}
@@ -63,13 +61,19 @@ func TestTrueIfAnyBehavior(t *testing.T) {
 		expectedResults[rootRule.ID] = l2 || l1 // since the leaf rule will propagate the change
 
 		err := engine.Compile(rootRule)
-		is.NoErr(err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		result, err := engine.Eval(ctx, rootRule, data)
-		is.NoErr(err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		// verify if matches the expected result
-		is.NoErr(match(flattenResultsRuleResult(result), expectedResults))
+		if err := match(flattenResultsRuleResult(result), expectedResults); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 	}
 
 	// possible scenarios for the leaf change
@@ -82,7 +86,6 @@ func TestTrueIfAnyBehavior(t *testing.T) {
 
 // Test that all rules are evaluated and yield the correct result in the default configuration
 func TestEvaluationTraversalDefault(t *testing.T) {
-	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
@@ -107,19 +110,24 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 	}
 
 	err := e.Compile(r)
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	result, err := e.Eval(context.Background(), r, map[string]any{})
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	//	fmt.Println(m.rulesTested)
 	//	fmt.Println(result)
-	is.NoErr(match(flattenResultsExprResult(result), expectedResults))
+	if err := match(flattenResultsExprResult(result), expectedResults); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // Ensure that rules are evaluated in the correct order when
 // alpha sort is applied
 func TestEvaluationTraversalAlphaSort(t *testing.T) {
-	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
@@ -130,15 +138,21 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 		r.EvalOptions.StopFirstNegativeChild = true
 		return nil
 	})
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	err = indigo.ApplyToRule(r, func(r *indigo.Rule) error {
 		r.Expr = "true"
 		return nil
 	})
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	err = e.Compile(r)
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	//	fmt.Println(r)
 	expectedResults := map[string]bool{
@@ -182,24 +196,31 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	}
 
 	result, err := e.Eval(context.Background(), r, map[string]any{}, indigo.ReturnDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	//	fmt.Println(m.rulesTested)
 	// fmt.Println(result)
-	is.NoErr(match(flattenResultsExprResult(result), expectedResults))
+	if err := match(flattenResultsExprResult(result), expectedResults); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	// fmt.Printf("Expected: %+v\n", expectedOrder)
 	// fmt.Printf("Got     : %+v\n", flattenResultsEvaluated(result))
-	is.True(reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result))) // not all rules were evaluated
+	if !reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result)) {
+		t.Error("not all rules were evaluated")
+	}
 }
 
 // Test that a self reference is passed through compilation, evaluation
 // and finally returned in results
 func TestSelf(t *testing.T) {
-	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 	err := e.Compile(r)
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// Set the self reference on D
 	D := r.Rules["D"]
@@ -209,34 +230,55 @@ func TestSelf(t *testing.T) {
 	// Give d1 a self expression, but no self value
 	d1.Expr = "self"
 	_, err = e.Eval(context.Background(), r, nil)
-	is.True(err != nil) // should get an error if the data map is nil and we try to use 'self'
+	if err == nil {
+		t.Error("should get an error if the data map is nil and we try to use 'self'")
+	}
 
 	result, err := e.Eval(context.Background(), r, map[string]any{"anything": "anything"})
-	is.NoErr(err)
-	is.Equal(result.Results["D"].Value.(int), 22)                     // D should return 'self', which is 22
-	is.Equal(result.Results["D"].Results["d1"].ExpressionPass, false) // d1 should not inherit D's self
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Results["D"].Value.(int) != 22 {
+		t.Errorf("expected 22, got %v", result.Results["D"].Value.(int))
+	}
+	if result.Results["D"].Results["d1"].ExpressionPass != false {
+		t.Errorf("expected false, got %v", result.Results["D"].Results["d1"].ExpressionPass)
+	}
 }
 
 // Test that the engine checks for nil data and rule
 func TestNilDataOrRule(t *testing.T) {
-	is := is.New(t)
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 	err := e.Compile(r)
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	_, err = e.Eval(context.Background(), r, nil)
-	is.True(err != nil) // should get an error if the data map is nil
-	is.True(strings.Contains(err.Error(), "data is nil"))
+	if err == nil {
+		t.Error("should get an error if the data map is nil")
+	}
+	if !strings.Contains(err.Error(), "data is nil") {
+		t.Error("error should contain 'data is nil'")
+	}
 
 	_, err = e.Eval(context.Background(), nil, map[string]any{})
-	is.True(err != nil) // should get an error if the rule is nil
-	is.True(strings.Contains(err.Error(), "rule is nil"))
+	if err == nil {
+		t.Error("should get an error if the rule is nil")
+	}
+	if !strings.Contains(err.Error(), "rule is nil") {
+		t.Error("error should contain 'rule is nil'")
+	}
 
 	r.Rules["B"].Rules["oops"] = nil
 	_, err = e.Eval(context.Background(), r, map[string]any{})
-	is.True(err != nil) // should get an error if the rule is nil
-	is.True(strings.Contains(err.Error(), "rule is nil"))
+	if err == nil {
+		t.Error("should get an error if the rule is nil")
+	}
+	if !strings.Contains(err.Error(), "rule is nil") {
+		t.Error("error should contain 'rule is nil'")
+	}
 
 }
 
@@ -244,7 +286,6 @@ func TestNilDataOrRule(t *testing.T) {
 // of evaluation options
 // This tests the result.ExpressionPass field.
 func TestEvalOptionsExpressionPassFail(t *testing.T) {
-	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
 	d := map[string]any{"a": "a"} // dummy data, not important
@@ -399,10 +440,14 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			r := makeRule()
 			c.prep(r)
 			err := e.Compile(r)
-			is.NoErr(err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
-			is.NoErr(err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			//			fmt.Println("got: ", flattenResultsExprResult(u))
 			err = match(flattenResultsExprResult(u), c.want())
 			if err != nil {
@@ -416,7 +461,6 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 // of evaluation options
 // This tests the result.Pass field
 func TestEvalOptionsRulePassFail(t *testing.T) {
-	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
 	d := map[string]any{"a": "a"} // dummy data, not important
@@ -636,11 +680,15 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 
 			c.prep(r)
 			err := e.Compile(r)
-			is.NoErr(err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
 
-			is.NoErr(err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			err = match(flattenResultsRuleResult(u), c.want())
 			if err != nil {
 				t.Errorf("%v", err)
@@ -652,7 +700,6 @@ func TestEvalOptionsRulePassFail(t *testing.T) {
 }
 
 func TestEvalTrueIfAny(t *testing.T) {
-	is := is.New(t)
 
 	e := indigo.NewEngine(newMockEvaluator())
 	d := map[string]any{"a": "a"} // dummy data, not important
@@ -802,10 +849,14 @@ func TestEvalTrueIfAny(t *testing.T) {
 
 			c.prep(r)
 			err := e.Compile(r)
-			is.NoErr(err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
-			is.NoErr(err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			err = match(flattenResultsRuleResult(u), c.want())
 			if err != nil {
 				t.Errorf("Error in case %s: %v", k, err)
@@ -818,7 +869,6 @@ func TestEvalTrueIfAny(t *testing.T) {
 
 func TestDiagnosticOptions(t *testing.T) {
 
-	is := is.New(t)
 	m := newMockEvaluator()
 	e := indigo.NewEngine(m)
 	d := map[string]any{"a": "a"} // dummy data, not important
@@ -857,10 +907,14 @@ func TestDiagnosticOptions(t *testing.T) {
 		m.diagnosticCompileRequired = c.engineDiagnosticCompileRequired
 
 		err := e.Compile(r, indigo.CollectDiagnostics(c.compileDiagnostics))
-		is.NoErr(err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(c.evalDiagnostics))
-		is.NoErr(err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		// fmt.Println(k)
 		//fmt.Println(indigo.DiagnosticsReport(u, nil))
 		switch c.wantDiagnostics {
@@ -893,7 +947,6 @@ func TestDiagnosticOptions(t *testing.T) {
 // Test compiling some rules with compile-time collection of diagnostics and some without
 func TestPartialDiagnostics(t *testing.T) {
 
-	is := is.New(t)
 	m := newMockEvaluator()
 	e := indigo.NewEngine(m)
 	// Set the mock engine to require that diagnostics must be turned on at compile time,
@@ -904,38 +957,49 @@ func TestPartialDiagnostics(t *testing.T) {
 
 	// first, compile all the rules WITHOUT diagnostics
 	err := e.Compile(r)
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	// then, re-compile rule B, WITH diagnostics
 	err = e.Compile(r.Rules["B"], indigo.CollectDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	u, err := e.Eval(context.Background(), r, d, indigo.ReturnDiagnostics(true))
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
 	f := flattenResultsDiagnostics(u)
 
 	// We expect that only the B rules will have diagnostics
 	for k, v := range f {
 		if k == "B" || k == "b1" || k == "b2" || k == "b3" || k == "b4" || k == "b4-1" || k == "b4-2" {
-			is.True(v != nil)
+			if v == nil {
+				t.Error("condition should be true")
+			}
 		} else {
 			if v != nil {
 				fmt.Println("V = ", v, k)
 			}
-			is.True(v == nil)
+			if v != nil {
+				t.Error("condition should be true")
+			}
 		}
 	}
 }
 
 func TestJSON(t *testing.T) {
-	is := is.New(t)
 
 	//	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
 
 	_, err := json.Marshal(r)
-	is.NoErr(err)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 	//	fmt.Println(string(b))
 
 }
@@ -943,7 +1007,6 @@ func TestJSON(t *testing.T) {
 // Test options set at the time eval is called
 // (options apply to the entire tree)
 func TestGlobalEvalOptions(t *testing.T) {
-	is := is.New(t)
 
 	cases := []struct {
 		prep func(*indigo.Rule)     // Edits to apply to the rule before evaluating
@@ -954,10 +1017,18 @@ func TestGlobalEvalOptions(t *testing.T) {
 			// Check that global (true) overrides default (false)
 			opts: []indigo.EvalOption{indigo.StopIfParentNegative(true)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 3)
-				is.Equal(len(r.Results["D"].Results), 3)
-				is.Equal(len(r.Results["E"].Results), 0)
-				is.Equal(len(r.Results["B"].Results), 0)
+				if len(r.Results) != 3 {
+				t.Errorf("expected 3, got %v", len(r.Results))
+			}
+				if len(r.Results["D"].Results) != 3 {
+				t.Errorf("expected 3, got %v", len(r.Results["D"].Results))
+			}
+				if len(r.Results["E"].Results) != 0 {
+				t.Errorf("expected 0, got %v", len(r.Results["E"].Results))
+			}
+				if len(r.Results["B"].Results) != 0 {
+				t.Errorf("expected 0, got %v", len(r.Results["B"].Results))
+			}
 			},
 		},
 
@@ -995,10 +1066,18 @@ func TestGlobalEvalOptions(t *testing.T) {
 			},
 			opts: []indigo.EvalOption{indigo.StopIfParentNegative(false)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 3)
-				is.Equal(len(r.Results["D"].Results), 3)
-				is.Equal(len(r.Results["E"].Results), 3)
-				is.Equal(len(r.Results["B"].Results), 4)
+				if len(r.Results) != 3 {
+				t.Errorf("expected 3, got %v", len(r.Results))
+			}
+				if len(r.Results["D"].Results) != 3 {
+				t.Errorf("expected 3, got %v", len(r.Results["D"].Results))
+			}
+				if len(r.Results["E"].Results) != 3 {
+				t.Errorf("expected 3, got %v", len(r.Results["E"].Results))
+			}
+				if len(r.Results["B"].Results) != 4 {
+				t.Errorf("expected 4, got %v", len(r.Results["B"].Results))
+			}
 			},
 		},
 		{
@@ -1015,7 +1094,9 @@ func TestGlobalEvalOptions(t *testing.T) {
 			},
 			opts: []indigo.EvalOption{indigo.SortFunc(indigo.SortRulesAlphaDesc)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results["B"].Results), 1)
+				if len(r.Results["B"].Results) != 1 {
+				t.Errorf("expected 1, got %v", len(r.Results["B"].Results))
+			}
 				if x, ok := r.Results["B"].Results["b3"]; !ok {
 					t.Errorf("expected b3, got %s", x.Rule.ID)
 				}
@@ -1027,9 +1108,15 @@ func TestGlobalEvalOptions(t *testing.T) {
 			// Check that global (true) overrides local option (false)
 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 2) // B is false, D is first positive child
-				is.True(r.Results["D"].ExpressionPass)
-				is.True(!r.Results["B"].ExpressionPass)
+				if len(r.Results) != 2 {
+				t.Errorf("expected 2, got %v", len(r.Results))
+			} // B is false, D is first positive child
+				if !r.Results["D"].ExpressionPass {
+				t.Error("condition should be true")
+			}
+				if r.Results["B"].ExpressionPass {
+				t.Error("condition should be false")
+			}
 			},
 		},
 		{
@@ -1047,7 +1134,9 @@ func TestGlobalEvalOptions(t *testing.T) {
 
 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(false)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 3)
+				if len(r.Results) != 3 {
+				t.Errorf("expected 3, got %v", len(r.Results))
+			}
 			},
 		},
 
@@ -1055,23 +1144,33 @@ func TestGlobalEvalOptions(t *testing.T) {
 			// Check that global (true) overrides local option (false)
 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 1) // B is first, should stop evaluation
-				is.True(!r.Results["B"].ExpressionPass)
+				if len(r.Results) != 1 {
+				t.Errorf("expected 1, got %v", len(r.Results))
+			} // B is first, should stop evaluation
+				if r.Results["B"].ExpressionPass {
+				t.Error("condition should be false")
+			}
 			},
 		},
 		{
 			// Check that global (true) overrides local option (false)
 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 1) // B should stop it
-				is.True(!r.Results["B"].ExpressionPass)
+				if len(r.Results) != 1 {
+				t.Errorf("expected 1, got %v", len(r.Results))
+			} // B should stop it
+				if r.Results["B"].ExpressionPass {
+				t.Error("condition should be false")
+			}
 			},
 		},
 		{
 			// Check that global (true) overrides local option (false)
 			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.Discard), indigo.DiscardPass(true)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 0)
+				if len(r.Results) != 0 {
+				t.Errorf("expected 0, got %v", len(r.Results))
+			}
 			},
 		},
 		{
@@ -1082,10 +1181,16 @@ func TestGlobalEvalOptions(t *testing.T) {
 
 			opts: []indigo.EvalOption{indigo.DiscardPass(true)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 2) // should get B and E
+				if len(r.Results) != 2 {
+				t.Errorf("expected 2, got %v", len(r.Results))
+			} // should get B and E
 
-				is.True(!r.Results["B"].ExpressionPass)
-				is.True(!r.Results["E"].ExpressionPass)
+				if r.Results["B"].ExpressionPass {
+				t.Error("condition should be false")
+			}
+				if r.Results["E"].ExpressionPass {
+				t.Error("condition should be false")
+			}
 			},
 		},
 		{
@@ -1098,7 +1203,9 @@ func TestGlobalEvalOptions(t *testing.T) {
 			},
 			opts: []indigo.EvalOption{indigo.DiscardPass(false)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 3)
+				if len(r.Results) != 3 {
+				t.Errorf("expected 3, got %v", len(r.Results))
+			}
 			},
 		},
 
@@ -1109,8 +1216,12 @@ func TestGlobalEvalOptions(t *testing.T) {
 			// Check that global (true) overrides local option (false)
 			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.Discard)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 1)
-				is.True(r.Results["D"].Pass)
+				if len(r.Results) != 1 {
+				t.Errorf("expected 1, got %v", len(r.Results))
+			}
+				if !r.Results["D"].Pass {
+				t.Error("condition should be true")
+			}
 			},
 		},
 
@@ -1124,7 +1235,9 @@ func TestGlobalEvalOptions(t *testing.T) {
 			},
 			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.KeepAll)},
 			chk: func(r *indigo.Result) {
-				is.Equal(len(r.Results), 3)
+				if len(r.Results) != 3 {
+				t.Errorf("expected 3, got %v", len(r.Results))
+			}
 			},
 		},
 	}
@@ -1137,17 +1250,20 @@ func TestGlobalEvalOptions(t *testing.T) {
 			c.prep(r)
 		}
 		err := e.Compile(r)
-		is.NoErr(err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
 		result, err := e.Eval(context.Background(), r, map[string]any{}, c.opts...)
-		is.NoErr(err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 		c.chk(result)
 	}
 }
 
 // Test that Indigo stops evaluating rules after a timeout value has been reached
 func TestTimeout(t *testing.T) {
-	is := is.New(t)
 
 	r := makeRule()
 	m := newMockEvaluator()
@@ -1157,5 +1273,7 @@ func TestTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
 	_, err := e.Eval(ctx, r, map[string]any{})
-	is.True(errors.Is(err, context.DeadlineExceeded))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Error("expected context.DeadlineExceeded error")
+	}
 }
