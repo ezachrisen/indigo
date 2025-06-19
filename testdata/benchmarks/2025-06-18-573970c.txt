@@ -1,0 +1,63 @@
+PASS
+ok  	github.com/ezachrisen/indigo	0.414s
+goos: darwin
+goarch: arm64
+pkg: github.com/ezachrisen/indigo/cel
+cpu: Apple M1
+BenchmarkHierarchicalRules-8            	       1	6394496167 ns/op	205474152 B/op	 6377145 allocs/op
+BenchmarkHierarchicalRules-8            	       1	6379120916 ns/op	205472216 B/op	 6377142 allocs/op
+BenchmarkHierarchicalRules-8            	       1	7717846916 ns/op	205469400 B/op	 6377005 allocs/op
+BenchmarkHierarchicalRules-8            	       1	7641050958 ns/op	205467080 B/op	 6376863 allocs/op
+BenchmarkHierarchicalRules-8            	       1	7309799042 ns/op	205465576 B/op	 6376736 allocs/op
+BenchmarkSimpleRule-8                   	 2272945	       469.2 ns/op	     640 B/op	       9 allocs/op
+BenchmarkSimpleRule-8                   	 2482071	       460.7 ns/op	     640 B/op	       9 allocs/op
+BenchmarkSimpleRule-8                   	 2689731	       543.7 ns/op	     640 B/op	       9 allocs/op
+BenchmarkSimpleRule-8                   	 2295865	       558.9 ns/op	     640 B/op	       9 allocs/op
+BenchmarkSimpleRule-8                   	 2322890	       458.7 ns/op	     640 B/op	       9 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  249877	      4828 ns/op	    5207 B/op	      85 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  249928	      4754 ns/op	    5207 B/op	      85 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  251788	      4751 ns/op	    5207 B/op	      85 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  248028	      4742 ns/op	    5207 B/op	      85 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  250192	      4682 ns/op	    5207 B/op	      85 allocs/op
+BenchmarkRuleWithArray-8                	 2614917	       456.1 ns/op	     640 B/op	       9 allocs/op
+BenchmarkRuleWithArray-8                	 2629424	       453.0 ns/op	     640 B/op	       9 allocs/op
+BenchmarkRuleWithArray-8                	 2639774	       470.6 ns/op	     640 B/op	       9 allocs/op
+BenchmarkRuleWithArray-8                	 2603491	       455.9 ns/op	     640 B/op	       9 allocs/op
+BenchmarkRuleWithArray-8                	 2424314	       461.8 ns/op	     640 B/op	       9 allocs/op
+BenchmarkProtoWithSelfX-8               	 1743645	       693.9 ns/op	     664 B/op	      12 allocs/op
+BenchmarkProtoWithSelfX-8               	 1737229	       699.7 ns/op	     664 B/op	      12 allocs/op
+BenchmarkProtoWithSelfX-8               	 1752620	       701.9 ns/op	     664 B/op	      12 allocs/op
+BenchmarkProtoWithSelfX-8               	 1742743	       690.0 ns/op	     664 B/op	      12 allocs/op
+BenchmarkProtoWithSelfX-8               	 1747123	       703.9 ns/op	     664 B/op	      12 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2066408	       576.0 ns/op	     640 B/op	       9 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2094547	       586.3 ns/op	     640 B/op	       9 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2103669	       587.1 ns/op	     640 B/op	       9 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2087589	       575.7 ns/op	     640 B/op	       9 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2104956	       577.6 ns/op	     640 B/op	       9 allocs/op
+BenchmarkProtoCreation-8                	  481761	      2502 ns/op	    2529 B/op	      39 allocs/op
+BenchmarkProtoCreation-8                	  484982	      2504 ns/op	    2529 B/op	      39 allocs/op
+BenchmarkProtoCreation-8                	  479203	      2504 ns/op	    2529 B/op	      39 allocs/op
+BenchmarkProtoCreation-8                	  481760	      2526 ns/op	    2529 B/op	      39 allocs/op
+BenchmarkProtoCreation-8                	  497971	      2524 ns/op	    2529 B/op	      39 allocs/op
+BenchmarkEval2000Rules-8                	     602	   1881022 ns/op	  605443 B/op	   16012 allocs/op
+BenchmarkEval2000Rules-8                	     565	   1914068 ns/op	  605442 B/op	   16012 allocs/op
+BenchmarkEval2000Rules-8                	     620	   1889456 ns/op	  605442 B/op	   16012 allocs/op
+BenchmarkEval2000Rules-8                	     589	   1964306 ns/op	  605441 B/op	   16012 allocs/op
+BenchmarkEval2000Rules-8                	     621	   1902315 ns/op	  605443 B/op	   16012 allocs/op
+BenchmarkEval2000RulesWithSort-8        	     529	   2144150 ns/op	  605443 B/op	   16012 allocs/op
+BenchmarkEval2000RulesWithSort-8        	     530	   2065896 ns/op	  605441 B/op	   16012 allocs/op
+BenchmarkEval2000RulesWithSort-8        	     564	   2703443 ns/op	  605444 B/op	   16012 allocs/op
+BenchmarkEval2000RulesWithSort-8        	     523	   2078488 ns/op	  605440 B/op	   16012 allocs/op
+BenchmarkEval2000RulesWithSort-8        	     583	   2020594 ns/op	  605443 B/op	   16012 allocs/op
+BenchmarkCompileRule-8                  	    3280	    374993 ns/op	  222555 B/op	    3506 allocs/op
+BenchmarkCompileRule-8                  	    3387	    361545 ns/op	  222561 B/op	    3506 allocs/op
+BenchmarkCompileRule-8                  	    3416	    372718 ns/op	  222553 B/op	    3506 allocs/op
+BenchmarkCompileRule-8                  	    3346	    355773 ns/op	  222554 B/op	    3506 allocs/op
+BenchmarkCompileRule-8                  	    3482	    358135 ns/op	  222588 B/op	    3506 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5425	    234914 ns/op	  161688 B/op	    2820 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5300	    234912 ns/op	  161682 B/op	    2820 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5142	    235134 ns/op	  161681 B/op	    2820 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5136	    236665 ns/op	  161679 B/op	    2820 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5062	    233747 ns/op	  161677 B/op	    2820 allocs/op
+PASS
+ok  	github.com/ezachrisen/indigo/cel	388.047s
