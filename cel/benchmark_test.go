@@ -284,3 +284,32 @@ func BenchmarkHierarchicalRules(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkProtoComplex tests a rule with a complex proto expression
+func BenchmarkProtoComplex(b *testing.B) {
+	schema := indigo.Schema{
+		ID: "benchmark_student_schema",
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+		},
+	}
+
+	root := createHierarchicalRules(1, 1, schema)
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(root)
+	if err != nil {
+		b.Fatalf("Failed to compile hierarchical rules: %v", err)
+	}
+
+	data := createComprehensiveStudentData()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Eval(context.Background(), root, data)
+		if err != nil {
+			b.Fatalf("Failed to evaluate hierarchical rules: %v", err)
+		}
+	}
+}
