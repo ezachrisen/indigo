@@ -4,15 +4,18 @@ import (
 	"testing"
 
 	"github.com/ezachrisen/indigo"
-	"github.com/matryer/is"
 )
 
 func TestNew(t *testing.T) {
-
-	is := is.New(t)
 	r := indigo.NewRule("blah", "")
 
-	is.True(r.Rules != nil) // child map initialized
-	is.True(r.ID == "blah")
-	is.True(len(r.Schema.Elements) == 0)
+	if r.Rules == nil {
+		t.Error("expected Rules to be initialized")
+	}
+	if r.ID != "blah" {
+		t.Errorf("expected ID to be 'blah', got %q", r.ID)
+	}
+	if len(r.Schema.Elements) != 0 {
+		t.Errorf("expected Schema.Elements length to be 0, got %d", len(r.Schema.Elements))
+	}
 }
