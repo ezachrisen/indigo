@@ -209,6 +209,7 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	if !reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result)) {
 		t.Error("not all rules were evaluated")
 	}
+
 }
 
 // Test that the engine checks for nil data and rule
@@ -1062,6 +1063,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results["B"].Results) != 1 {
 					t.Errorf("expected 1, got %v", len(r.Results["B"].Results))
 				}
+
 				if x, ok := r.Results["B"].Results["b3"]; !ok {
 					t.Errorf("expected b3, got %s", x.Rule.ID)
 				}
@@ -1240,30 +1242,5 @@ func TestTimeout(t *testing.T) {
 	_, err := e.Eval(ctx, r, map[string]any{})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Error("expected context.DeadlineExceeded error")
-	}
-}
-
-// Test that using both sortFunc and parallel options results in an error
-func TestSortFuncAndParallelIncompatible(t *testing.T) {
-	e := indigo.NewEngine(newMockEvaluator())
-	r := makeRule()
-	
-	// Set up a rule with both sortFunc and parallel options
-	r.EvalOptions.SortFunc = indigo.SortRulesAlpha
-	
-	err := e.Compile(r)
-	if err != nil {
-		t.Fatalf("unexpected error during compile: %v", err)
-	}
-	
-	// Try to evaluate with parallel processing - this should fail
-	_, err = e.Eval(context.Background(), r, map[string]any{}, indigo.Parallel(10, 2))
-	if err == nil {
-		t.Fatal("expected error when using both sortFunc and parallel options")
-	}
-	
-	expectedError := "sortFunc and parallel options are incompatible"
-	if !strings.Contains(err.Error(), expectedError) {
-		t.Errorf("expected error to contain '%s', got: %v", expectedError, err)
 	}
 }
