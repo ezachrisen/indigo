@@ -295,6 +295,16 @@ type EvalOptions struct {
 	//  (2) Rule did not supply its own sort
 	// and was overridden by a global eval option,
 	overrideSort bool
+
+	// Parallel enables parallel evaluation of child rules with batching.
+	// BatchSize controls how many rules are evaluated concurrently in each batch.
+	// MaxParallel limits the maximum number of goroutines used for evaluation.
+	// If BatchSize is 0, all rules are processed in a single batch.
+	// If MaxParallel is 0, no limit is imposed on parallel goroutines.
+	Parallel struct {
+		BatchSize   int `json:"batch_size"`
+		MaxParallel int `json:"max_parallel"`
+	} `json:"parallel"`
 }
 
 // FailAction is used to tell Indigo what to do with the results of
@@ -375,6 +385,15 @@ func StopFirstNegativeChild(b bool) EvalOption {
 func StopFirstPositiveChild(b bool) EvalOption {
 	return func(f *EvalOptions) {
 		f.StopFirstPositiveChild = b
+	}
+}
+
+// Parallel enables parallel evaluation of child rules with the specified
+// batch size and maximum parallel goroutines.
+func Parallel(batchSize, maxParallel int) EvalOption {
+	return func(f *EvalOptions) {
+		f.Parallel.BatchSize = batchSize
+		f.Parallel.MaxParallel = maxParallel
 	}
 }
 
