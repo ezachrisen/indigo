@@ -55,19 +55,15 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	applyEvaluatorOptions(&o, opts...)
 	setSelfKey(r, d)
 
-	//	fmt.Println("Rule ID", r.ID, "return diags?", o.ReturnDiagnostics)
-
+	// Evaluate the rule's expression using the engine's ExpressionEvaluator
 	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program, defaultResultType(r), o.ReturnDiagnostics)
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
 	}
 
-	//	fmt.Println("Rule ID", r.ID, "diagnostics: ", diagnostics)
-
 	u := &Result{
 		Rule:           r,
-		ExpressionPass: true,                                   // default boolean result
-		Results:        make(map[string]*Result, len(r.Rules)), // TODO: consider how large to make it
+		ExpressionPass: true, // default boolean result
 		Value:          val,
 		Diagnostics:    diagnostics,
 		EvalOptions:    o,
@@ -78,7 +74,6 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	if pass, ok := val.(bool); ok {
 		u.ExpressionPass = pass
 	}
-
 	// By default, the rule's pass/fail is determined by the pass/fail of the
 	// expression. If the rule has child rules, we'll iterate through them next
 	// and change the rule's pass/fail (but not expresion pass/fail) if any child
@@ -89,63 +84,11 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	if o.StopIfParentNegative && !u.ExpressionPass {
 		return u, nil
 	}
+	var passCount, failCount int
 
-	// count the number of failed and passed children
-	var failCount int
-	var passCount int
-
-done: // break out of inner switch
-	for _, cr := range r.sortChildRules(o.SortFunc, o.overrideSort) {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-			if o.ReturnDiagnostics {
-				u.RulesEvaluated = append(u.RulesEvaluated, cr)
-			}
-
-			result, err := e.Eval(ctx, cr, d, opts...)
-			if err != nil {
-				return nil, err
-			}
-
-			// If the child rule failed, either due to its own expression evaluation
-			// or its children, we have encountered a failure, and we'll count it
-			// The reason to keep this count, rather than look at the child results,
-			// is that we may be discarding passes or failures.
-			switch result.Pass {
-			case true:
-				passCount++
-			case false:
-				failCount++
-			}
-
-			// Decide if we should return the child rule's result or not
-			switch result.Pass {
-			case true:
-				if !o.DiscardPass {
-					u.Results[cr.ID] = result
-				}
-			case false:
-				switch o.DiscardFail {
-				case KeepAll:
-					u.Results[cr.ID] = result
-				case Discard:
-				case DiscardOnlyIfExpressionFailed:
-					if result.ExpressionPass {
-						u.Results[cr.ID] = result
-					}
-				}
-			}
-
-			if o.StopFirstPositiveChild && result.Pass {
-				break done
-			}
-
-			if o.StopFirstNegativeChild && !result.Pass {
-				break done
-			}
-		}
+	passCount, failCount, u.Results, u.RulesEvaluated, err = e.evalRuleSlice(ctx, r.sortChildRules(o.SortFunc, o.overrideSort), d, o, opts...)
+	if err != nil {
+		return nil, err
 	}
 
 	// Based on the results of the child rules, determine the result of the parent rule
@@ -167,6 +110,66 @@ done: // break out of inner switch
 	}
 
 	return u, nil
+}
+
+func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[string]any, o EvalOptions, opts ...EvalOption) (passCount, failCount int, results map[string]*Result, evaluated []*Rule, err error) {
+
+	results = make(map[string]*Result, len(rules))
+
+	for _, cr := range rules {
+		select {
+		case <-ctx.Done():
+			return 0, 0, nil, nil, ctx.Err()
+		default:
+			if o.ReturnDiagnostics {
+				evaluated = append(evaluated, cr)
+			}
+			var result *Result
+			result, err = e.Eval(ctx, cr, d, opts...)
+			if err != nil {
+				return 0, 0, nil, nil, err
+			}
+
+			// If the child rule failed, either due to its own expression evaluation
+			// or its children, we have encountered a failure, and we'll count it
+			// The reason to keep this count, rather than look at the child results,
+			// is that we may be discarding passes or failures.
+			switch result.Pass {
+			case true:
+				passCount++
+			case false:
+				failCount++
+			}
+
+			// Decide if we should return the child rule's result or not
+			switch result.Pass {
+			case true:
+				if !o.DiscardPass {
+					results[cr.ID] = result
+				}
+			case false:
+				switch o.DiscardFail {
+				case KeepAll:
+					results[cr.ID] = result
+				case Discard:
+				case DiscardOnlyIfExpressionFailed:
+					if result.ExpressionPass {
+						results[cr.ID] = result
+					}
+				}
+			}
+
+			if o.StopFirstPositiveChild && result.Pass {
+				return
+			}
+
+			if o.StopFirstNegativeChild && !result.Pass {
+				return
+			}
+		}
+	}
+	return
+
 }
 
 // Compile uses the Evaluator's compile method to check the rule and its children,
