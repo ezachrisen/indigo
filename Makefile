@@ -8,8 +8,10 @@ race_test:
 
 
 benchmark:
-	@echo "Benchmarking results saved in ./testdata/benchmarks/after.txt"
-	go test  -bench=. -count 5 -benchmem ./... | tee ./testdata/benchmarks/after.txt
+	@COMMIT_HASH=$$(git rev-parse --short HEAD); \
+	DATE=$$(date +%Y-%m-%d); \
+	echo "Benchmarking results saved in ./testdata/benchmarks/$$DATE-$$COMMIT_HASH.txt"; \
+	go test  -bench=. -count 5 -benchmem ./... | tee ./testdata/benchmarks/$$DATE-$$COMMIT_HASH.txt
 
 stats:
 	benchstat ./testdata/benchmarks/reference.txt ./testdata/benchmarks/after.txt
