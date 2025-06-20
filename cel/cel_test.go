@@ -832,7 +832,6 @@ func BenchmarkEval2000Rules(b *testing.B) {
 			Expr:   `student.gpa < honors.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
 			Schema: schema,
 			Meta:   false,
-			Delay:  time.Duration(1 * time.Millisecond),
 		}
 		r.Rules[cr.ID] = cr
 	}

@@ -324,6 +324,22 @@ func (e *DefaultEngine) eatChunks(ctx context.Context, chunkCh <-chan chunk, rul
 
 			// Process the chunk by evaluating all rules in its range
 			go func() {
+				// Recover from any panics that occur during evaluation
+				// This prevents a panic in one worker goroutine from crashing the entire evaluation
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						// Convert the panic to an error and send it back to the main goroutine
+						panicErr := fmt.Errorf("panic during parallel rule evaluation: %v", recovered)
+						select {
+						case errCh <- panicErr:
+							// Successfully sent the panic error
+						case <-ctx.Done():
+							// Context cancelled while sending panic error - just exit
+							// The main goroutine will see the cancellation
+						}
+					}
+				}()
+
 				r, err := e.evalRuleSlice(ctx, rules[chunk.start:chunk.end], d, o, opts...)
 				if err != nil {
 					// An error occurred during evaluation
