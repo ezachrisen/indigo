@@ -60,7 +60,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	//		setSelfKey(r, d)
 
 	// Evaluate the rule's expression using the engine's ExpressionEvaluator
-	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program,
+	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, nil, r.Program,
 		defaultResultType(r), o.ReturnDiagnostics)
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
@@ -679,19 +679,6 @@ func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]any) error {
 	}
 }
 
-func setSelfKey(r *Rule, d map[string]any) {
-	if d == nil {
-		return
-	}
-	// If this rule has a reference to a 'self' object, insert it into the d.
-	// If it doesn't, we must remove any existing reference to self, so that
-	// child rules do not accidentally "inherit" the self object.
-	if r.Self != nil {
-		d[selfKey] = r.Self
-	} else {
-		delete(d, selfKey)
-	}
-}
 
 // Default the result type to boolean
 // This is the result type passed to the evaluator. The evaluator may use it to

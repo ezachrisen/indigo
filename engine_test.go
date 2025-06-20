@@ -211,41 +211,6 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	}
 }
 
-// Test that a self reference is passed through compilation, evaluation
-// and finally returned in results
-func TestSelf(t *testing.T) {
-
-	e := indigo.NewEngine(newMockEvaluator())
-	r := makeRule()
-	err := e.Compile(r)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Set the self reference on D
-	D := r.Rules["D"]
-	D.Self = 22
-	D.Expr = "self"
-	d1 := D.Rules["d1"]
-	// Give d1 a self expression, but no self value
-	d1.Expr = "self"
-	_, err = e.Eval(context.Background(), r, nil)
-	if err == nil {
-		t.Error("should get an error if the data map is nil and we try to use 'self'")
-	}
-
-	result, err := e.Eval(context.Background(), r, map[string]any{"anything": "anything"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Results["D"].Value.(int) != 22 {
-		t.Errorf("expected 22, got %v", result.Results["D"].Value.(int))
-	}
-	if result.Results["D"].Results["d1"].ExpressionPass != false {
-		t.Errorf("expected false, got %v", result.Results["D"].Results["d1"].ExpressionPass)
-	}
-}
-
 // Test that the engine checks for nil data and rule
 func TestNilDataOrRule(t *testing.T) {
 	e := indigo.NewEngine(newMockEvaluator())
@@ -289,7 +254,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 
 	e := indigo.NewEngine(newMockEvaluator())
 	d := map[string]any{"a": "a"} // dummy data, not important
-	w := map[string]bool{                 // the wanted expression evaluation results with no options in effect
+	w := map[string]bool{         // the wanted expression evaluation results with no options in effect
 		"rule1": true,
 		"D":     true,
 		"d1":    true,
@@ -1018,17 +983,17 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopIfParentNegative(true)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 3 {
-				t.Errorf("expected 3, got %v", len(r.Results))
-			}
+					t.Errorf("expected 3, got %v", len(r.Results))
+				}
 				if len(r.Results["D"].Results) != 3 {
-				t.Errorf("expected 3, got %v", len(r.Results["D"].Results))
-			}
+					t.Errorf("expected 3, got %v", len(r.Results["D"].Results))
+				}
 				if len(r.Results["E"].Results) != 0 {
-				t.Errorf("expected 0, got %v", len(r.Results["E"].Results))
-			}
+					t.Errorf("expected 0, got %v", len(r.Results["E"].Results))
+				}
 				if len(r.Results["B"].Results) != 0 {
-				t.Errorf("expected 0, got %v", len(r.Results["B"].Results))
-			}
+					t.Errorf("expected 0, got %v", len(r.Results["B"].Results))
+				}
 			},
 		},
 
@@ -1067,17 +1032,17 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopIfParentNegative(false)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 3 {
-				t.Errorf("expected 3, got %v", len(r.Results))
-			}
+					t.Errorf("expected 3, got %v", len(r.Results))
+				}
 				if len(r.Results["D"].Results) != 3 {
-				t.Errorf("expected 3, got %v", len(r.Results["D"].Results))
-			}
+					t.Errorf("expected 3, got %v", len(r.Results["D"].Results))
+				}
 				if len(r.Results["E"].Results) != 3 {
-				t.Errorf("expected 3, got %v", len(r.Results["E"].Results))
-			}
+					t.Errorf("expected 3, got %v", len(r.Results["E"].Results))
+				}
 				if len(r.Results["B"].Results) != 4 {
-				t.Errorf("expected 4, got %v", len(r.Results["B"].Results))
-			}
+					t.Errorf("expected 4, got %v", len(r.Results["B"].Results))
+				}
 			},
 		},
 		{
@@ -1095,8 +1060,8 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.SortFunc(indigo.SortRulesAlphaDesc)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results["B"].Results) != 1 {
-				t.Errorf("expected 1, got %v", len(r.Results["B"].Results))
-			}
+					t.Errorf("expected 1, got %v", len(r.Results["B"].Results))
+				}
 				if x, ok := r.Results["B"].Results["b3"]; !ok {
 					t.Errorf("expected b3, got %s", x.Rule.ID)
 				}
@@ -1109,14 +1074,14 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 2 {
-				t.Errorf("expected 2, got %v", len(r.Results))
-			} // B is false, D is first positive child
+					t.Errorf("expected 2, got %v", len(r.Results))
+				} // B is false, D is first positive child
 				if !r.Results["D"].ExpressionPass {
-				t.Error("condition should be true")
-			}
+					t.Error("condition should be true")
+				}
 				if r.Results["B"].ExpressionPass {
-				t.Error("condition should be false")
-			}
+					t.Error("condition should be false")
+				}
 			},
 		},
 		{
@@ -1135,8 +1100,8 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopFirstPositiveChild(false)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 3 {
-				t.Errorf("expected 3, got %v", len(r.Results))
-			}
+					t.Errorf("expected 3, got %v", len(r.Results))
+				}
 			},
 		},
 
@@ -1145,11 +1110,11 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 1 {
-				t.Errorf("expected 1, got %v", len(r.Results))
-			} // B is first, should stop evaluation
+					t.Errorf("expected 1, got %v", len(r.Results))
+				} // B is first, should stop evaluation
 				if r.Results["B"].ExpressionPass {
-				t.Error("condition should be false")
-			}
+					t.Error("condition should be false")
+				}
 			},
 		},
 		{
@@ -1157,11 +1122,11 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.StopFirstNegativeChild(true), indigo.StopFirstPositiveChild(true), indigo.SortFunc(indigo.SortRulesAlpha)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 1 {
-				t.Errorf("expected 1, got %v", len(r.Results))
-			} // B should stop it
+					t.Errorf("expected 1, got %v", len(r.Results))
+				} // B should stop it
 				if r.Results["B"].ExpressionPass {
-				t.Error("condition should be false")
-			}
+					t.Error("condition should be false")
+				}
 			},
 		},
 		{
@@ -1169,8 +1134,8 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.Discard), indigo.DiscardPass(true)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 0 {
-				t.Errorf("expected 0, got %v", len(r.Results))
-			}
+					t.Errorf("expected 0, got %v", len(r.Results))
+				}
 			},
 		},
 		{
@@ -1182,15 +1147,15 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.DiscardPass(true)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 2 {
-				t.Errorf("expected 2, got %v", len(r.Results))
-			} // should get B and E
+					t.Errorf("expected 2, got %v", len(r.Results))
+				} // should get B and E
 
 				if r.Results["B"].ExpressionPass {
-				t.Error("condition should be false")
-			}
+					t.Error("condition should be false")
+				}
 				if r.Results["E"].ExpressionPass {
-				t.Error("condition should be false")
-			}
+					t.Error("condition should be false")
+				}
 			},
 		},
 		{
@@ -1204,8 +1169,8 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.DiscardPass(false)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 3 {
-				t.Errorf("expected 3, got %v", len(r.Results))
-			}
+					t.Errorf("expected 3, got %v", len(r.Results))
+				}
 			},
 		},
 
@@ -1217,11 +1182,11 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.Discard)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 1 {
-				t.Errorf("expected 1, got %v", len(r.Results))
-			}
+					t.Errorf("expected 1, got %v", len(r.Results))
+				}
 				if !r.Results["D"].Pass {
-				t.Error("condition should be true")
-			}
+					t.Error("condition should be true")
+				}
 			},
 		},
 
@@ -1236,8 +1201,8 @@ func TestGlobalEvalOptions(t *testing.T) {
 			opts: []indigo.EvalOption{indigo.DiscardFail(indigo.KeepAll)},
 			chk: func(r *indigo.Result) {
 				if len(r.Results) != 3 {
-				t.Errorf("expected 3, got %v", len(r.Results))
-			}
+					t.Errorf("expected 3, got %v", len(r.Results))
+				}
 			},
 		},
 	}

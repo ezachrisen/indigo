@@ -58,11 +58,6 @@ type Rule struct {
 	// Some implementations of Evaluator require a schema.
 	Schema Schema `json:"schema,omitempty"`
 
-	// A reference to an object whose values can be used in the rule expression.
-	// Add the corresponding object in the data with the reserved key name selfKey
-	// (see constants).
-	// Child rules do not inherit the self value.
-	Self any `json:"-"`
 
 	// A set of child rules.
 	Rules map[string]*Rule `json:"rules,omitempty"`
@@ -87,11 +82,6 @@ type Rule struct {
 	Delay time.Duration
 }
 
-const (
-	// If the rule includes a Self object, it will be made available in the input
-	// data with this key name.
-	selfKey = "self"
-)
 
 // NewRule initializes a rule with the ID and rule expression.
 // The ID and expression can be empty.
