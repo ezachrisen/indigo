@@ -37,7 +37,7 @@ statsversion:
 		exit 1; \
 	fi; \
 	echo "Comparing $$VERSIONED (baseline) vs $$LATEST (current)"; \
-	benchstat "$$LATEST" "$$VERSIONED" 
+	benchstat "$$VERSIONED" "$$LATEST" 
 
 
 

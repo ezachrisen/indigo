@@ -1,0 +1,69 @@
+PASS
+ok  	github.com/ezachrisen/indigo	0.451s
+goos: darwin
+goarch: arm64
+pkg: github.com/ezachrisen/indigo/cel
+cpu: Apple M1
+BenchmarkHierarchicalRules-8            	       1	3809290125 ns/op	201483288 B/op	 6126696 allocs/op
+BenchmarkHierarchicalRules-8            	       1	3687788958 ns/op	201482680 B/op	 6126840 allocs/op
+BenchmarkHierarchicalRules-8            	       1	3821749750 ns/op	201479352 B/op	 6126632 allocs/op
+BenchmarkHierarchicalRules-8            	       1	3805490500 ns/op	201483576 B/op	 6126896 allocs/op
+BenchmarkHierarchicalRules-8            	       1	3722368750 ns/op	201471192 B/op	 6126122 allocs/op
+BenchmarkProtoComplex-8                 	 3726937	       319.7 ns/op	     192 B/op	       2 allocs/op
+BenchmarkProtoComplex-8                 	 3744564	       318.2 ns/op	     192 B/op	       2 allocs/op
+BenchmarkProtoComplex-8                 	 3813138	       314.2 ns/op	     192 B/op	       2 allocs/op
+BenchmarkProtoComplex-8                 	 3808879	       314.4 ns/op	     192 B/op	       2 allocs/op
+BenchmarkProtoComplex-8                 	 3822366	       313.1 ns/op	     192 B/op	       2 allocs/op
+BenchmarkSimpleRule-8                   	 2910001	       410.1 ns/op	     656 B/op	       8 allocs/op
+BenchmarkSimpleRule-8                   	 2918114	       411.2 ns/op	     656 B/op	       8 allocs/op
+BenchmarkSimpleRule-8                   	 2954990	       412.5 ns/op	     656 B/op	       8 allocs/op
+BenchmarkSimpleRule-8                   	 2914110	       411.5 ns/op	     656 B/op	       8 allocs/op
+BenchmarkSimpleRule-8                   	 2986177	       410.0 ns/op	     656 B/op	       8 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  258184	      4547 ns/op	    5248 B/op	      86 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  264171	      4552 ns/op	    5248 B/op	      86 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  259602	      4569 ns/op	    5248 B/op	      86 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  261135	      4541 ns/op	    5248 B/op	      86 allocs/op
+BenchmarkSimpleRuleWithDiagnostics-8    	  263614	      4574 ns/op	    5248 B/op	      86 allocs/op
+BenchmarkRuleWithArray-8                	 2843590	       419.5 ns/op	     656 B/op	       8 allocs/op
+BenchmarkRuleWithArray-8                	 2859907	       421.1 ns/op	     656 B/op	       8 allocs/op
+BenchmarkRuleWithArray-8                	 2915065	       419.1 ns/op	     656 B/op	       8 allocs/op
+BenchmarkRuleWithArray-8                	 2884580	       420.2 ns/op	     656 B/op	       8 allocs/op
+BenchmarkRuleWithArray-8                	 2862243	       417.4 ns/op	     656 B/op	       8 allocs/op
+--- FAIL: BenchmarkProtoWithSelfX
+    cel_test.go:708: rule at_risk: evaluating rule: no such attribute(s): self
+BenchmarkProtoWithoutSelf-8             	 2259606	       530.8 ns/op	     656 B/op	       8 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2262766	       528.8 ns/op	     656 B/op	       8 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2256224	       531.8 ns/op	     656 B/op	       8 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2277410	       525.9 ns/op	     656 B/op	       8 allocs/op
+BenchmarkProtoWithoutSelf-8             	 2263431	       530.6 ns/op	     656 B/op	       8 allocs/op
+BenchmarkProtoCreation-8                	  502214	      2382 ns/op	    2562 B/op	      39 allocs/op
+BenchmarkProtoCreation-8                	  515914	      2359 ns/op	    2562 B/op	      39 allocs/op
+BenchmarkProtoCreation-8                	  519310	      2387 ns/op	    2562 B/op	      39 allocs/op
+BenchmarkProtoCreation-8                	  500776	      2370 ns/op	    2562 B/op	      39 allocs/op
+BenchmarkProtoCreation-8                	  500133	      2388 ns/op	    2562 B/op	      39 allocs/op
+BenchmarkEval2000Rules-8                	       1	2332029583 ns/op	  574864 B/op	   14019 allocs/op
+BenchmarkEval2000Rules-8                	       1	2333414708 ns/op	  574864 B/op	   14019 allocs/op
+BenchmarkEval2000Rules-8                	       1	2337581708 ns/op	  574848 B/op	   14019 allocs/op
+BenchmarkEval2000Rules-8                	       1	2332102793 ns/op	  574848 B/op	   14019 allocs/op
+BenchmarkEval2000Rules-8                	       1	2345780541 ns/op	  576312 B/op	   14029 allocs/op
+BenchmarkEval2000RulesParallel-8        	       5	 232243358 ns/op	  645808 B/op	   14110 allocs/op
+BenchmarkEval2000RulesParallel-8        	       5	 232803017 ns/op	  645657 B/op	   14110 allocs/op
+BenchmarkEval2000RulesParallel-8        	       5	 231626891 ns/op	  645644 B/op	   14109 allocs/op
+BenchmarkEval2000RulesParallel-8        	       5	 233019308 ns/op	  646681 B/op	   14111 allocs/op
+BenchmarkEval2000RulesParallel-8        	       5	 231968008 ns/op	  645465 B/op	   14111 allocs/op
+--- FAIL: BenchmarkEval2000RulesWithSort
+    cel_test.go:991: rule at_risk_0: evaluating rule: no such attribute(s): self
+BenchmarkCompileRule-8                  	    3577	    331657 ns/op	  222652 B/op	    3506 allocs/op
+BenchmarkCompileRule-8                  	    3591	    317549 ns/op	  222643 B/op	    3506 allocs/op
+BenchmarkCompileRule-8                  	    3744	    329724 ns/op	  222650 B/op	    3506 allocs/op
+BenchmarkCompileRule-8                  	    3669	    329363 ns/op	  222639 B/op	    3506 allocs/op
+BenchmarkCompileRule-8                  	    3727	    329858 ns/op	  222657 B/op	    3506 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5438	    217275 ns/op	  161721 B/op	    2820 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5749	    203291 ns/op	  161733 B/op	    2820 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5908	    213599 ns/op	  161715 B/op	    2820 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5521	    217747 ns/op	  161721 B/op	    2820 allocs/op
+BenchmarkCompileRuleWithFixedSchema-8   	    5529	    218076 ns/op	  161727 B/op	    2820 allocs/op
+FAIL
+exit status 1
+FAIL	github.com/ezachrisen/indigo/cel	310.523s
+FAIL

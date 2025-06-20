@@ -68,14 +68,6 @@ func (m *mockEvaluator) Evaluate(data map[string]any, expr string, s indigo.Sche
 		return true, diagnostics, nil
 	}
 
-	if expr == `self` && self != nil {
-		return self, diagnostics, nil
-		// return indigo.Value{
-		// 	Val:  self,
-		// 	Type: indigo.Int{},
-		// }, diagnostics, nil
-	}
-
 	// return indigo.Value{
 	// 	Val:  false,
 	// 	Type: indigo.Bool{},
