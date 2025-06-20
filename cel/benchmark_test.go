@@ -206,7 +206,7 @@ func TestHierarchicalRulesDeep(t *testing.T) {
 			data := createComprehensiveStudentData()
 
 			// Evaluate rules
-			results, err := engine.Eval(context.Background(), root, data, indigo.ReturnDiagnostics(true))
+			results, err := engine.Eval(context.Background(), root, data, indigo.ReturnDiagnostics(true), indigo.Parallel(2, 1000))
 			is.NoErr(err)
 			is.True(results != nil)
 

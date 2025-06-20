@@ -2,9 +2,12 @@ package indigo
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
+	"time"
 )
 
 // Compiler is the interface that wraps the Compile method.
@@ -54,7 +57,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
-	setSelfKey(r, d)
+	//		setSelfKey(r, d)
 
 	// Evaluate the rule's expression using the engine's ExpressionEvaluator
 	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program,
@@ -116,6 +119,9 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 }
 
 func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[string]any, o EvalOptions, opts ...EvalOption) (r evalResult, err error) {
+	if len(rules) == 0 {
+		return
+	}
 
 	if o.Parallel.BatchSize <= 1 || o.Parallel.MaxParallel <= 1 {
 		return e.evalRuleSlice(ctx, rules, d, o, opts...)
@@ -124,7 +130,57 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 	if o.Parallel.BatchSize > math.MaxInt/2 || o.Parallel.MaxParallel > math.MaxInt/2 {
 		return r, errors.New("batch size or parallel out of range")
 	}
+	//	fmt.Println("rule len", len(rules), "option: ", o.Parallel)
+
+	r.results = make(map[string]*Result, len(rules))
+
+	chunkCh := make(chan chunk, o.Parallel.MaxParallel)
+	resultsCh := make(chan evalResult)
+	errCh := make(chan error)
+
+	chunks := makeChunks(0, len(rules), o.Parallel.BatchSize)
+	//fmt.Println("Made chunks: ", chunks)
+
+	// Create internal context for coordinating goroutine cleanup
+	// This allows us to signal all goroutines to stop when we're done,
+	// separate from the user's context which might have different semantics
+	internalCtx, cancelInternal := context.WithCancel(context.Background())
+	defer cancelInternal() // Ensure goroutines are cleaned up when function exits
+
+	// Start producer goroutine: sends chunks to workers on chunkCh
+	// This goroutine will close chunkCh when all chunks are sent
+	go hurlChunks(ctx, chunks, chunkCh)
+
+	// Start consumer goroutine: processes chunks and sends results
+	// This goroutine reads from chunkCh and evaluates each chunk
+	go e.eatChunks(internalCtx, chunkCh, rules, d, resultsCh, errCh, o, opts...)
+
+	// Collect results from all chunks
+	// We know exactly how many results to expect (one per chunk)
+	numChunks := len(chunks)
+	for range numChunks {
+		// Use select to handle multiple channel operations non-blockingly
+		select {
+		case <-ctx.Done():
+			// User cancelled or timeout occurred - stop immediately
+			// The defer cancelInternal() will clean up our goroutines
+			return r, ctx.Err()
+		case res := <-resultsCh:
+			// Got results from a chunk - add them to our matches
+			// Note: append is safe here because we're the only goroutine modifying matches
+			r.evaluated = append(r.evaluated, res.evaluated...)
+			r.failCount = r.failCount + res.failCount
+			r.passCount = r.passCount + res.passCount
+			maps.Copy(r.results, res.results)
+		case err := <-errCh:
+			// A worker encountered an error - stop processing and return it
+			return r, err
+		}
+	}
+
+	// All chunks processed successfully
 	return
+
 }
 
 type evalResult struct {
@@ -134,9 +190,185 @@ type evalResult struct {
 	evaluated []*Rule
 }
 
+// makeChunks divides a range [start, len) into batches of the specified size.
+// It returns a slice of chunks, where each chunk represents a contiguous range
+// with start and end positions. The last chunk may be smaller than batchSize
+// if the remaining range is not evenly divisible.
+//
+// This function uses recursion to build the chunk list, which is an interesting
+// approach but not necessarily the most efficient for large datasets. An iterative
+// approach might be more suitable for production code, but recursion demonstrates
+// functional programming concepts in Go.
+//
+// Parameters:
+//   - start: the starting position of the range (inclusive)
+//   - len: the end position of the range (exclusive) - this is the total length
+//   - batchSize: the maximum size of each chunk
+//
+// Returns a slice of chunks covering the entire range [start, len).
+//
+// Example: makeChunks(0, 10, 3) returns chunks:
+//   - {0, 3} covers indices 0, 1, 2
+//   - {3, 6} covers indices 3, 4, 5
+//   - {6, 9} covers indices 6, 7, 8
+//   - {9, 10} covers index 9
+func makeChunks(start, len, batchSize int) (chunks []chunk) {
+	// Create a chunk starting at 'start' with size 'batchSize'
+	c := chunk{start, start + batchSize}
+
+	// Check if this chunk extends beyond our range
+	if c.end > len {
+		// Last chunk - trim it to fit exactly
+		c.end = len
+		chunks = append(chunks, c)
+		return // Base case: we've covered the entire range
+	}
+
+	// This chunk fits completely within our range
+	chunks = append(chunks, c)
+
+	// Recursively create chunks for the remaining range
+	// Note: This is tail recursion - the recursive call is the last operation
+	chunks = append(chunks, makeChunks(c.end, len, batchSize)...)
+	return
+}
+
+// hurlChunks is the producer goroutine that sends work chunks to the consumer.
+// It runs in a separate goroutine and sends all chunks to chunkCh for processing.
+//
+// This function implements the "producer" part of a producer-consumer pattern.
+// Key patterns demonstrated:
+//   - defer close() to ensure the channel is closed when done
+//   - Select with context cancellation for graceful shutdown
+//   - Send-only channel parameter (chan<- chunk) for type safety
+//
+// Parameters:
+//   - ctx: Context for cancellation - if cancelled, stops sending chunks
+//   - chunks: Slice of all work chunks to send
+//   - chunkCh: Send-only channel where chunks are sent for processing
+//
+// Important: This function MUST close chunkCh when done to signal the consumer
+// that no more work is coming. We use defer to ensure it's closed even if
+// the context is cancelled partway through.
+func hurlChunks(ctx context.Context, chunks []chunk, chunkCh chan<- chunk) {
+	// defer close(chunkCh) ensures the channel is closed no matter how this function exits
+	// This is CRITICAL - the consumer (eatChunks) waits for the channel to be closed
+	// to know when all work has been sent. Without this, eatChunks would wait forever!
+	defer close(chunkCh)
+
+	// Send each chunk to the worker
+	for _, c := range chunks {
+		// Use select to handle both sending and cancellation
+		select {
+		case chunkCh <- c:
+			// Successfully sent the chunk - continue to next one
+			// Note: this might block if the channel buffer is full,
+			// which provides natural backpressure (flow control)
+		case <-ctx.Done():
+			// Context was cancelled - stop sending chunks immediately
+			// The defer close(chunkCh) will still run, properly signaling the consumer
+			return
+		}
+	}
+	// All chunks sent successfully
+	// The defer close(chunkCh) will execute here, signaling completion
+}
+
+// eatChunks is the consumer goroutine that processes work chunks.
+// It runs in a separate goroutine and continuously reads chunks from chunkCh,
+// evaluates them, and sends results back through resultsCh or errCh.
+//
+// This function implements the "worker" part of a producer-consumer pattern.
+// It demonstrates several important Go concurrency patterns:
+//   - Channel communication for receiving work and sending results
+//   - Select statements for handling multiple channels and cancellation
+//   - Proper goroutine termination when channels are closed or context is cancelled
+//
+// Parameters:
+//   - ctx: Context for cancellation - when cancelled, this goroutine exits
+//   - chunkCh: Receive-only channel for getting work chunks (note the <-chan syntax)
+//   - rules: The full slice of rules (chunks contain indices into this slice)
+//   - resultsCh: Send-only channel for sending successful results (note the chan<- syntax)
+//   - errCh: Send-only channel for sending errors when evaluation fails
+//
+// Channel directions (important Go concept):
+//   - <-chan chunk: Can only receive from this channel
+//   - chan<- result: Can only send to this channel
+//   - This provides compile-time safety and documents the intended data flow
+func (e *DefaultEngine) eatChunks(ctx context.Context, chunkCh <-chan chunk, rules []*Rule, d map[string]any, resultsCh chan<- evalResult, errCh chan<- error, o EvalOptions, opts ...EvalOption) {
+	// Infinite loop to continuously process chunks until context is cancelled
+	// or the chunk channel is closed
+	for {
+		// Select allows us to wait on multiple channel operations simultaneously
+		// The first case that becomes ready will be executed
+		select {
+		case <-ctx.Done():
+			// Context was cancelled - exit immediately
+			// This is how we ensure goroutines don't leak when the parent gives up
+			return
+
+		case chunk, ok := <-chunkCh:
+			// Try to receive a chunk from the work queue
+			// The 'ok' variable tells us if the channel is still open
+			if !ok {
+				// Channel was closed, meaning no more work is coming
+				// This is the normal way for a producer to signal "all done"
+				return
+			}
+
+			// Process the chunk by evaluating all rules in its range
+			go func() {
+				r, err := e.evalRuleSlice(ctx, rules[chunk.start:chunk.end], d, o, opts...)
+				if err != nil {
+					// An error occurred during evaluation
+					// We need to send it back to the main goroutine, but we also
+					// need to handle the case where the context gets cancelled
+					// while we're trying to send the error
+					select {
+					case errCh <- err:
+						// Successfully sent the error
+					case <-ctx.Done():
+						// Context cancelled while sending error - just exit
+						// The main goroutine will see the cancellation
+					}
+					return // Exit after sending error (fail-fast behavior)
+				}
+
+				// Successfully processed the chunk - send results back
+				// Again, we need to handle potential cancellation during the send
+				select {
+				case resultsCh <- r:
+					// Successfully sent results - continue to next chunk
+				case <-ctx.Done():
+					// Context cancelled while sending results - exit
+					return
+				}
+			}()
+		}
+		// Loop continues to process the next chunk
+	}
+}
+
+// chunk represents a range of indices in the rules slice that should be processed together.
+// This allows us to divide the work into batches for parallel processing.
+//
+// Fields:
+//   - start: Starting index (inclusive) - first rule to include in this chunk
+//   - end: Ending index (exclusive) - first rule NOT to include in this chunk
+//
+// Example: chunk{start: 5, end: 8} includes rules at indices 5, 6, and 7
+// This follows Go's slice convention where ranges are [start, end)
+type chunk struct {
+	start, end int
+}
+
 func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[string]any,
 	o EvalOptions, opts ...EvalOption) (r evalResult, err error) {
-
+	// id := UniqueID()
+	// fmt.Println("Starting ", id)
+	// defer func() {
+	// 	fmt.Println("Finished ", id)
+	// }()
 	r.results = make(map[string]*Result, len(rules))
 
 	for _, cr := range rules {
@@ -152,7 +384,7 @@ func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[
 			if err != nil {
 				return r, err
 			}
-
+			time.Sleep(cr.Delay)
 			// If the child rule failed, either due to its own expression evaluation
 			// or its children, we have encountered a failure, and we'll count it
 			// The reason to keep this count, rather than look at the child results,
@@ -488,4 +720,19 @@ func validateCompileArguments(r *Rule, e *DefaultEngine) error {
 	default:
 		return nil
 	}
+}
+
+const alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+// From the Firestore Go Client:
+// https://github.com/googleapis/google-cloud-go/blob/d14ee26877efc7c87f94a1acddff415628781b8d/firestore/collref.go
+func UniqueID() string {
+	b := make([]byte, 10)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("firestore: crypto/rand.Read error: %v", err))
+	}
+	for i, byt := range b {
+		b[i] = alphanum[int(byt)%len(alphanum)]
+	}
+	return string(b)
 }
