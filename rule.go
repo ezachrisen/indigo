@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -15,26 +16,26 @@ import (
 // how child rules should be handled. Child rules can in turn have children,
 // enabling you to create a hierarchy of rules.
 //
-// Example Rule Structures
+// # Example Rule Structures
 //
 // A hierchy of parent/child rules, combined with evaluation options
 // give many different ways of using the rules engine.
-//  Rule with expression, no child rules:
-//   Parent rule expression is evaluated and result returned.
 //
-//  Rule with expression and child rules:
-//   No options specified
-//   - Parent rule xpression is evaluated, and so are all the child rules.
-//   - All children and their evaluation results are returned
+//	Rule with expression, no child rules:
+//	 Parent rule expression is evaluated and result returned.
 //
-//  Rule with expression and child rules
-//  Option set: StopIfParentNegative
-//  - Parent rule expression is evaluated
-//  - If the parent rule is a boolean, and it returns FALSE,
-//    the children are NOT evaluated
-//  - If the parent rule returns TRUE, or if it's not a
-//    boolean, all the children and their resulsts are returned
+//	Rule with expression and child rules:
+//	 No options specified
+//	 - Parent rule xpression is evaluated, and so are all the child rules.
+//	 - All children and their evaluation results are returned
 //
+//	Rule with expression and child rules
+//	Option set: StopIfParentNegative
+//	- Parent rule expression is evaluated
+//	- If the parent rule is a boolean, and it returns FALSE,
+//	  the children are NOT evaluated
+//	- If the parent rule returns TRUE, or if it's not a
+//	  boolean, all the children and their resulsts are returned
 type Rule struct {
 	// A rule identifier. (required)
 	ID string `json:"id"`
@@ -82,6 +83,8 @@ type Rule struct {
 	// compile time. If SortFunc is not specified, the evaluation order is
 	// unspecified.
 	sortedRules []*Rule
+
+	Delay time.Duration
 }
 
 const (
