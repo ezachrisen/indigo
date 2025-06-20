@@ -57,6 +57,12 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
+	
+	// Check for incompatible options: sortFunc and parallel cannot be used together
+	if o.SortFunc != nil && (o.Parallel.BatchSize > 1 || o.Parallel.MaxParallel > 1) {
+		return nil, fmt.Errorf("rule %s: sortFunc and parallel options are incompatible - parallel processing cannot guarantee evaluation order", r.ID)
+	}
+	
 	//		setSelfKey(r, d)
 
 	// Evaluate the rule's expression using the engine's ExpressionEvaluator
