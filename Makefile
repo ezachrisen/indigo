@@ -9,24 +9,24 @@ race_test:
 
 benchmark:
 	@COMMIT_HASH=$$(git rev-parse --short HEAD); \
-	DATE=$$(date +%Y-%m-%d); \
-	echo "Benchmarking results saved in ./testdata/benchmarks/$$DATE-$$COMMIT_HASH.txt"; \
+	TIMESTAMP=$$(date +%Y-%m-%d-%H-%M-%S); \
+	echo "Benchmarking results saved in ./testdata/benchmarks/$$TIMESTAMP-$$COMMIT_HASH.txt"; \
 	echo "This could take a while..."; \
-	go test -timeout 30m -bench=. -count 5 -benchmem ./... | tee ./testdata/benchmarks/$$DATE-$$COMMIT_HASH.txt
+	go test -timeout 30m -bench=. -count 5 -benchmem ./... | tee ./testdata/benchmarks/$$TIMESTAMP-$$COMMIT_HASH.txt
 
-stats:
-	@FILES=$$(ls -1 ./testdata/benchmarks/????-??-??-*.txt 2>/dev/null | sort -r | head -2); \
-	if [ $$(echo "$$FILES" | wc -l) -lt 2 ]; then \
-		echo "Need at least 2 benchmark files to compare"; \
-		exit 1; \
-	fi; \
-	LATEST=$$(echo "$$FILES" | head -1); \
-	PREVIOUS=$$(echo "$$FILES" | tail -1); \
-	echo "Comparing $$PREVIOUS (older) vs $$LATEST (newer)"; \
-	benchstat "$$PREVIOUS" "$$LATEST"
+# stats:
+# 	@FILES=$$(ls -1 ./testdata/benchmarks/????-??-??-??-??-??-*.txt 2>/dev/null | sort -r | head -2); \
+# 	if [ $$(echo "$$FILES" | wc -l) -lt 2 ]; then \
+# 		echo "Need at least 2 benchmark files to compare"; \
+# 		exit 1; \
+# 	fi; \
+# 	LATEST=$$(echo "$$FILES" | head -1); \
+# 	PREVIOUS=$$(echo "$$FILES" | tail -1); \
+# 	echo "Comparing $$PREVIOUS (older) vs $$LATEST (newer)"; \
+# 	benchstat "$$PREVIOUS" "$$LATEST"
 
 statsversion:
-	@LATEST=$$(ls -1 ./testdata/benchmarks/????-??-??-*.txt 2>/dev/null | sort -r | head -1); \
+	@LATEST=$$(ls -1 ./testdata/benchmarks/????-??-??-??-??-??-*.txt 2>/dev/null | sort -r | head -1); \
 	VERSIONED=$$(ls -1 ./testdata/benchmarks/v*.txt 2>/dev/null | sort -V | tail -1); \
 	if [ -z "$$LATEST" ]; then \
 		echo "No dated benchmark files found"; \
