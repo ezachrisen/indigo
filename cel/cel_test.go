@@ -894,7 +894,6 @@ func BenchmarkEval2000RulesParallel(b *testing.B) {
 			Expr:   `student.gpa < honors.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
 			Schema: schema,
 			Meta:   false,
-			Delay:  time.Duration(1 * time.Millisecond),
 		}
 		r.Rules[cr.ID] = cr
 	}
@@ -1046,7 +1045,6 @@ func TestEval2000RulesParallel(t *testing.T) {
 			Expr:   `student.gpa < honors.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
 			Schema: schema,
 			Meta:   false,
-			Delay:  time.Duration(1 * time.Millisecond),
 		}
 		r.Rules[cr.ID] = cr
 	}
@@ -1108,7 +1106,6 @@ func TestEval2000Rules(t *testing.T) {
 			Expr:   `student.gpa < honors.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
 			Schema: schema,
 			Meta:   false,
-			Delay:  time.Duration(1 * time.Millisecond),
 		}
 		r.Rules[cr.ID] = cr
 	}
