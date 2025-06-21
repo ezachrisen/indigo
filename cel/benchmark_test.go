@@ -9,7 +9,6 @@ import (
 	"github.com/ezachrisen/indigo"
 	"github.com/ezachrisen/indigo/cel"
 	"github.com/ezachrisen/indigo/testdata/school"
-	"github.com/matryer/is"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -182,8 +181,6 @@ func TestHierarchicalRulesDeep(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			is := is.New(t)
-
 			// Create schema
 			schema := indigo.Schema{
 				ID: "comprehensive_student_schema",
@@ -195,30 +192,42 @@ func TestHierarchicalRulesDeep(t *testing.T) {
 
 			// Create hierarchical rules
 			root := createHierarchicalRules(tc.depth, tc.breadth, schema)
-			is.True(root != nil)
+			if root == nil {
+				t.Fatal("root should not be nil")
+			}
 
 			// Create engine and compile
 			engine := indigo.NewEngine(cel.NewEvaluator())
 			err := engine.Compile(root, indigo.CollectDiagnostics(true))
-			is.NoErr(err)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
 			// Create test data that satisfies all conditions
 			data := createComprehensiveStudentData()
 
 			// Evaluate rules
 			results, err := engine.Eval(context.Background(), root, data, indigo.ReturnDiagnostics(true), indigo.Parallel(2, 1000))
-			is.NoErr(err)
-			is.True(results != nil)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if results == nil {
+				t.Fatal("results should not be nil")
+			}
 
 			// Verify results structure
 			if tc.expectPass {
-				is.True(results.ExpressionPass)
+				if !results.ExpressionPass {
+					t.Fatal("expected results.ExpressionPass to be true")
+				}
 			}
 
 			// Count total rules evaluated
 			totalRules := countRulesInResult(results)
 			expectedMinRules := calculateExpectedRules(tc.depth, tc.breadth)
-			is.True(totalRules >= expectedMinRules)
+			if totalRules < expectedMinRules {
+				t.Fatalf("expected at least %d rules, got %d", expectedMinRules, totalRules)
+			}
 
 			t.Logf("Test case: %s - Evaluated %d rules across %d levels with %d children per level",
 				tc.description, totalRules, tc.depth, tc.breadth)

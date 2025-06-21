@@ -1063,7 +1063,6 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results["B"].Results) != 1 {
 					t.Errorf("expected 1, got %v", len(r.Results["B"].Results))
 				}
-
 				if x, ok := r.Results["B"].Results["b3"]; !ok {
 					t.Errorf("expected b3, got %s", x.Rule.ID)
 				}
