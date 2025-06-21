@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"time"
 )
 
 // Compiler is the interface that wraps the Compile method.
@@ -57,12 +56,12 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
-	
+
 	// Check for incompatible options: sortFunc and parallel cannot be used together
 	if o.SortFunc != nil && (o.Parallel.BatchSize > 1 || o.Parallel.MaxParallel > 1) {
 		return nil, fmt.Errorf("rule %s: sortFunc and parallel options are incompatible - parallel processing cannot guarantee evaluation order", r.ID)
 	}
-	
+
 	//		setSelfKey(r, d)
 
 	// Evaluate the rule's expression using the engine's ExpressionEvaluator
@@ -406,7 +405,7 @@ func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[
 			if err != nil {
 				return r, err
 			}
-			time.Sleep(cr.Delay)
+
 			// If the child rule failed, either due to its own expression evaluation
 			// or its children, we have encountered a failure, and we'll count it
 			// The reason to keep this count, rather than look at the child results,
@@ -700,7 +699,6 @@ func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]any) error {
 		return nil
 	}
 }
-
 
 // Default the result type to boolean
 // This is the result type passed to the evaluator. The evaluator may use it to
