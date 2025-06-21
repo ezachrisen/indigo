@@ -209,11 +209,8 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	if !reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result)) {
 		t.Error("not all rules were evaluated")
 	}
-<<<<<<< HEAD
-}
-=======
 
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
+}
 
 // Test that the engine checks for nil data and rule
 func TestNilDataOrRule(t *testing.T) {
@@ -998,10 +995,6 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results["B"].Results) != 0 {
 					t.Errorf("expected 0, got %v", len(r.Results["B"].Results))
 				}
-<<<<<<< HEAD
-=======
-
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 
@@ -1051,10 +1044,6 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results["B"].Results) != 4 {
 					t.Errorf("expected 4, got %v", len(r.Results["B"].Results))
 				}
-<<<<<<< HEAD
-=======
-
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 		{
@@ -1074,10 +1063,6 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results["B"].Results) != 1 {
 					t.Errorf("expected 1, got %v", len(r.Results["B"].Results))
 				}
-<<<<<<< HEAD
-=======
-
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 				if x, ok := r.Results["B"].Results["b3"]; !ok {
 					t.Errorf("expected b3, got %s", x.Rule.ID)
 				}
@@ -1098,10 +1083,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if r.Results["B"].ExpressionPass {
 					t.Error("condition should be false")
 				}
-<<<<<<< HEAD
-=======
 
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 		{
@@ -1122,10 +1104,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results) != 3 {
 					t.Errorf("expected 3, got %v", len(r.Results))
 				}
-<<<<<<< HEAD
-=======
 
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 
@@ -1139,10 +1118,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if r.Results["B"].ExpressionPass {
 					t.Error("condition should be false")
 				}
-<<<<<<< HEAD
-=======
 
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 		{
@@ -1164,10 +1140,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results) != 0 {
 					t.Errorf("expected 0, got %v", len(r.Results))
 				}
-<<<<<<< HEAD
-=======
 
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 		{
@@ -1181,7 +1154,6 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results) != 2 {
 					t.Errorf("expected 2, got %v", len(r.Results))
 				} // should get B and E
-<<<<<<< HEAD
 
 				if r.Results["B"].ExpressionPass {
 					t.Error("condition should be false")
@@ -1189,16 +1161,6 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if r.Results["E"].ExpressionPass {
 					t.Error("condition should be false")
 				}
-=======
-
-				if r.Results["B"].ExpressionPass {
-					t.Error("condition should be false")
-				}
-				if r.Results["E"].ExpressionPass {
-					t.Error("condition should be false")
-				}
-
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 		{
@@ -1214,10 +1176,6 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results) != 3 {
 					t.Errorf("expected 3, got %v", len(r.Results))
 				}
-<<<<<<< HEAD
-=======
-
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 
@@ -1234,10 +1192,6 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if !r.Results["D"].Pass {
 					t.Error("condition should be true")
 				}
-<<<<<<< HEAD
-=======
-
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 
@@ -1254,10 +1208,7 @@ func TestGlobalEvalOptions(t *testing.T) {
 				if len(r.Results) != 3 {
 					t.Errorf("expected 3, got %v", len(r.Results))
 				}
-<<<<<<< HEAD
-=======
 
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 			},
 		},
 	}
@@ -1302,27 +1253,23 @@ func TestTimeout(t *testing.T) {
 func TestSortFuncAndParallelIncompatible(t *testing.T) {
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
-	
+
 	// Set up a rule with both sortFunc and parallel options
 	r.EvalOptions.SortFunc = indigo.SortRulesAlpha
-	
+
 	err := e.Compile(r)
 	if err != nil {
 		t.Fatalf("unexpected error during compile: %v", err)
 	}
-	
+
 	// Try to evaluate with parallel processing - this should fail
 	_, err = e.Eval(context.Background(), r, map[string]any{}, indigo.Parallel(10, 2))
 	if err == nil {
 		t.Fatal("expected error when using both sortFunc and parallel options")
 	}
-	
+
 	expectedError := "sortFunc and parallel options are incompatible"
 	if !strings.Contains(err.Error(), expectedError) {
 		t.Errorf("expected error to contain '%s', got: %v", expectedError, err)
 	}
-<<<<<<< HEAD
-=======
-
->>>>>>> 2cecd57e3a7e4fbaee86f5e794d675f8da6c705c
 }
