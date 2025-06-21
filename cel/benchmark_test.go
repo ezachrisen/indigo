@@ -264,6 +264,9 @@ func calculateExpectedRules(depth, breadth int) int {
 	return total
 }
 
+var depth = 2
+var breadth = 1000
+
 // BenchmarkHierarchicalRules benchmarks performance of deep hierarchical rule evaluation
 func BenchmarkHierarchicalRules(b *testing.B) {
 	schema := indigo.Schema{
@@ -275,7 +278,7 @@ func BenchmarkHierarchicalRules(b *testing.B) {
 	}
 
 	// Create a moderately complex hierarchy for benchmarking
-	root := createHierarchicalRules(3, 500, schema)
+	root := createHierarchicalRules(depth, breadth, schema)
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	err := engine.Compile(root)
@@ -288,6 +291,36 @@ func BenchmarkHierarchicalRules(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err := engine.Eval(context.Background(), root, data)
+		if err != nil {
+			b.Fatalf("Failed to evaluate hierarchical rules: %v", err)
+		}
+	}
+}
+
+// BenchmarkHierarchicalRules benchmarks performance of deep hierarchical rule evaluation
+func BenchmarkHierarchicalRulesParallel(b *testing.B) {
+	schema := indigo.Schema{
+		ID: "benchmark_student_schema",
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+		},
+	}
+
+	// Create a moderately complex hierarchy for benchmarking
+	root := createHierarchicalRules(depth, breadth, schema)
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	err := engine.Compile(root)
+	if err != nil {
+		b.Fatalf("Failed to compile hierarchical rules: %v", err)
+	}
+
+	data := createComprehensiveStudentData()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := engine.Eval(context.Background(), root, data, indigo.Parallel(100, 100))
 		if err != nil {
 			b.Fatalf("Failed to evaluate hierarchical rules: %v", err)
 		}
