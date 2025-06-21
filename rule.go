@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -58,7 +57,6 @@ type Rule struct {
 	// Some implementations of Evaluator require a schema.
 	Schema Schema `json:"schema,omitempty"`
 
-
 	// A set of child rules.
 	Rules map[string]*Rule `json:"rules,omitempty"`
 
@@ -78,10 +76,7 @@ type Rule struct {
 	// compile time. If SortFunc is not specified, the evaluation order is
 	// unspecified.
 	sortedRules []*Rule
-
-	Delay time.Duration
 }
-
 
 // NewRule initializes a rule with the ID and rule expression.
 // The ID and expression can be empty.
