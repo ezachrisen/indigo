@@ -1137,3 +1137,262 @@ func TestEval2000Rules(t *testing.T) {
 	//	fmt.Println("Took ", time.Since(start))
 
 }
+
+func TestRuleSelfFunctionality(t *testing.T) {
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "score", Type: indigo.Int{}},
+			{Name: "category", Type: indigo.String{}},
+			{Name: "self", Type: indigo.Any{}},
+		},
+	}
+
+	testCases := []struct {
+		name     string
+		parallel bool
+	}{
+		{"sequential", false},
+		{"parallel", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &indigo.Rule{
+				ID:     "root",
+				Schema: schema,
+				Expr:   "true",
+				Self: map[string]any{
+					"priority": 10,
+					"category": "high",
+					"weight":   2.5,
+				},
+				Rules: map[string]*indigo.Rule{
+					"priority_check": {
+						ID:     "priority_check",
+						Schema: schema,
+						Expr:   `self.priority > 5`,
+						Self: map[string]any{
+							"priority": 8,
+							"category": "medium",
+							"weight":   1.8,
+						},
+					},
+					"category_check": {
+						ID:     "category_check",
+						Schema: schema,
+						Expr:   `self.category == "high" && score > 90`,
+						Self: map[string]any{
+							"priority": 15,
+							"category": "high",
+							"weight":   3.0,
+						},
+					},
+					"weight_check": {
+						ID:     "weight_check",
+						Schema: schema,
+						Expr:   `self.weight * double(score) > 150.0`,
+						Self: map[string]any{
+							"priority": 5,
+							"category": "low",
+							"weight":   2.0,
+						},
+					},
+					"no_self": {
+						ID:     "no_self",
+						Schema: schema,
+						Expr:   `score > 80`,
+					},
+				},
+			}
+
+			err := e.Compile(r)
+			if err != nil {
+				t.Fatalf("compilation failed: %v", err)
+			}
+
+			data := map[string]any{
+				"score":    95,
+				"category": "premium",
+			}
+
+			var result *indigo.Result
+			if tc.parallel {
+				result, err = e.Eval(context.Background(), r, data, indigo.Parallel(2, 2))
+			} else {
+				result, err = e.Eval(context.Background(), r, data)
+			}
+
+			if err != nil {
+				t.Fatalf("evaluation failed: %v", err)
+			}
+
+			if !result.Pass {
+				t.Error("root rule should pass")
+			}
+
+			if !result.Results["priority_check"].Pass {
+				t.Error("priority_check should pass (self.priority=8 > 5)")
+			}
+
+			if !result.Results["category_check"].Pass {
+				t.Error("category_check should pass (self.category='high' and score=95 > 90)")
+			}
+
+			if !result.Results["weight_check"].Pass {
+				t.Error("weight_check should pass (self.weight=2.0 * score=95 = 190 > 150)")
+			}
+
+			if !result.Results["no_self"].Pass {
+				t.Error("no_self should pass (score=95 > 80)")
+			}
+
+			if len(result.Results) != 4 {
+				t.Errorf("expected 4 child results, got %d", len(result.Results))
+			}
+		})
+	}
+}
+
+func TestRuleSelfInheritance(t *testing.T) {
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "value", Type: indigo.Int{}},
+			{Name: "self", Type: indigo.Any{}},
+		},
+	}
+
+	testCases := []struct {
+		name     string
+		parallel bool
+	}{
+		{"sequential_inheritance", false},
+		{"parallel_inheritance", true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &indigo.Rule{
+				ID:     "parent",
+				Schema: schema,
+				Expr:   "true",
+				Self: map[string]any{
+					"threshold": 50,
+					"mode":      "strict",
+				},
+				Rules: map[string]*indigo.Rule{
+					"child_with_self": {
+						ID:     "child_with_self",
+						Schema: schema,
+						Expr:   `self.mode == "strict"`,
+						Self: map[string]any{
+							"threshold": 75,
+							"mode":      "strict",
+						},
+					},
+					"child_no_self": {
+						ID:     "child_no_self",
+						Schema: schema,
+						Expr:   `value > 50`,
+						// No Self field - should not inherit parent's self
+					},
+					"grandchild_test": {
+						ID:     "grandchild_test",
+						Schema: schema,
+						Expr:   `value > self.threshold`,
+						Self: map[string]any{
+							"threshold": 30,
+							"mode":      "relaxed",
+						},
+					},
+				},
+			}
+
+			err := e.Compile(r)
+			if err != nil {
+				t.Fatalf("compilation failed: %v", err)
+			}
+
+			data := map[string]any{
+				"value": 60,
+			}
+
+			var result *indigo.Result
+			if tc.parallel {
+				result, err = e.Eval(context.Background(), r, data, indigo.Parallel(2, 2))
+			} else {
+				result, err = e.Eval(context.Background(), r, data)
+			}
+
+			if err != nil {
+				t.Fatalf("evaluation failed: %v", err)
+			}
+
+			if !result.Pass {
+				t.Error("parent rule should pass")
+			}
+
+			if !result.Results["child_with_self"].Pass {
+				t.Error("child_with_self should pass (self.mode='strict')")
+			}
+
+			if !result.Results["child_no_self"].Pass {
+				t.Error("child_no_self should pass (value=60 > 50)")
+			}
+
+			if !result.Results["grandchild_test"].Pass {
+				t.Error("grandchild_test should pass (value=60 > self.threshold=30)")
+			}
+		})
+	}
+}
+
+func TestRuleSelfUndefinedReference(t *testing.T) {
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "value", Type: indigo.Int{}},
+			{Name: "self", Type: indigo.Any{}},
+		},
+	}
+
+	r := &indigo.Rule{
+		ID:     "parent",
+		Schema: schema,
+		Expr:   "true",
+		Self: map[string]any{
+			"threshold": 50,
+		},
+		Rules: map[string]*indigo.Rule{
+			"child_undefined_self": {
+				ID:     "child_undefined_self",
+				Schema: schema,
+				Expr:   `value > self.threshold`,
+				// No Self field - should cause error when trying to access self
+			},
+		},
+	}
+
+	err := e.Compile(r)
+	if err != nil {
+		t.Fatalf("compilation failed: %v", err)
+	}
+
+	data := map[string]any{
+		"value": 60,
+	}
+
+	_, err = e.Eval(context.Background(), r, data)
+
+	// We expect this to fail because child tries to access self.threshold but has no Self field
+	if err == nil {
+		t.Error("evaluation should fail because child references undefined self")
+	}
+	if err != nil && !strings.Contains(err.Error(), "no such attribute(s): self") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

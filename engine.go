@@ -698,6 +698,7 @@ func setSelfKey(r *Rule, d map[string]any) map[string]any {
 		d2 := make(map[string]any, len(d))
 		maps.Copy(d2, d)
 		d2[selfKey] = r.Self
+		return d2
 	} else {
 		// ... similarly, if the data map already has a self key, we have to remove it
 		_, ok := d[selfKey]
@@ -709,7 +710,7 @@ func setSelfKey(r *Rule, d map[string]any) map[string]any {
 		delete(d2, selfKey)
 		return d2
 	}
-	return d
+
 }
 
 // validateEvalArguments checks the input parameters to engine.Eval
