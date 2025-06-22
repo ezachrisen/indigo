@@ -929,6 +929,70 @@ func BenchmarkEval2000WithSelfRules(b *testing.B) {
 	}
 }
 
+func BenchmarkEval2000RulesWithSelfParallel(b *testing.B) {
+	b.StopTimer()
+	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
+	if err != nil {
+		b.Error(err)
+	}
+
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+			{Name: "honors", Type: indigo.Proto{Message: &school.HonorsConfiguration{}}},
+			{Name: "self", Type: indigo.Int{}},
+		},
+	}
+
+	e := indigo.NewEngine(cel.NewEvaluator())
+
+	r := &indigo.Rule{
+		ID:     "student_actions",
+		Schema: schema,
+		Rules:  map[string]*indigo.Rule{},
+	}
+
+	for i := 0; i < 2_000; i++ {
+		cr := &indigo.Rule{
+			ID:     fmt.Sprintf("at_risk_%d", i),
+			Expr:   `student.gpa < honors.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION && self == 42`,
+			Schema: schema,
+			Meta:   false,
+			Self:   42,
+		}
+		r.Rules[cr.ID] = cr
+	}
+
+	err = e.Compile(r)
+	if err != nil {
+		log.Fatalf("Error adding ruleset: %v", err)
+	}
+
+	s := school.Student{
+		Age:            16,
+		Gpa:            3,
+		Status:         school.Student_PROBATION,
+		Grades:         []float64{2.0, 2.0, 3.7},
+		Attrs:          map[string]string{"Nickname": "Joey"},
+		EnrollmentDate: &timestamppb.Timestamp{Seconds: time.Date(2010, 5, 1, 12, 12, 59, 0, time.FixedZone("UTC-8", -8*60*60)).Unix()},
+	}
+
+	data := map[string]any{
+		"student": &s,
+		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
+		"honors":  &school.HonorsConfiguration{Minimum_GPA: 3.7},
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(200, 10))
+		if err != nil {
+			b.Error(err)
+		}
+
+	}
+}
+
 func BenchmarkEval2000RulesParallel(b *testing.B) {
 	b.StopTimer()
 	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
