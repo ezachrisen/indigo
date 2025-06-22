@@ -56,6 +56,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
+	d = setSelfKey(r, d, o)
 
 	// Check for incompatible options: sortFunc and parallel cannot be used together
 	if o.SortFunc != nil && (o.Parallel.BatchSize > 1 || o.Parallel.MaxParallel > 1) {
@@ -65,7 +66,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	//		setSelfKey(r, d)
 
 	// Evaluate the rule's expression using the engine's ExpressionEvaluator
-	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, nil, r.Program,
+	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program,
 		defaultResultType(r), o.ReturnDiagnostics)
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
@@ -681,6 +682,85 @@ func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
 	for _, opt := range opts {
 		opt(o)
 	}
+}
+
+// setSelfKey manages the special "self" key in rule evaluation data.
+// This function makes the Rule.Self object available to expressions via the reserved "self" key.
+// The implementation strategy depends on whether parallel processing is enabled:
+//
+// - Parallel mode: Creates a copy of the data map to avoid race conditions between goroutines
+// - Sequential mode: Modifies the data map in place for better performance
+//
+// Parameters:
+//   - r: The rule being evaluated, containing the Self object to expose
+//   - d: The data map containing variables for expression evaluation
+//   - o: Evaluation options that determine processing mode (parallel vs sequential)
+//
+// Returns: A data map with the "self" key properly set or removed
+func setSelfKey(r *Rule, d map[string]any, o EvalOptions) map[string]any {
+	if d == nil {
+		return nil
+	}
+
+	switch {
+	case o.Parallel.BatchSize > 0:
+		return setSelfKeyParallelMode(r, d)
+	default:
+		return setSelfKeySequentialMode(r, d)
+	}
+
+}
+
+// setSelfKeyParallelMode handles self key management for parallel rule evaluation.
+// This function creates copies of the data map to prevent race conditions when multiple
+// goroutines are evaluating rules concurrently. Each goroutine gets its own copy of the
+// data map with the appropriate self key value.
+//
+// Behavior:
+//   - When r.Self is nil: Removes any existing "self" key from a copy of the data map
+//     to prevent conflicts. If no "self" key exists, returns the original map unchanged.
+//   - When r.Self is not nil: Creates a copy of the data map and sets the "self" key
+//     to the value of r.Self.
+//
+// Thread Safety: Always safe for concurrent use as it never modifies the input map.
+// Performance: O(n) time and space complexity due to map copying, where n is map size.
+func setSelfKeyParallelMode(r *Rule, d map[string]any) map[string]any {
+	switch r.Self {
+	case nil:
+		_, ok := d[selfKey]
+		if !ok {
+			return d
+		}
+		d2 := make(map[string]any, len(d))
+		maps.Copy(d2, d)
+		delete(d2, selfKey)
+		return d2
+	default:
+		d2 := make(map[string]any, len(d))
+		maps.Copy(d2, d)
+		d2[selfKey] = r.Self
+		return d2
+	}
+}
+
+// setSelfKeySequentialMode handles self key management for sequential rule evaluation.
+// This function modifies the input data map in place for optimal performance when
+// rules are evaluated sequentially (no concurrency concerns).
+//
+// Behavior:
+//   - When r.Self is nil, deletes the self key
+//   - When r.Self is not nil, sets the "self" key to the value of r.Self
+//
+// Thread Safety: NOT safe for concurrent use as it modifies the input map directly.
+// Performance: O(1) time and space complexity - highly efficient in-place modification.
+func setSelfKeySequentialMode(r *Rule, d map[string]any) map[string]any {
+	switch r.Self {
+	case nil:
+		delete(d, selfKey)
+	default:
+		d[selfKey] = r.Self
+	}
+	return d
 }
 
 // validateEvalArguments checks the input parameters to engine.Eval

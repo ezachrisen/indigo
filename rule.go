@@ -67,6 +67,12 @@ type Rule struct {
 	// Not used by the rules engine.
 	Meta any `json:"-"`
 
+	// A reference to an object whose values can be used in the rule expression.
+	// Add the corresponding object in the data with the reserved key name selfKey
+	// (see constants).
+	// Child rules do not inherit the self value.
+	Self any `json:"-"`
+
 	// Options determining how the child rules should be handled.
 	EvalOptions EvalOptions `json:"eval_options"`
 
@@ -77,6 +83,12 @@ type Rule struct {
 	// unspecified.
 	sortedRules []*Rule
 }
+
+const (
+	// If the rule includes a Self object, it will be made available in the input
+	// data with this key name.
+	selfKey = "self"
+)
 
 // NewRule initializes a rule with the ID and rule expression.
 // The ID and expression can be empty.

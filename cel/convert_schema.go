@@ -84,6 +84,8 @@ func convertIndigoToExprType(t indigo.Type) (*gexpr.Type, error) {
 			return nil, fmt.Errorf("setting value of %v list: %w", v.ValueType, err)
 		}
 		return decls.NewListType(val), nil
+	case indigo.Any:
+		return decls.Dyn, nil
 	case indigo.Proto:
 		n, err := v.ProtoFullName()
 		if err != nil {
