@@ -684,6 +684,19 @@ func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
 	}
 }
 
+// setSelfKey manages the special "self" key in rule evaluation data.
+// This function makes the Rule.Self object available to expressions via the reserved "self" key.
+// The implementation strategy depends on whether parallel processing is enabled:
+//
+// - Parallel mode: Creates a copy of the data map to avoid race conditions between goroutines
+// - Sequential mode: Modifies the data map in place for better performance
+//
+// Parameters:
+//   - r: The rule being evaluated, containing the Self object to expose
+//   - d: The data map containing variables for expression evaluation
+//   - o: Evaluation options that determine processing mode (parallel vs sequential)
+//
+// Returns: A data map with the "self" key properly set or removed
 func setSelfKey(r *Rule, d map[string]any, o EvalOptions) map[string]any {
 	if d == nil {
 		return nil
