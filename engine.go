@@ -56,7 +56,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
-	d = setSelfKey(r, d)
+	d = setSelfKey(r, d, o)
 
 	// Check for incompatible options: sortFunc and parallel cannot be used together
 	if o.SortFunc != nil && (o.Parallel.BatchSize > 1 || o.Parallel.MaxParallel > 1) {
@@ -684,23 +684,23 @@ func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
 	}
 }
 
-func setSelfKey(r *Rule, d map[string]any) map[string]any {
+func setSelfKey(r *Rule, d map[string]any, o EvalOptions) map[string]any {
 	if d == nil {
 		return nil
 	}
-	// If this rule has a reference to a 'self' object, insert it into the d.
-	// If it doesn't, we must remove any existing reference to self, so that
-	// child rules do not accidentally "inherit" the self object.
-	//
-	// Because rules may be evaluated in parallel, we have to copy the data map
-	// and insert the key there.
-	if r.Self != nil {
-		d2 := make(map[string]any, len(d))
-		maps.Copy(d2, d)
-		d2[selfKey] = r.Self
-		return d2
-	} else {
-		// ... similarly, if the data map already has a self key, we have to remove it
+
+	switch {
+	case o.Parallel.BatchSize > 0:
+		return setSelfKeyParallelMode(r, d)
+	default:
+		return setSelfKeySequentialMode(r, d)
+	}
+
+}
+
+func setSelfKeyParallelMode(r *Rule, d map[string]any) map[string]any {
+	switch r.Self {
+	case nil:
 		_, ok := d[selfKey]
 		if !ok {
 			return d
@@ -709,8 +709,22 @@ func setSelfKey(r *Rule, d map[string]any) map[string]any {
 		maps.Copy(d2, d)
 		delete(d2, selfKey)
 		return d2
+	default:
+		d2 := make(map[string]any, len(d))
+		maps.Copy(d2, d)
+		d2[selfKey] = r.Self
+		return d2
 	}
+}
 
+func setSelfKeySequentialMode(r *Rule, d map[string]any) map[string]any {
+	switch r.Self {
+	case nil:
+		d[selfKey] = r.Self
+	default:
+		d[selfKey] = r.Self
+	}
+	return d
 }
 
 // validateEvalArguments checks the input parameters to engine.Eval
