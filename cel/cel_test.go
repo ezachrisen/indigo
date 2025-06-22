@@ -1520,7 +1520,7 @@ func TestRuleSelfUndefinedReference(t *testing.T) {
 	if err == nil {
 		t.Error("evaluation should fail because child references undefined self")
 	}
-	if err != nil && !strings.Contains(err.Error(), "no such key: threshold") {
+	if err != nil && !strings.Contains(err.Error(), "no such attribute") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

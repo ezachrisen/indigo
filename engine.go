@@ -711,6 +711,19 @@ func setSelfKey(r *Rule, d map[string]any, o EvalOptions) map[string]any {
 
 }
 
+// setSelfKeyParallelMode handles self key management for parallel rule evaluation.
+// This function creates copies of the data map to prevent race conditions when multiple
+// goroutines are evaluating rules concurrently. Each goroutine gets its own copy of the
+// data map with the appropriate self key value.
+//
+// Behavior:
+//   - When r.Self is nil: Removes any existing "self" key from a copy of the data map
+//     to prevent conflicts. If no "self" key exists, returns the original map unchanged.
+//   - When r.Self is not nil: Creates a copy of the data map and sets the "self" key
+//     to the value of r.Self.
+//
+// Thread Safety: Always safe for concurrent use as it never modifies the input map.
+// Performance: O(n) time and space complexity due to map copying, where n is map size.
 func setSelfKeyParallelMode(r *Rule, d map[string]any) map[string]any {
 	switch r.Self {
 	case nil:
@@ -730,10 +743,20 @@ func setSelfKeyParallelMode(r *Rule, d map[string]any) map[string]any {
 	}
 }
 
+// setSelfKeySequentialMode handles self key management for sequential rule evaluation.
+// This function modifies the input data map in place for optimal performance when
+// rules are evaluated sequentially (no concurrency concerns).
+//
+// Behavior:
+//   - When r.Self is nil, deletes the self key
+//   - When r.Self is not nil, sets the "self" key to the value of r.Self
+//
+// Thread Safety: NOT safe for concurrent use as it modifies the input map directly.
+// Performance: O(1) time and space complexity - highly efficient in-place modification.
 func setSelfKeySequentialMode(r *Rule, d map[string]any) map[string]any {
 	switch r.Self {
 	case nil:
-		d[selfKey] = r.Self
+		delete(d, selfKey)
 	default:
 		d[selfKey] = r.Self
 	}
