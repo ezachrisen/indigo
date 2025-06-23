@@ -8,7 +8,7 @@ The purpose of the guide is to describe how Indigo's rules and the evaluation en
 Useful links
 
 - [Indigo examples](example_test.go)
-- [CEL examples](/cel/example_test.go)
+- [CEL examples](cel/example_test.go)
 
 - [CEL Codelabs](https://codelabs.developers.google.com/codelabs/cel-go#0)
 
@@ -172,7 +172,7 @@ All of examples use [Google's Common Expression Language](https://github.com/goo
 **Note:** In this guide we will touch on the basics of the language, for complete coverage you should read the [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md).
 
 
-> See the ``indigo/cel/example_test.go`` file's ``Example_basic()`` function for the code used in the examples. 
+> See the `cel/example_test.go` file's `Example_basic()` function for the code used in the examples.
 
 
 
@@ -207,7 +207,7 @@ In Indigo, the indigo.Schema type is used to specify the schema:
 
 
 ```go
-// indigo/cel/example_test.go:Example_basic()
+// cel/example_test.go:Example_basic()
 schema := indigo.Schema{
 	Elements: []indigo.DataElement{
 		{Name: "x", Type: indigo.Int{}},
@@ -245,7 +245,7 @@ You specify the output type by setting the ``ResultType`` field on the rule.
 
 #### Exercises
 
-Modify the example `indigo/cel/example_test.go:Example_basic()` and run ``go test`` in the ``indigo/cel`` directory. 
+Modify the example `cel/example_test.go:Example_basic()` and run ``go test`` in the ``cel`` directory.
 
 1. Change the declared data type of `x` to a boolean
 1. Change the ResultType of the rule to a string
@@ -286,7 +286,7 @@ An Indigo rule is a Go struct, so it can be created like this:
 
 
 ```go
-// indigo/cel/example_test.go:Example_basic()
+// cel/example_test.go:Example_basic()
 rule := indigo.Rule{
 	Schema:     schema,
 	ResultType: indigo.Bool{},
@@ -304,7 +304,7 @@ Before compiling the rule, we need to create an instance of indigo.DefaultEngine
 
 
 ```go
-// indigo/cel/example_test.go:Example_basic()
+// cel/example_test.go:Example_basic()
 engine := indigo.NewEngine(cel.NewEvaluator())
 ```
 
@@ -313,7 +313,7 @@ This creates a new engine that will use CEL as its expression evaluation languag
 With an engine, we can now compile the rule:
 
 ```go
-// indigo/cel/example_test.go:Example_basic()
+// cel/example_test.go:Example_basic()
 err := engine.Compile(&rule)
 if err != nil {
 	fmt.Println(err)
@@ -344,7 +344,7 @@ Now that we have a compiled rule, we can start to evaluate data against it. Let'
 We prepare the data for evaluation like this: 
 
 ```go
-// indigo/cel/example_test.go:Example_basic()
+// cel/example_test.go:Example_basic()
 data := map[string]interface{}{
 	"x": 11,
 	"y": "red",
@@ -411,7 +411,7 @@ CEL also implements short circuiting, but even allows for a!=nil to be the secon
 
 #### Exercises
 
-Modify the example `indigo/cel/example_test.go:Example_basic()` and run ``go test`` in the ``indigo/cel`` directory. 
+Modify the example `cel/example_test.go:Example_basic()` and run ``go test`` in the ``cel`` directory.
 
 1. Comment out the input value for y
    Notice the error message, what does it mean? 
@@ -484,7 +484,7 @@ In [section 2](#2-expression-evaluation), we saw how to use scalar values in inp
 Below is an example of how to define a list, pass a list in the input data, and how to use a list in a rule expression:
 
 
-> All of the examples in this section are from the indigo/cel/example_test.go:Example_list()
+> All of the examples in this section are from cel/example_test.go:Example_list()
 
 
 ```go
@@ -534,7 +534,7 @@ Maps work like Go maps, where values are indexed by a key, such as a string.
 
 
 
-> All of the examples in this section are from the indigo/cel/example_test.go:Example_map()
+> All of the examples in this section are from cel/example_test.go:Example_map()
 
 
 ```go
@@ -569,7 +569,7 @@ flights["UA1500"] == "On Time"
 
 In addition to the ``exists`` macro, we can use the operator ``in`` to determine if a value is in a list, or a key is in a map.
 
-> The sample code for this section is in [ExampleIn()](example_test.go)
+> The sample code for this section is in [Example_in()](cel/example_test.go)
 
 In the data we have a map and a list:
 
@@ -721,7 +721,7 @@ Generally, you can assume that any valid protocol buffer can be used in an Indig
 ## Rules using protocol buffer types
 Rules using protocol buffer types work exactly like rules with simple types such as strings and numbers. 
 
-> The code in this section is from the indigo/cel/example_test.go:Example_protoBasic
+> The code in this section is from cel/example_test.go:Example_protoBasic
 
 In some ways, using protocol buffers instead of native Go types is easier, because in the schema declaration we simply provide an instance of the protocol buffer type we want to use in the ``indigo.Proto`` type. We do not have to specify each field inside the protocol buffer, or the type of values in lists and maps. Nor do we need to define any nested structs or imported types. The protocol buffer definition itself takes care of this for us:
 
@@ -754,7 +754,7 @@ In the Go code (where we define the data map), the field ``Age`` is capitalized.
 ## Nested fields
 The Student protocol buffer includes a nested field, ``suspensions``, which is a list of objects of the ``Suspension`` protocol buffer type. To access these elements, we don't need to do anything special:
 
-> The sample code is from ``indigo/cel/example_test.go:Example_protoNestedMessages()
+> The sample code is from cel/example_test.go:Example_protoNestedMessages()
 
 ```go
 education := indigo.Schema{
@@ -806,7 +806,7 @@ message Student {
 
 We can use the name of the enum value directly in the expression. So instead of using 0 for the ENROLLED state, we can use the enum constant name: 
 
-> The sample code is from [Example_protoEnum()](/cel/example_test.go)
+> The sample code is from [Example_protoEnum()](cel/example_test.go)
 
 ```go
 
@@ -1889,7 +1889,7 @@ In this example, we are going to monitor system metrics such as CPU and memory a
 The best way to do this is to have a rule for each alarm, and to set the evaluation option ```FailAction = DiscardFailures``, so that only ``true`` rules are returned. 
 
 
-> The sample code for this section is in [Example_alarms()](example_test.go)
+> The sample code for this section is in [Example_alarms()](cel/example_test.go)
 
 ```go
 sysmetrics := indigo.Schema{
