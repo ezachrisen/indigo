@@ -1322,11 +1322,11 @@ func TestParallelEvalLeakOnEarlyError(t *testing.T) {
 	rootRule := &indigo.Rule{
 		ID: "root",
 		Rules: map[string]*indigo.Rule{ // Changed to map to match typical Rule structure
-			"ruleError": {ID: "ruleError", Expr: "ruleError"}, // Will error out quickly
 			"ruleSlow1": {ID: "ruleSlow1", Expr: "ruleSlow1"}, // Will be slow
 			"ruleSlow2": {ID: "ruleSlow2", Expr: "ruleSlow2"}, // Will be slow
 			"ruleSlow3": {ID: "ruleSlow3", Expr: "ruleSlow3"}, // Will be slow
 			"ruleSlow4": {ID: "ruleSlow4", Expr: "ruleSlow4"}, // Will be slow
+			"ruleError": {ID: "ruleError", Expr: "ruleError"}, // Will error out quickly
 			"ruleSlow5": {ID: "ruleSlow5", Expr: "ruleSlow5"}, // Will be slow
 			"ruleSlow6": {ID: "ruleSlow6", Expr: "ruleSlow6"}, // Will be slow
 			"ruleSlow7": {ID: "ruleSlow7", Expr: "ruleSlow7"}, // Will be slow

@@ -139,8 +139,7 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 	r.results = make(map[string]*Result, len(rules))
 
-	// We're using a buffered channel so we can throttle how many goroutines will run at once.
-	chunkCh := make(chan chunk, o.Parallel.MaxParallel)
+	chunkCh := make(chan chunk)
 	// Results will be sent back to the main goroutine via this channel.
 	resultsCh := make(chan evalResult)
 	// Errors will be sent back to the main goroutine via this channel.
@@ -163,7 +162,11 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 	// Start consumer goroutine: processes chunks and sends results
 	// This goroutine reads from chunkCh and evaluates each chunk
-	go e.eatChunks(internalCtx, chunkCh, rules, d, resultsCh, errCh, o, opts...)
+	for i := 0; i < o.Parallel.MaxParallel; i++ {
+		go func() {
+			e.eatChunks(internalCtx, chunkCh, rules, d, resultsCh, errCh, o, opts...)
+		}()
+	}
 
 	// Collect results from all chunks
 	// We know exactly how many results to expect (one per chunk)
@@ -312,75 +315,50 @@ func hurlChunks(ctx context.Context, chunks []chunk, chunkCh chan<- chunk) {
 //   - chan<- result: Can only send to this channel
 //   - This provides compile-time safety and documents the intended data flow
 func (e *DefaultEngine) eatChunks(ctx context.Context, chunkCh <-chan chunk, rules []*Rule, d map[string]any, resultsCh chan<- evalResult, errCh chan<- error, o EvalOptions, opts ...EvalOption) {
-	// Infinite loop to continuously process chunks until context is cancelled
-	// or the chunk channel is closed
-	for {
-		// Select allows us to wait on multiple channel operations simultaneously
-		// The first case that becomes ready will be executed
-		select {
-		case <-ctx.Done():
-			// Context was cancelled - exit immediately
-			// This is how we ensure goroutines don't leak when the parent gives up
-			return
-
-		case chunk, ok := <-chunkCh:
-			fmt.Println("Received chunk from chunkCh", chunk)
-			// Try to receive a chunk from the work queue
-			// The 'ok' variable tells us if the channel is still open
-			if !ok {
-				// Channel was closed, meaning no more work is coming
-				// This is the normal way for a producer to signal "all done"
-				return
+	// Recover from any panics that occur during evaluation
+	// This prevents a panic in one worker goroutine from crashing the entire evaluation
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			// Convert the panic to an error and send it back to the main goroutine
+			panicErr := fmt.Errorf("panic during parallel rule evaluation: %v", recovered)
+			select {
+			case errCh <- panicErr:
+				// Successfully sent the panic error
+			case <-ctx.Done():
+				// Context cancelled while sending panic error - just exit
+				// The main goroutine will see the cancellation
 			}
-
-			// Process the chunk by evaluating all rules in its range
-			go func() {
-				// Recover from any panics that occur during evaluation
-				// This prevents a panic in one worker goroutine from crashing the entire evaluation
-				defer func() {
-					if recovered := recover(); recovered != nil {
-						// Convert the panic to an error and send it back to the main goroutine
-						panicErr := fmt.Errorf("panic during parallel rule evaluation: %v", recovered)
-						select {
-						case errCh <- panicErr:
-							// Successfully sent the panic error
-						case <-ctx.Done():
-							// Context cancelled while sending panic error - just exit
-							// The main goroutine will see the cancellation
-						}
-					}
-				}()
-
-				r, err := e.evalRuleSlice(ctx, rules[chunk.start:chunk.end], d, o, opts...)
-				if err != nil {
-					fmt.Println("Error in evalRuleSlice", err)
-					// An error occurred during evaluation
-					// We need to send it back to the main goroutine, but we also
-					// need to handle the case where the context gets cancelled
-					// while we're trying to send the error
-					select {
-					case errCh <- err:
-						fmt.Println("   Sent error to errCh", err)
-						// Successfully sent the error
-					case <-ctx.Done():
-						// Context cancelled while sending error - just exit
-						// The main goroutine will see the cancellation
-					}
-					return // Exit after sending error (fail-fast behavior)
-				}
-
-				// Successfully processed the chunk - send results back
-				// Again, we need to handle potential cancellation during the send
-				select {
-				case resultsCh <- r:
-					// Successfully sent results - continue to next chunk
-				case <-ctx.Done():
-					// Context cancelled while sending results - exit
-					return
-				}
-			}()
 		}
-		// Loop continues to process the next chunk
+	}()
+
+	// Process chunks as they are sent to us
+	for chunk := range chunkCh {
+		fmt.Println("Processing chunk", chunk)
+		r, err := e.evalRuleSlice(ctx, rules[chunk.start:chunk.end], d, o, opts...)
+		if err != nil {
+			// An error occurred during evaluation
+			// We need to send it back to the main goroutine, but we also
+			// need to handle the case where the context gets cancelled
+			// while we're trying to send the error
+			select {
+			case errCh <- err:
+				// Successfully sent the error
+			case <-ctx.Done():
+				// Context cancelled while sending error - just exit
+				// The main goroutine will see the cancellation
+			}
+			return // Exit after sending error (fail-fast behavior)
+		}
+		// Successfully processed the chunk - send results back
+		// Again, we need to handle potential cancellation during the send
+		select {
+		case resultsCh <- r:
+		// Successfully sent results - continue to next chunk
+		case <-ctx.Done():
+			// Context cancelled while sending results - exit
+			return
+		}
+
 	}
 }
 
