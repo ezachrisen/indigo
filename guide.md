@@ -49,7 +49,59 @@ Useful links
 
 [5. Macros and Functions](#5-macros-and-functions)
 
+[6. Using Protocol Buffers in Rules](#6-using-protocol-buffers-in-rules)
 
+   1. Rules using protocol buffer types
+   1. Field names in rule expressions
+   1. Nested fields
+   1. Enums
+   1. Referring to protocol buffer types in rule expressions
+   1. Oneofs
+
+[7. Timestamps and Durations](#7-timestamps-and-durations)
+
+   1. Rules with timestamps and durations
+   1. Calculations on timestamps and durations
+   1. Summary of timestamp operations in Go
+   1. Timestamp conversion in a CEL rule
+   1. Summary of duration operations in Go
+   1. Duration conversion in a CEL rule
+   1. Parts of time
+
+[8. Object Construction](#8-object-construction)
+
+   1. Conditional object construction
+
+[9. Processing Multiple Rules with Indigo](#9-processing-multiple-rules-with-indigo)
+
+   1. Manually processing multiple rules
+   1. The Indigo way
+   1. Parent and child rules
+   1. Modifying rules
+   1. Structuring rule hierarchies for updates
+   1. Visualizing rules
+   1. The Rule struct
+   1. The Results struct
+
+[10. Evaluation Options](#10-evaluation-options)
+
+   1. Setting Options
+   1. TrueIfAny
+   1. StopIfParentNegative
+   1. StopFirstNegativeChild, StopFirstPositiveChild
+   1. SortFunc
+   1. DiscardPass, FailAction
+
+[11. Rule Structure and Use Cases](#11-rule-structure-and-use-cases)
+
+   1. Which of these rules are true?
+
+[12. Parallel Rule Evaluation](#12-parallel-rule-evaluation)
+
+   1. Enabling Parallel Evaluation
+   1. Limitations
+
+[Appendix: More CEL Resources](#appendix-more-cel-resources)
 
 </br>
 </br>
@@ -1953,6 +2005,38 @@ memory_alarm --> memory_remaining_alarm;
 
 </br>
 </br>
+
+# 12. Parallel Rule Evaluation
+
+Parallel evaluation of child rules can dramatically improve throughput when working with large rule sets. In this mode, Indigo evaluates child rules concurrently in batches, minimizing total evaluation time on multi-core systems.
+
+## Enabling Parallel Evaluation
+
+To enable parallel evaluation for a parent rule, pass the `Parallel` evaluation option to `Engine.Eval`. For example, to process child rules in batches of 10 with up to 4 goroutines:
+
+```go
+result, err := engine.Eval(
+    ctx,
+    parentRule,
+    data,
+    indigo.Parallel(10, 4),
+)
+if err != nil {
+    // handle error
+}
+```
+
+When both `batchSize` and `maxParallel` are set to values greater than 1, Indigo splits the child rules into batches of the specified size and evaluates each batch in parallel, up to the maximum number of goroutines.
+
+## Limitations
+
+Parallel rule evaluation has the following restrictions and considerations:
+
+- **Incompatible with ordered evaluation options**: You cannot combine `Parallel` with `SortFunc`, `StopFirstPositiveChild`, or `StopFirstNegativeChild`. An error will be returned if these options are used together, as parallel evaluation does not guarantee ordering of child rule execution.
+- **Data isolation for `self`**: When `Parallel` is enabled, Indigo creates copies of the input data map for each batch to avoid race conditions. As a result, functions or custom macros that modify shared data via the `self` key will not observe changes across child evaluations.
+- **Diagnostics ordering**: Detailed diagnostics and the `RulesEvaluated` order are not meaningful in parallel mode; the ordering of concurrent evaluations is inherently non-deterministic.
+- **Resource usage**: Parallel evaluation increases goroutine and memory usage due to batching and map copying. Tune `batchSize` and `maxParallel` to balance throughput and resource consumption.
+- **Short-circuit behavior**: Although `StopIfParentNegative` still applies at the parent level, child-level short-circuit options (`StopFirstPositiveChild`, `StopFirstNegativeChild`) are disabled. All children in each batch will complete before results are aggregated.
 
 ***
 </br>
