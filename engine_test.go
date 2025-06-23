@@ -1301,7 +1301,7 @@ func (m *trackingMockEvaluator) Evaluate(data map[string]any, expr string, s ind
 		time.Sleep(m.evalDelay)
 	}
 	if strings.Contains(expr, "Slow") {
-		time.Sleep(1 * time.Second)
+		time.Sleep(50 * time.Millisecond)
 	}
 	if m.errorRuleID != "" && expr == m.errorRuleID {
 		return false, nil, errors.New("mock error for rule " + expr)

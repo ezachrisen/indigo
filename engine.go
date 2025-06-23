@@ -189,7 +189,6 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 			r.passCount = r.passCount + res.passCount
 			maps.Copy(r.results, res.results)
 		case err := <-errCh:
-			fmt.Println("Received error from errCh", err)
 			// A worker encountered an error - stop processing and return it
 			return r, err
 		}
@@ -272,22 +271,17 @@ func sendChunks(ctx context.Context, chunks []chunk, chunkCh chan<- chunk) {
 	// defer close(chunkCh) ensures the channel is closed no matter how this function exits
 	// This is CRITICAL - the consumer (eatChunks) waits for the channel to be closed
 	// to know when all work has been sent. Without this, eatChunks would wait forever!
-	defer func() {
-		fmt.Println("Closing chunkCh")
-		close(chunkCh)
-	}()
+	defer close(chunkCh)
 
 	// Send each chunk to the worker
 	for _, c := range chunks {
 		// Use select to handle both sending and cancellation
 		select {
 		case chunkCh <- c:
-			fmt.Println("Sent chunk to chunkCh", c)
 			// Successfully sent the chunk - continue to next one
 			// Note: this might block if the channel buffer is full,
 			// which provides natural backpressure (flow control)
 		case <-ctx.Done():
-			fmt.Println("Context cancelled - stopping chunk sending")
 			// Context was cancelled - stop sending chunks immediately
 			// The defer close(chunkCh) will still run, properly signaling the consumer
 			return
@@ -337,7 +331,6 @@ func (e *DefaultEngine) processChunks(ctx context.Context, chunkCh <-chan chunk,
 
 	// Process chunks as they are sent to us
 	for chunk := range chunkCh {
-		fmt.Println("Processing chunk", chunk)
 		r, err := e.evalRuleSlice(ctx, rules[chunk.start:chunk.end], d, o, opts...)
 		if err != nil {
 			// An error occurred during evaluation
