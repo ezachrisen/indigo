@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1268,4 +1269,157 @@ func TestSortFuncAndParallelIncompatible(t *testing.T) {
 		t.Errorf("expected error to contain '%s', got: %v", expectedError, err)
 	}
 
+}
+
+var activeEvals int32 // Counter for active mock evaluations
+
+type trackingMockEvaluator struct {
+	evalDelay   time.Duration
+	errorRuleID string // if non-empty, this rule ID will produce an error
+	panicRuleID string // if non-empty, this rule ID will panic
+}
+
+func (m *trackingMockEvaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics, dryRun bool) (any, error) {
+	// Simple mock compilation
+	return "compiled:" + expr, nil
+}
+
+func (m *trackingMockEvaluator) Evaluate(data map[string]any, expr string, s indigo.Schema, self any, evalData any, resultType indigo.Type, returnDiagnostics bool) (any, *indigo.Diagnostics, error) {
+	atomic.AddInt32(&activeEvals, 1)
+	defer atomic.AddInt32(&activeEvals, -1)
+
+	if m.panicRuleID != "" && expr == m.panicRuleID {
+		panic(fmt.Sprintf("mock panic for rule %s", expr))
+	}
+
+	if m.evalDelay > 0 {
+		time.Sleep(m.evalDelay)
+	}
+
+	if m.errorRuleID != "" && expr == m.errorRuleID {
+		return false, nil, errors.New("mock error for rule " + expr)
+	}
+
+	return true, nil, nil
+}
+
+func TestParallelEvalLeakOnEarlyError(t *testing.T) {
+	atomic.StoreInt32(&activeEvals, 0)
+	mockEval := &trackingMockEvaluator{
+		evalDelay:   100 * time.Millisecond,
+		errorRuleID: "ruleError",
+	}
+	engine := indigo.NewEngine(mockEval)
+
+	rootRule := &indigo.Rule{
+		ID: "root",
+		Rules: map[string]*indigo.Rule{ // Changed to map to match typical Rule structure
+			"ruleError": {ID: "ruleError", Expr: "ruleError"}, // Will error out quickly
+			"ruleSlow1": {ID: "ruleSlow1", Expr: "ruleSlow1"}, // Will be slow
+			"ruleSlow2": {ID: "ruleSlow2", Expr: "ruleSlow2"}, // Will be slow
+		},
+		// EvalOptions on the rule itself are used if not overridden by Eval call options
+	}
+	err := engine.Compile(rootRule)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // Test timeout
+	defer cancel()
+
+	// Pass Parallel options directly to Eval
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(2, 3))
+	if evalErr == nil {
+		t.Fatal("expected an error but got none")
+	}
+	if !strings.Contains(evalErr.Error(), "mock error for rule ruleError") {
+		t.Errorf("expected error to contain 'mock error for rule ruleError', got: %v", evalErr)
+	}
+
+	// Give some time for other goroutines to potentially get stuck or finish
+	time.Sleep(mockEval.evalDelay * 3)
+
+	if active := atomic.LoadInt32(&activeEvals); active != 0 {
+		t.Errorf("Expected no active evaluations after early error, got %d", active)
+	}
+}
+
+func TestParallelEvalLeakOnContextCancel(t *testing.T) {
+	atomic.StoreInt32(&activeEvals, 0)
+	mockEval := &trackingMockEvaluator{
+		evalDelay: 200 * time.Millisecond, // Make it longer so cancellation is more likely to interrupt
+	}
+	engine := indigo.NewEngine(mockEval)
+
+	rootRule := &indigo.Rule{
+		ID: "root",
+		Rules: map[string]*indigo.Rule{
+			"ruleSlow1": {ID: "ruleSlow1", Expr: "ruleSlow1"},
+			"ruleSlow2": {ID: "ruleSlow2", Expr: "ruleSlow2"},
+			"ruleSlow3": {ID: "ruleSlow3", Expr: "ruleSlow3"},
+		},
+	}
+	err := engine.Compile(rootRule)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), mockEval.evalDelay/2)
+	defer cancel()
+
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(2, 3))
+	if evalErr == nil {
+		t.Fatal("expected an error but got none")
+	}
+	isContextError := errors.Is(evalErr, context.DeadlineExceeded) || errors.Is(evalErr, context.Canceled)
+	if !isContextError {
+		// It's possible a rule finished and returned an error just as context was cancelled.
+		// The key is that activeEvals should go to 0.
+		t.Logf("Eval error was not a direct context error, but: %v", evalErr)
+	}
+
+	time.Sleep(mockEval.evalDelay * 2)
+
+	if active := atomic.LoadInt32(&activeEvals); active != 0 {
+		t.Errorf("Expected no active evaluations after context cancellation, got %d", active)
+	}
+}
+
+func TestParallelEvalPanicHandling(t *testing.T) {
+	atomic.StoreInt32(&activeEvals, 0)
+	mockEval := &trackingMockEvaluator{
+		evalDelay:   50 * time.Millisecond,
+		panicRuleID: "rulePanic",
+	}
+	engine := indigo.NewEngine(mockEval)
+
+	rootRule := &indigo.Rule{
+		ID: "root",
+		Rules: map[string]*indigo.Rule{
+			"ruleOK1":   {ID: "ruleOK1", Expr: "ruleOK1"},
+			"rulePanic": {ID: "rulePanic", Expr: "rulePanic"}, // This rule will panic
+			"ruleOK2":   {ID: "ruleOK2", Expr: "ruleOK2"},
+		},
+	}
+	err := engine.Compile(rootRule)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // Test timeout
+	defer cancel()
+
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(2, 3))
+	if evalErr == nil {
+		t.Fatal("expected an error but got none")
+	}
+	if !strings.Contains(evalErr.Error(), "panic during parallel rule evaluation: mock panic for rule rulePanic") {
+		t.Errorf("expected error to contain 'panic during parallel rule evaluation: mock panic for rule rulePanic', got: %v", evalErr)
+	}
+
+	time.Sleep(mockEval.evalDelay * 3)
+	if active := atomic.LoadInt32(&activeEvals); active != 0 {
+		t.Errorf("Expected no active evaluations after panic, got %d", active)
+	}
 }
