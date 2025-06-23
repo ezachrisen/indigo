@@ -985,7 +985,7 @@ func BenchmarkEval2000RulesWithSelfParallel(b *testing.B) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(200, 10))
+		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(100, 20))
 		if err != nil {
 			b.Error(err)
 		}
@@ -1047,7 +1047,7 @@ func BenchmarkEval2000RulesParallel(b *testing.B) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(200, 10))
+		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(100, 20))
 		if err != nil {
 			b.Error(err)
 		}
@@ -1197,7 +1197,7 @@ func TestEval2000RulesParallel(t *testing.T) {
 		"honors":  &school.HonorsConfiguration{Minimum_GPA: 3.7},
 	}
 	//	start := time.Now()
-	_, err = e.Eval(context.Background(), r, data, indigo.Parallel(200, 10))
+	_, err = e.Eval(context.Background(), r, data, indigo.Parallel(100, 20))
 	if err != nil {
 		t.Error(err)
 	}
