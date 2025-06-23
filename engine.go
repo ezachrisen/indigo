@@ -153,18 +153,21 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 	// separate from the user's context which might have different semantics
 	// We do not want to derive this internal context from the user's context,
 	// because of locking contention on the user's context in high concurrency situations.
+	// Rather, we link cancellation of the internal context to cancelation of the request context
+	// by canceling the internal context when this function returns, which it will if
+	// the request context is cancelled (in the for/select loop below).
 	internalCtx, cancelInternal := context.WithCancel(context.Background())
 	defer cancelInternal() // Ensure goroutines are cleaned up when function exits
 
 	// Start producer goroutine: sends chunks to workers on chunkCh
 	// This goroutine will close chunkCh when all chunks are sent
-	go hurlChunks(ctx, chunks, chunkCh)
+	go sendChunks(internalCtx, chunks, chunkCh)
 
 	// Start consumer goroutine: processes chunks and sends results
 	// This goroutine reads from chunkCh and evaluates each chunk
 	for i := 0; i < o.Parallel.MaxParallel; i++ {
 		go func() {
-			e.eatChunks(internalCtx, chunkCh, rules, d, resultsCh, errCh, o, opts...)
+			e.processChunks(internalCtx, chunkCh, rules, d, resultsCh, errCh, o, opts...)
 		}()
 	}
 
@@ -197,6 +200,7 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 }
 
+// evalResult is a convenience type to let us pass multiple values on a channel
 type evalResult struct {
 	passCount int
 	failCount int
@@ -247,7 +251,7 @@ func makeChunks(start, len, batchSize int) (chunks []chunk) {
 	return
 }
 
-// hurlChunks is the producer goroutine that sends work chunks to the consumer.
+// sendChunks is the producer goroutine that sends work chunks to the consumer.
 // It runs in a separate goroutine and sends all chunks to chunkCh for processing.
 //
 // This function implements the "producer" part of a producer-consumer pattern.
@@ -264,7 +268,7 @@ func makeChunks(start, len, batchSize int) (chunks []chunk) {
 // Important: This function MUST close chunkCh when done to signal the consumer
 // that no more work is coming. We use defer to ensure it's closed even if
 // the context is cancelled partway through.
-func hurlChunks(ctx context.Context, chunks []chunk, chunkCh chan<- chunk) {
+func sendChunks(ctx context.Context, chunks []chunk, chunkCh chan<- chunk) {
 	// defer close(chunkCh) ensures the channel is closed no matter how this function exits
 	// This is CRITICAL - the consumer (eatChunks) waits for the channel to be closed
 	// to know when all work has been sent. Without this, eatChunks would wait forever!
@@ -293,7 +297,7 @@ func hurlChunks(ctx context.Context, chunks []chunk, chunkCh chan<- chunk) {
 	// The defer close(chunkCh) will execute here, signaling completion
 }
 
-// eatChunks is the consumer goroutine that processes work chunks.
+// processChunks is the consumer goroutine that processes work chunks.
 // It runs in a separate goroutine and continuously reads chunks from chunkCh,
 // evaluates them, and sends results back through resultsCh or errCh.
 //
@@ -314,7 +318,7 @@ func hurlChunks(ctx context.Context, chunks []chunk, chunkCh chan<- chunk) {
 //   - <-chan chunk: Can only receive from this channel
 //   - chan<- result: Can only send to this channel
 //   - This provides compile-time safety and documents the intended data flow
-func (e *DefaultEngine) eatChunks(ctx context.Context, chunkCh <-chan chunk, rules []*Rule, d map[string]any, resultsCh chan<- evalResult, errCh chan<- error, o EvalOptions, opts ...EvalOption) {
+func (e *DefaultEngine) processChunks(ctx context.Context, chunkCh <-chan chunk, rules []*Rule, d map[string]any, resultsCh chan<- evalResult, errCh chan<- error, o EvalOptions, opts ...EvalOption) {
 	// Recover from any panics that occur during evaluation
 	// This prevents a panic in one worker goroutine from crashing the entire evaluation
 	defer func() {
