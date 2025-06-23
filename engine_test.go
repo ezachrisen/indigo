@@ -1306,7 +1306,6 @@ func (m *trackingMockEvaluator) Evaluate(data map[string]any, expr string, s ind
 	if m.errorRuleID != "" && expr == m.errorRuleID {
 		return false, nil, errors.New("mock error for rule " + expr)
 	}
-	fmt.Println("Evaluated rule", expr, "activeEvals", activeEvals)
 	return true, nil, nil
 }
 
@@ -1353,10 +1352,10 @@ func TestParallelEvalLeakOnEarlyError(t *testing.T) {
 	if !strings.Contains(evalErr.Error(), "mock error for rule ruleError") {
 		t.Errorf("expected error to contain 'mock error for rule ruleError', got: %v", evalErr)
 	}
-	fmt.Println("Num goroutines: ", runtime.NumGoroutine())
+	//fmt.Println("Num goroutines: ", runtime.NumGoroutine())
 	// Give some time for other goroutines to potentially get stuck or finish
 	time.Sleep(mockEval.evalDelay * 3)
-	time.Sleep(3 * time.Second)
+
 	if active := atomic.LoadInt32(&activeEvals); active != 0 {
 		t.Errorf("Expected no active evaluations after early error, got %d", active)
 	}
@@ -1368,8 +1367,8 @@ func TestParallelEvalLeakOnEarlyError(t *testing.T) {
 		t.Errorf("Expected max active evals to be %d, got %d", parallel, maxActiveEvals)
 	}
 
-	fmt.Println("Num goroutines: ", runtime.NumGoroutine())
-	fmt.Println("Max active evals: ", maxActiveEvals)
+	// fmt.Println("Num goroutines: ", runtime.NumGoroutine())
+	// fmt.Println("Max active evals: ", maxActiveEvals)
 
 }
 
