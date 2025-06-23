@@ -157,9 +157,11 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 	// This goroutine will close chunkCh when all chunks are sent
 	go hurlChunks(ctx, chunks, chunkCh)
 
-	// Start consumer goroutine: processes chunks and sends results
-	// This goroutine reads from chunkCh and evaluates each chunk
-	go e.eatChunks(internalCtx, chunkCh, rules, d, resultsCh, errCh, o, opts...)
+	// Start worker pool: spawn limited number of worker goroutines based on MaxParallel
+	// Each worker processes chunks from chunkCh and sends results
+	for i := 0; i < o.Parallel.MaxParallel; i++ {
+		go e.chunkWorker(internalCtx, chunkCh, rules, d, resultsCh, errCh, o, opts...)
+	}
 
 	// Collect results from all chunks
 	// We know exactly how many results to expect (one per chunk)
@@ -280,52 +282,42 @@ func hurlChunks(ctx context.Context, chunks []chunk, chunkCh chan<- chunk) {
 	// The defer close(chunkCh) will execute here, signaling completion
 }
 
-// eatChunks is the consumer goroutine that processes work chunks.
-// It runs in a separate goroutine and continuously reads chunks from chunkCh,
-// evaluates them, and sends results back through resultsCh or errCh.
+// chunkWorker is a worker goroutine that processes work chunks from the chunk channel.
+// Multiple workers run concurrently (limited by MaxParallel setting) to process chunks
+// in parallel. This replaces the old eatChunks function which had unbounded goroutine creation.
 //
-// This function implements the "worker" part of a producer-consumer pattern.
-// It demonstrates several important Go concurrency patterns:
-//   - Channel communication for receiving work and sending results
-//   - Select statements for handling multiple channels and cancellation
-//   - Proper goroutine termination when channels are closed or context is cancelled
+// Key improvements over eatChunks:
+//   - Respects MaxParallel limit by having a fixed number of workers
+//   - Processes chunks directly without spawning additional goroutines
+//   - Provides better resource control and predictable concurrency
 //
 // Parameters:
-//   - ctx: Context for cancellation - when cancelled, this goroutine exits
-//   - chunkCh: Receive-only channel for getting work chunks (note the <-chan syntax)
+//   - ctx: Context for cancellation - when cancelled, this worker exits
+//   - chunkCh: Receive-only channel for getting work chunks
 //   - rules: The full slice of rules (chunks contain indices into this slice)
-//   - resultsCh: Send-only channel for sending successful results (note the chan<- syntax)
+//   - resultsCh: Send-only channel for sending successful results
 //   - errCh: Send-only channel for sending errors when evaluation fails
-//
-// Channel directions (important Go concept):
-//   - <-chan chunk: Can only receive from this channel
-//   - chan<- result: Can only send to this channel
-//   - This provides compile-time safety and documents the intended data flow
-func (e *DefaultEngine) eatChunks(ctx context.Context, chunkCh <-chan chunk, rules []*Rule, d map[string]any, resultsCh chan<- evalResult, errCh chan<- error, o EvalOptions, opts ...EvalOption) {
-	// Infinite loop to continuously process chunks until context is cancelled
-	// or the chunk channel is closed
+//   - o: Evaluation options
+//   - opts: Additional evaluation options
+func (e *DefaultEngine) chunkWorker(ctx context.Context, chunkCh <-chan chunk, rules []*Rule, d map[string]any, resultsCh chan<- evalResult, errCh chan<- error, o EvalOptions, opts ...EvalOption) {
+	// Worker loop: continuously process chunks until context is cancelled or channel is closed
 	for {
-		// Select allows us to wait on multiple channel operations simultaneously
-		// The first case that becomes ready will be executed
 		select {
 		case <-ctx.Done():
 			// Context was cancelled - exit immediately
-			// This is how we ensure goroutines don't leak when the parent gives up
 			return
 
 		case chunk, ok := <-chunkCh:
 			// Try to receive a chunk from the work queue
-			// The 'ok' variable tells us if the channel is still open
 			if !ok {
 				// Channel was closed, meaning no more work is coming
-				// This is the normal way for a producer to signal "all done"
 				return
 			}
 
-			// Process the chunk by evaluating all rules in its range
-			go func() {
+			// Process the chunk directly in this worker goroutine
+			// This eliminates the unbounded goroutine spawning issue
+			func() {
 				// Recover from any panics that occur during evaluation
-				// This prevents a panic in one worker goroutine from crashing the entire evaluation
 				defer func() {
 					if recovered := recover(); recovered != nil {
 						// Convert the panic to an error and send it back to the main goroutine
@@ -335,7 +327,6 @@ func (e *DefaultEngine) eatChunks(ctx context.Context, chunkCh <-chan chunk, rul
 							// Successfully sent the panic error
 						case <-ctx.Done():
 							// Context cancelled while sending panic error - just exit
-							// The main goroutine will see the cancellation
 						}
 					}
 				}()
@@ -343,31 +334,25 @@ func (e *DefaultEngine) eatChunks(ctx context.Context, chunkCh <-chan chunk, rul
 				r, err := e.evalRuleSlice(ctx, rules[chunk.start:chunk.end], d, o, opts...)
 				if err != nil {
 					// An error occurred during evaluation
-					// We need to send it back to the main goroutine, but we also
-					// need to handle the case where the context gets cancelled
-					// while we're trying to send the error
 					select {
 					case errCh <- err:
 						// Successfully sent the error
 					case <-ctx.Done():
 						// Context cancelled while sending error - just exit
-						// The main goroutine will see the cancellation
 					}
 					return // Exit after sending error (fail-fast behavior)
 				}
 
 				// Successfully processed the chunk - send results back
-				// Again, we need to handle potential cancellation during the send
 				select {
 				case resultsCh <- r:
-					// Successfully sent results - continue to next chunk
+					// Successfully sent results
 				case <-ctx.Done():
 					// Context cancelled while sending results - exit
 					return
 				}
 			}()
 		}
-		// Loop continues to process the next chunk
 	}
 }
 
