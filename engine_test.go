@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1271,7 +1272,8 @@ func TestSortFuncAndParallelIncompatible(t *testing.T) {
 
 }
 
-var activeEvals int32 // Counter for active mock evaluations
+var activeEvals int32    // Counter for active mock evaluations
+var maxActiveEvals int32 // Maximum number of active evaluations
 
 type trackingMockEvaluator struct {
 	evalDelay   time.Duration
@@ -1286,6 +1288,9 @@ func (m *trackingMockEvaluator) Compile(expr string, s indigo.Schema, resultType
 
 func (m *trackingMockEvaluator) Evaluate(data map[string]any, expr string, s indigo.Schema, self any, evalData any, resultType indigo.Type, returnDiagnostics bool) (any, *indigo.Diagnostics, error) {
 	atomic.AddInt32(&activeEvals, 1)
+	if activeEvals > maxActiveEvals {
+		maxActiveEvals = activeEvals
+	}
 	defer atomic.AddInt32(&activeEvals, -1)
 
 	if m.panicRuleID != "" && expr == m.panicRuleID {
@@ -1295,15 +1300,18 @@ func (m *trackingMockEvaluator) Evaluate(data map[string]any, expr string, s ind
 	if m.evalDelay > 0 {
 		time.Sleep(m.evalDelay)
 	}
-
+	if strings.Contains(expr, "Slow") {
+		time.Sleep(1 * time.Second)
+	}
 	if m.errorRuleID != "" && expr == m.errorRuleID {
 		return false, nil, errors.New("mock error for rule " + expr)
 	}
-
+	fmt.Println("Evaluated rule", expr, "activeEvals", activeEvals)
 	return true, nil, nil
 }
 
 func TestParallelEvalLeakOnEarlyError(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
 	atomic.StoreInt32(&activeEvals, 0)
 	mockEval := &trackingMockEvaluator{
 		evalDelay:   100 * time.Millisecond,
@@ -1317,6 +1325,12 @@ func TestParallelEvalLeakOnEarlyError(t *testing.T) {
 			"ruleError": {ID: "ruleError", Expr: "ruleError"}, // Will error out quickly
 			"ruleSlow1": {ID: "ruleSlow1", Expr: "ruleSlow1"}, // Will be slow
 			"ruleSlow2": {ID: "ruleSlow2", Expr: "ruleSlow2"}, // Will be slow
+			"ruleSlow3": {ID: "ruleSlow3", Expr: "ruleSlow3"}, // Will be slow
+			"ruleSlow4": {ID: "ruleSlow4", Expr: "ruleSlow4"}, // Will be slow
+			"ruleSlow5": {ID: "ruleSlow5", Expr: "ruleSlow5"}, // Will be slow
+			"ruleSlow6": {ID: "ruleSlow6", Expr: "ruleSlow6"}, // Will be slow
+			"ruleSlow7": {ID: "ruleSlow7", Expr: "ruleSlow7"}, // Will be slow
+			"ruleSlow8": {ID: "ruleSlow8", Expr: "ruleSlow8"}, // Will be slow
 		},
 		// EvalOptions on the rule itself are used if not overridden by Eval call options
 	}
@@ -1328,21 +1342,35 @@ func TestParallelEvalLeakOnEarlyError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // Test timeout
 	defer cancel()
 
+	batchSize := 2
+	parallel := 2
+
 	// Pass Parallel options directly to Eval
-	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(2, 3))
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(batchSize, parallel))
 	if evalErr == nil {
 		t.Fatal("expected an error but got none")
 	}
 	if !strings.Contains(evalErr.Error(), "mock error for rule ruleError") {
 		t.Errorf("expected error to contain 'mock error for rule ruleError', got: %v", evalErr)
 	}
-
+	fmt.Println("Num goroutines: ", runtime.NumGoroutine())
 	// Give some time for other goroutines to potentially get stuck or finish
 	time.Sleep(mockEval.evalDelay * 3)
-
+	time.Sleep(3 * time.Second)
 	if active := atomic.LoadInt32(&activeEvals); active != 0 {
 		t.Errorf("Expected no active evaluations after early error, got %d", active)
 	}
+
+	if runtime.NumGoroutine() > startGoroutines+1 {
+		t.Errorf("Expected no goroutines to be created, got %d", runtime.NumGoroutine())
+	}
+	if maxActiveEvals > int32(parallel) {
+		t.Errorf("Expected max active evals to be %d, got %d", parallel, maxActiveEvals)
+	}
+
+	fmt.Println("Num goroutines: ", runtime.NumGoroutine())
+	fmt.Println("Max active evals: ", maxActiveEvals)
+
 }
 
 func TestParallelEvalLeakOnContextCancel(t *testing.T) {
