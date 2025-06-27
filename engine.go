@@ -508,6 +508,16 @@ func applyCompilerOptions(o *compileOptions, opts ...CompilationOption) {
 	}
 }
 
+// ParallelConfig enables parallel evaluation of child rules with batching.
+// BatchSize controls how many rules are evaluated concurrently in each batch.
+// MaxParallel limits the maximum number of goroutines used for evaluation.
+// If BatchSize is 0, all rules are processed in a single batch.
+// If MaxParallel is 0, no limit is imposed on parallel goroutines.
+type ParallelConfig struct {
+	BatchSize   int `json:"batch_size"`
+	MaxParallel int `json:"max_parallel"`
+}
+
 // EvalOptions determines how the engine should treat the results of evaluating a rule.
 type EvalOptions struct {
 
@@ -564,15 +574,8 @@ type EvalOptions struct {
 	// and was overridden by a global eval option,
 	overrideSort bool
 
-	// Parallel enables parallel evaluation of child rules with batching.
-	// BatchSize controls how many rules are evaluated concurrently in each batch.
-	// MaxParallel limits the maximum number of goroutines used for evaluation.
-	// If BatchSize is 0, all rules are processed in a single batch.
-	// If MaxParallel is 0, no limit is imposed on parallel goroutines.
-	Parallel struct {
-		BatchSize   int `json:"batch_size"`
-		MaxParallel int `json:"max_parallel"`
-	} `json:"parallel"`
+	// Parallel controls parallel evaluation of child rules with batching.
+	Parallel ParallelConfig `json:"parallel"`
 }
 
 // FailAction is used to tell Indigo what to do with the results of
