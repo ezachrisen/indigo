@@ -1466,10 +1466,7 @@ func TestParallelEvalOptionOverride(t *testing.T) {
 	rootRule := &indigo.Rule{
 		ID: "root",
 		EvalOptions: indigo.EvalOptions{
-			Parallel: struct {
-				BatchSize   int `json:"batch_size"`
-				MaxParallel int `json:"max_parallel"`
-			}{
+			Parallel: indigo.ParallelConfig{
 				BatchSize:   2,
 				MaxParallel: 3,
 			},
