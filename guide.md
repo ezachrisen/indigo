@@ -2008,35 +2008,160 @@ memory_alarm --> memory_remaining_alarm;
 
 # 12. Parallel Rule Evaluation
 
-Parallel evaluation of child rules can dramatically improve throughput when working with large rule sets. In this mode, Indigo evaluates child rules concurrently in batches, minimizing total evaluation time on multi-core systems.
+Parallel evaluation dramatically improves performance when processing large sets of child rules by leveraging multiple CPU cores. Instead of evaluating rules one at a time, Indigo can evaluate multiple rules concurrently, reducing total evaluation time from linear to near-constant for independent rule sets.
 
-## Enabling Parallel Evaluation
+## Understanding Parallel Execution
 
-To enable parallel evaluation for a parent rule, pass the `Parallel` evaluation option to `Engine.Eval`. For example, to process child rules in batches of 10 with up to 4 goroutines:
+When parallel evaluation is enabled, Indigo transforms the evaluation process:
+
+1. **Sequential Mode**: Rules are evaluated one after another in a single goroutine
+2. **Parallel Mode**: Rules are divided into batches and evaluated concurrently across multiple goroutines
+
+The key insight is that most child rules are independent of each other - they read the same input data but don't affect each other's outcomes. This independence makes them ideal candidates for parallel processing.
+
+## Caveat
+
+Parallel evaluation may not be the best solution for you. It works best with a large number of rules (thousands) with complex expressions, and will reduce latency. However, no matter how you slice it, the same amount of work has to be performed whether in parallel or sequentially.  Evaluating rules in parallel will increase CPU pressure since the work is compressed in a smaller time window. 
+
+A better approach to try first is always to try to limit the number of rules that are evaluated. You can do this by using Indigo's ability to organize rules in a hierarchy, as described in the StopIfParentNegative section. You can use multiple levels of a hierarchy to tune the performance to your rules and data. 
+
+
+## Configuration Methods
+
+Indigo provides two ways to configure parallel execution, giving you control at different levels:
+
+### Method 1: Rule-Level Configuration
+
+Configure parallel settings directly on the rule definition:
 
 ```go
-result, err := engine.Eval(
-    ctx,
-    parentRule,
-    data,
-    indigo.Parallel(10, 4),
-)
-if err != nil {
-    // handle error
+rule := &indigo.Rule{
+    ID:   "process_students",
+    Schema: education,
+    EvalOptions: indigo.EvalOptions{
+        Parallel: indigo.ParallelConfig{
+            BatchSize:   50,  // Process 50 rules per batch
+            MaxParallel: 8,   // Use up to 8 goroutines
+        },
+    },
+    Rules: map[string]*indigo.Rule{
+        // ... hundreds of student evaluation rules
+    },
 }
 ```
 
-When both `batchSize` and `maxParallel` are set to values greater than 1, Indigo splits the child rules into batches of the specified size and evaluates each batch in parallel, up to the maximum number of goroutines.
+### Method 2: Eval-Level Override
 
-## Limitations
+Override parallel settings at evaluation time using the `Parallel` option:
 
-Parallel rule evaluation has the following restrictions and considerations:
+```go
+// Override any rule-level parallel config
+result, err := engine.Eval(
+    ctx,
+    rule,
+    data,
+    indigo.Parallel(25, 4), // 25 per batch, max 4 goroutines
+)
+```
 
-- **Incompatible with ordered evaluation options**: You cannot combine `Parallel` with `SortFunc`, `StopFirstPositiveChild`, or `StopFirstNegativeChild`. An error will be returned if these options are used together, as parallel evaluation does not guarantee ordering of child rule execution.
-- **Data isolation for `self`**: When `Parallel` is enabled, Indigo creates copies of the input data map for each batch to avoid race conditions. As a result, functions or custom macros that modify shared data via the `self` key will not observe changes across child evaluations.
-- **Diagnostics ordering**: Detailed diagnostics and the `RulesEvaluated` order are not meaningful in parallel mode; the ordering of concurrent evaluations is inherently non-deterministic.
-- **Resource usage**: Parallel evaluation increases goroutine and memory usage due to batching and map copying. Tune `batchSize` and `maxParallel` to balance throughput and resource consumption.
-- **Short-circuit behavior**: Although `StopIfParentNegative` still applies at the parent level, child-level short-circuit options (`StopFirstPositiveChild`, `StopFirstNegativeChild`) are disabled. All children in each batch will complete before results are aggregated.
+**Configuration Priority**: Eval-level settings override rule-level settings, allowing you to adapt to runtime conditions or different execution environments.
+
+
+### Self-Reference Behavior
+
+When using the `self` reference in rules, parallel execution incurs a performance penalty because the input data has to be copied for every rule to avoid data access contention. It is not recommended to use parallel processing and `self` references together. 
+
+## Limitations and Restrictions
+
+### Incompatible Evaluation Options
+
+Parallel execution cannot be combined with ordering-dependent options:
+
+```go
+// These will return an error if used with Parallel:
+rule.EvalOptions.SortFunc = mySort           // ❌ Requires ordering
+rule.EvalOptions.StopFirstPositiveChild = true  // ❌ Requires ordering  
+rule.EvalOptions.StopFirstNegativeChild = true  // ❌ Requires ordering
+
+// These work fine with Parallel:
+rule.EvalOptions.TrueIfAny = true             // ✅ Order independent
+rule.EvalOptions.StopIfParentNegative = true  // ✅ Parent-level only
+rule.EvalOptions.FailAction = indigo.DiscardFailures // ✅ Post-processing
+```
+
+### Diagnostic Considerations
+
+- **Rule evaluation order**: Non-deterministic in parallel mode
+- **Timing information**: Less meaningful due to concurrent execution
+- **Error reporting**: Collected from all batches and aggregated
+
+### Resource Usage
+
+Monitor resource consumption when using parallel evaluation:
+
+- **Memory**: Increases due to data copying and goroutine overhead
+- **CPU**: Should scale with `MaxParallel` up to available cores
+- **Goroutines**: Monitor for leaks using runtime metrics
+
+## Best Practices
+
+### When to Use Parallel Evaluation
+
+**Good candidates:**
+- Large numbers of independent child rules (exact number depends on rule complexity)
+- Rules with significant computational complexity
+
+**Poor candidates:**
+- Small rule sets (<10 rules)
+- Rules requiring specific evaluation order
+- Memory-constrained environments with complex rules
+
+### Context Cancellation
+
+Parallel evaluation respects context cancellation:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+result, err := engine.Eval(ctx, rule, data, indigo.Parallel(50, 8))
+if errors.Is(err, context.DeadlineExceeded) {
+    // Parallel evaluation was cancelled
+}
+```
+
+### Error Handling
+
+Parallel execution includes built-in panic recovery:
+
+```go
+// If any child rule panics, it's recovered and converted to an error
+// Other batches continue executing normally
+// Final result includes error details for debugging
+```
+
+## Performance Testing
+
+Always benchmark parallel settings for your specific use case:
+
+```go
+func BenchmarkParallelEval(b *testing.B) {
+    // Test different batch sizes and parallelism levels
+    configs := []struct{batch, parallel int}{
+        {10, 2}, {50, 4}, {100, 8}, {200, 16},
+    }
+    
+    for _, cfg := range configs {
+        b.Run(fmt.Sprintf("batch%d_parallel%d", cfg.batch, cfg.parallel), func(b *testing.B) {
+            for i := 0; i < b.N; i++ {
+                engine.Eval(ctx, rule, data, indigo.Parallel(cfg.batch, cfg.parallel))
+            }
+        })
+    }
+}
+```
+
+Start with conservative settings and increase parallelism based on measured performance improvements in your specific environment.
 
 ***
 </br>
