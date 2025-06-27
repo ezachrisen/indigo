@@ -1450,3 +1450,68 @@ func TestParallelEvalPanicHandling(t *testing.T) {
 		t.Errorf("Expected no active evaluations after panic, got %d", active)
 	}
 }
+
+// Test that EvalOptions passed to Eval can override the parallel evaluation options
+// set on a rule, forcing sequential evaluation instead of parallel evaluation
+func TestParallelEvalOptionOverride(t *testing.T) {
+	atomic.StoreInt32(&activeEvals, 0)
+	atomic.StoreInt32(&maxActiveEvals, 0)
+
+	mockEval := &trackingMockEvaluator{
+		evalDelay: 100 * time.Millisecond,
+	}
+	engine := indigo.NewEngine(mockEval)
+
+	// Create a rule that wants to evaluate its children in parallel
+	rootRule := &indigo.Rule{
+		ID: "root",
+		EvalOptions: indigo.EvalOptions{
+			Parallel: struct {
+				BatchSize   int `json:"batch_size"`
+				MaxParallel int `json:"max_parallel"`
+			}{
+				BatchSize:   2,
+				MaxParallel: 3,
+			},
+		},
+		Rules: map[string]*indigo.Rule{
+			"rule1": {ID: "rule1", Expr: "true"},
+			"rule2": {ID: "rule2", Expr: "true"},
+			"rule3": {ID: "rule3", Expr: "true"},
+			"rule4": {ID: "rule4", Expr: "true"},
+			"rule5": {ID: "rule5", Expr: "true"},
+		},
+	}
+
+	err := engine.Compile(rootRule)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Track initial goroutine count
+	initialGoroutines := runtime.NumGoroutine()
+
+	// Override the rule's parallel settings with sequential evaluation
+	// (BatchSize=0 and MaxParallel=0 forces sequential evaluation)
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(0, 0))
+	if evalErr != nil {
+		t.Fatalf("unexpected error: %v", evalErr)
+	}
+
+	// Verify that the number of goroutines did not increase significantly
+	// (allowing for some variance due to Go runtime)
+	finalGoroutines := runtime.NumGoroutine()
+	if finalGoroutines > initialGoroutines+2 {
+		t.Errorf("Expected sequential evaluation with minimal goroutine increase, initial: %d, final: %d", 
+			initialGoroutines, finalGoroutines)
+	}
+
+	// Verify that the maximum number of concurrent evaluations was limited
+	// In sequential mode, we should never have more than 1 active evaluation at a time
+	if maxActiveEvals > 1 {
+		t.Errorf("Expected max 1 active evaluation in sequential mode, got %d", maxActiveEvals)
+	}
+}
