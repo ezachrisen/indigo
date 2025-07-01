@@ -2023,7 +2023,7 @@ The key insight is that most child rules are independent of each other - they re
 
 Parallel evaluation may not be the best solution for you. It works best with a large number of rules (thousands) with complex expressions, and will reduce latency. However, no matter how you slice it, the same amount of work has to be performed whether in parallel or sequentially.  Evaluating rules in parallel will increase CPU pressure since the work is compressed in a smaller time window. 
 
-A better approach to try first is always to try to limit the number of rules that are evaluated. You can do this by using Indigo's ability to organize rules in a hierarchy, as described in the StopIfParentNegative section. You can use multiple levels of a hierarchy to tune the performance to your rules and data. 
+A better approach to try first is always to try to limit the number of rules that are evaluated. You can do this by using Indigo's ability to organize rules in a hierarchy, as described in the [StopIfParentNegative](#stopifparentnegative) section. You can use multiple levels of a hierarchy to tune the performance to your rules and data. 
 
 
 ## Configuration Methods
