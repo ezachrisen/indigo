@@ -985,7 +985,7 @@ func BenchmarkEval2000RulesWithSelfParallel(b *testing.B) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(100, 20))
+		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(1, 100, 20))
 		if err != nil {
 			b.Error(err)
 		}
@@ -1047,7 +1047,7 @@ func BenchmarkEval2000RulesParallel(b *testing.B) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(100, 20))
+		_, err = e.Eval(context.Background(), r, data, indigo.Parallel(1, 100, 20))
 		if err != nil {
 			b.Error(err)
 		}
@@ -1197,7 +1197,7 @@ func TestEval2000RulesParallel(t *testing.T) {
 		"honors":  &school.HonorsConfiguration{Minimum_GPA: 3.7},
 	}
 	//	start := time.Now()
-	_, err = e.Eval(context.Background(), r, data, indigo.Parallel(100, 20))
+	_, err = e.Eval(context.Background(), r, data, indigo.Parallel(1, 100, 20))
 	if err != nil {
 		t.Error(err)
 	}
@@ -1347,7 +1347,7 @@ func TestRuleSelfFunctionality(t *testing.T) {
 
 			var result *indigo.Result
 			if tc.parallel {
-				result, err = e.Eval(context.Background(), r, data, indigo.Parallel(2, 2))
+				result, err = e.Eval(context.Background(), r, data, indigo.Parallel(1, 2, 2))
 			} else {
 				result, err = e.Eval(context.Background(), r, data)
 			}
@@ -1450,7 +1450,7 @@ func TestRuleSelfInheritance(t *testing.T) {
 
 			var result *indigo.Result
 			if tc.parallel {
-				result, err = e.Eval(context.Background(), r, data, indigo.Parallel(2, 2))
+				result, err = e.Eval(context.Background(), r, data, indigo.Parallel(1, 2, 2))
 			} else {
 				result, err = e.Eval(context.Background(), r, data)
 			}

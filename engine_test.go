@@ -1260,7 +1260,7 @@ func TestSortFuncAndParallelIncompatible(t *testing.T) {
 	}
 
 	// Try to evaluate with parallel processing - this should fail
-	_, err = e.Eval(context.Background(), r, map[string]any{}, indigo.Parallel(10, 2))
+	_, err = e.Eval(context.Background(), r, map[string]any{}, indigo.Parallel(1, 10, 2))
 	if err == nil {
 		t.Fatal("expected error when using both sortFunc and parallel options")
 	}
@@ -1345,7 +1345,7 @@ func TestParallelEvalLeakOnEarlyError(t *testing.T) {
 	parallel := 2
 
 	// Pass Parallel options directly to Eval
-	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(batchSize, parallel))
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(1, batchSize, parallel))
 	if evalErr == nil {
 		t.Fatal("expected an error but got none")
 	}
@@ -1395,7 +1395,7 @@ func TestParallelEvalLeakOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), mockEval.evalDelay/2)
 	defer cancel()
 
-	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(2, 3))
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(1, 2, 3))
 	if evalErr == nil {
 		t.Fatal("expected an error but got none")
 	}
@@ -1437,7 +1437,7 @@ func TestParallelEvalPanicHandling(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // Test timeout
 	defer cancel()
 
-	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(2, 3))
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(1, 2, 3))
 	if evalErr == nil {
 		t.Fatal("expected an error but got none")
 	}

@@ -52,7 +52,7 @@ func TestParallelRaceConditions(t *testing.T) {
 				var err error
 				//				if j%2 == 0 {
 				_, err = engine.Eval(context.Background(), root, data,
-					indigo.Parallel(10, 20))
+					indigo.Parallel(1, 10, 20))
 				// } else {
 				// 	_, err = engine.Eval(context.Background(), root, data)
 				// }
@@ -98,7 +98,7 @@ func TestParallelGoroutineLeaksWithCancellation(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 
 		// Start evaluation but cancel quickly
-		_, err := engine.Eval(ctx, root, data, indigo.Parallel(5, 50))
+		_, err := engine.Eval(ctx, root, data, indigo.Parallel(1, 5, 50))
 
 		cancel()
 
@@ -172,7 +172,7 @@ func TestParallelGoroutineLeaksWithErrors(t *testing.T) {
 
 	for i := 0; i < numTests; i++ {
 		_, err := engine.Eval(context.Background(), root, data,
-			indigo.Parallel(10, 20))
+			indigo.Parallel(1, 10, 20))
 
 		// We expect errors here due to invalid expressions
 		if err == nil {
@@ -226,7 +226,7 @@ func TestParallelMemoryStress(t *testing.T) {
 
 			// Run parallel evaluation
 			result, err := engine.Eval(context.Background(), root, data,
-				indigo.Parallel(100, 50))
+				indigo.Parallel(1, 100, 50))
 			if err != nil {
 				t.Fatalf("evaluation failed for size %d: %v", size, err)
 			}
@@ -344,7 +344,7 @@ func TestParallelEdgeCases(t *testing.T) {
 			}
 
 			result, err := engine.Eval(context.Background(), tc.rule, data,
-				indigo.Parallel(tc.batchSize, tc.maxParallel))
+				indigo.Parallel(1, tc.batchSize, tc.maxParallel))
 
 			if tc.shouldFail {
 				if err == nil {
@@ -386,7 +386,7 @@ func TestParallelRapidCancellation(t *testing.T) {
 
 		// Start evaluation
 		go func() {
-			_, _ = engine.Eval(ctx, root, data, indigo.Parallel(10, 20))
+			_, _ = engine.Eval(ctx, root, data, indigo.Parallel(1, 10, 20))
 		}()
 
 		// Cancel immediately
@@ -425,7 +425,7 @@ func TestParallelConcurrentModification(t *testing.T) {
 		defer wg.Done()
 		for i := 0; i < 50; i++ {
 			_, err := engine.Eval(context.Background(), root, data,
-				indigo.Parallel(20, 10))
+				indigo.Parallel(1, 20, 10))
 			if err != nil {
 				atomic.AddInt64(&errors, 1)
 			}
@@ -483,7 +483,7 @@ func TestParallelExtremeParallelism(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := engine.Eval(context.Background(), root, data,
-				indigo.Parallel(tc.batchSize, tc.maxParallel))
+				indigo.Parallel(1, tc.batchSize, tc.maxParallel))
 
 			if err != nil {
 				t.Errorf("evaluation failed with batch_size=%d, max_parallel=%d: %v",
@@ -561,7 +561,7 @@ func TestParallelPanicRecovery(t *testing.T) {
 
 	// This should handle panics gracefully
 	_, err = engine.Eval(context.Background(), root, data,
-		indigo.Parallel(10, 5))
+		indigo.Parallel(1, 10, 5))
 
 	// We expect an error due to the panic
 	if err == nil {

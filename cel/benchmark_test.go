@@ -207,7 +207,7 @@ func TestHierarchicalRulesDeep(t *testing.T) {
 			data := createComprehensiveStudentData()
 
 			// Evaluate rules
-			results, err := engine.Eval(context.Background(), root, data, indigo.ReturnDiagnostics(true), indigo.Parallel(2, 1000))
+			results, err := engine.Eval(context.Background(), root, data, indigo.ReturnDiagnostics(true), indigo.Parallel(1, 2, 1000))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -320,7 +320,7 @@ func BenchmarkHierarchicalRulesParallel(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := engine.Eval(context.Background(), root, data, indigo.Parallel(100, 100))
+		_, err := engine.Eval(context.Background(), root, data, indigo.Parallel(1, 100, 100))
 		if err != nil {
 			b.Fatalf("Failed to evaluate hierarchical rules: %v", err)
 		}

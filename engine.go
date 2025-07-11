@@ -56,10 +56,12 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
+
+	// even if we're not processing in parallel if
 	d = setSelfKey(r, d, o)
 
 	// Check for incompatible options: sortFunc and parallel cannot be used together
-	if o.SortFunc != nil && (o.Parallel.BatchSize > 1 || o.Parallel.MaxParallel > 1) {
+	if o.SortFunc != nil && o.parallel.batchSize > 1 {
 		return nil, fmt.Errorf("rule %s: sortFunc and parallel options are incompatible - parallel processing cannot guarantee evaluation order", r.ID)
 	}
 
@@ -129,11 +131,11 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 		return
 	}
 
-	if o.Parallel.BatchSize <= 1 || o.Parallel.MaxParallel <= 1 {
+	if o.parallel.batchSize <= 1 {
 		return e.evalRuleSlice(ctx, rules, d, o, opts...)
 	}
 
-	if o.Parallel.BatchSize > math.MaxInt/2 || o.Parallel.MaxParallel > math.MaxInt/2 {
+	if o.parallel.batchSize > math.MaxInt/2 || o.parallel.maxGoroutines > math.MaxInt/2 {
 		return r, errors.New("batch size or parallel out of range")
 	}
 
@@ -146,7 +148,7 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 	errCh := make(chan error)
 
 	// A chunk is a range of rules (a batch) to evaluate together
-	chunks := makeChunks(0, len(rules), o.Parallel.BatchSize)
+	chunks := makeChunks(0, len(rules), o.parallel.batchSize)
 
 	// Create internal context for coordinating goroutine cleanup
 	// This allows us to signal all goroutines to stop when we're done,
@@ -165,7 +167,7 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 	// Start consumer goroutine: processes chunks and sends results
 	// This goroutine reads from chunkCh and evaluates each chunk
-	for i := 0; i < o.Parallel.MaxParallel; i++ {
+	for i := 0; i < o.parallel.maxGoroutines; i++ {
 		go func() {
 			e.processChunks(internalCtx, chunkCh, rules, d, resultsCh, errCh, o, opts...)
 		}()
@@ -564,15 +566,28 @@ type EvalOptions struct {
 	// and was overridden by a global eval option,
 	overrideSort bool
 
-	// Parallel enables parallel evaluation of child rules with batching.
-	// BatchSize controls how many rules are evaluated concurrently in each batch.
-	// MaxParallel limits the maximum number of goroutines used for evaluation.
-	// If BatchSize is 0, all rules are processed in a single batch.
-	// If MaxParallel is 0, no limit is imposed on parallel goroutines.
-	Parallel struct {
-		BatchSize   int `json:"batch_size"`
-		MaxParallel int `json:"max_parallel"`
-	} `json:"parallel"`
+	// parallel enables parallel evaluation of child rules with batching.
+	//
+	// - MinSize determines the minimum number of rules that should be in a list
+	//   before we divide the work into batches. parallel processing has a time cost;
+	//   this setting allows users to specify at what point it makes sense to batch.
+	//
+	// - BatchSize controls how many rules are evaluated concurrently in each batch.
+	//   If BatchSize is 0, all rules are processed in a single batch, and no additional
+	//   overhead cost is incurred for parallel processing. This is Indigo's default.
+	//
+	// - MaxGoroutines limits the maximum number of goroutines used for evaluation.
+	//   This limits the number of batches that can be evaluated at the same time.
+	//   If MaxGoroutines is 0, a default number is used (defaultMaxParallel).
+	//
+	// Unlike most EvalOption fields, this is unexported, so it cannot be set
+	// on a rule directly. The reason for this is the special handling required
+	// for the "self" field in parallel processing situations.
+	parallel struct {
+		minSize       int
+		batchSize     int
+		maxGoroutines int
+	}
 }
 
 // FailAction is used to tell Indigo what to do with the results of
@@ -658,12 +673,23 @@ func StopFirstPositiveChild(b bool) EvalOption {
 
 // Parallel enables parallel evaluation of child rules with the specified
 // batch size and maximum parallel goroutines.
-func Parallel(batchSize, maxParallel int) EvalOption {
+func Parallel(minSize, batchSize, maxParallel int) EvalOption {
 	return func(f *EvalOptions) {
-		f.Parallel.BatchSize = batchSize
-		f.Parallel.MaxParallel = maxParallel
+		f.parallel.minSize = minSize
+		f.parallel.batchSize = batchSize
+
+		switch maxParallel {
+		case 0:
+			f.parallel.maxGoroutines = defaultMaxParallel
+		default:
+			f.parallel.maxGoroutines = maxParallel
+		}
 	}
 }
+
+// the default number of goroutines to use in parallel processing if the user
+// has specified 0
+const defaultMaxParallel = 255
 
 // See the EvalOptions struct for documentation.
 func applyEvaluatorOptions(o *EvalOptions, opts ...EvalOption) {
@@ -690,8 +716,8 @@ func setSelfKey(r *Rule, d map[string]any, o EvalOptions) map[string]any {
 		return nil
 	}
 
-	switch {
-	case o.Parallel.BatchSize > 0:
+	switch o.parallel.batchSize > 0 {
+	case true:
 		return setSelfKeyParallelMode(r, d)
 	default:
 		return setSelfKeySequentialMode(r, d)
