@@ -41,26 +41,21 @@ func TestParallelRaceConditions(t *testing.T) {
 
 	var wg sync.WaitGroup
 	var errors int64
-
+	var evalCount int32
+	var parallelCount int32
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
 
 			for j := 0; j < numIterations; j++ {
-				// Mix parallel and sequential evaluations
-				var err error
-				//				if j%2 == 0 {
-				_, err = engine.Eval(context.Background(), root, data,
-					indigo.Parallel(1, 10, 20))
-				// } else {
-				// 	_, err = engine.Eval(context.Background(), root, data)
-				// }
-
+				res, err := engine.Eval(context.Background(), root, data, indigo.Parallel(1, 10, 20))
 				if err != nil {
 					atomic.AddInt64(&errors, 1)
 					t.Errorf("worker %d iteration %d failed: %v", workerID, j, err)
 				}
+				atomic.AddInt32(&evalCount, int32(res.EvalCount))
+				atomic.AddInt32(&parallelCount, int32(res.EvalParallelCount))
 			}
 		}(i)
 	}
@@ -70,6 +65,7 @@ func TestParallelRaceConditions(t *testing.T) {
 	if errors > 0 {
 		t.Errorf("detected %d errors during concurrent evaluation", errors)
 	}
+	fmt.Println("Evaluated: ", evalCount, " rules, ", parallelCount, " of them in parallel")
 }
 
 // Test for goroutine leaks when context is cancelled

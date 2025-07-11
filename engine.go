@@ -57,15 +57,12 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	o := r.EvalOptions
 	applyEvaluatorOptions(&o, opts...)
 
-	// even if we're not processing in parallel if
 	d = setSelfKey(r, d, o)
 
 	// Check for incompatible options: sortFunc and parallel cannot be used together
 	if o.SortFunc != nil && o.parallel.batchSize > 1 {
 		return nil, fmt.Errorf("rule %s: sortFunc and parallel options are incompatible - parallel processing cannot guarantee evaluation order", r.ID)
 	}
-
-	//		setSelfKey(r, d)
 
 	// Evaluate the rule's expression using the engine's ExpressionEvaluator
 	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program,
@@ -80,6 +77,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 		Value:          val,
 		Diagnostics:    diagnostics,
 		EvalOptions:    o,
+		EvalCount:      1,
 	}
 
 	// If the evaluation returned a boolean, set the Result's value,
@@ -104,6 +102,8 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	}
 	u.Results = eu.results
 	u.RulesEvaluated = eu.evaluated
+	u.EvalCount += eu.evalCount
+	u.EvalParallelCount += eu.evalParallel
 
 	// Based on the results of the child rules, determine the result of the parent rule
 	switch r.EvalOptions.TrueIfAny {
@@ -131,7 +131,7 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 		return
 	}
 
-	if o.parallel.batchSize <= 1 {
+	if o.parallel.batchSize <= 1 || len(rules) < o.parallel.minSize {
 		return e.evalRuleSlice(ctx, rules, d, o, opts...)
 	}
 
@@ -187,8 +187,10 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 			// Got results from a chunk - add them to our matches
 			// Note: append is safe here because we're the only goroutine modifying matches
 			r.evaluated = append(r.evaluated, res.evaluated...)
-			r.failCount = r.failCount + res.failCount
-			r.passCount = r.passCount + res.passCount
+			r.failCount += res.failCount
+			r.passCount += res.passCount
+			r.evalCount += res.evalCount
+			r.evalParallel += res.evalCount
 			maps.Copy(r.results, res.results)
 		case err := <-errCh:
 			// A worker encountered an error - stop processing and return it
@@ -203,10 +205,12 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 // evalResult is a convenience type to let us pass multiple values on a channel
 type evalResult struct {
-	passCount int
-	failCount int
-	results   map[string]*Result
-	evaluated []*Rule
+	passCount    int
+	failCount    int
+	evalCount    int
+	evalParallel int
+	results      map[string]*Result
+	evaluated    []*Rule
 }
 
 // makeChunks divides a range [start, len) into batches of the specified size.
@@ -376,11 +380,7 @@ type chunk struct {
 
 func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[string]any,
 	o EvalOptions, opts ...EvalOption) (r evalResult, err error) {
-	// id := UniqueID()
-	// fmt.Println("Starting ", id)
-	// defer func() {
-	// 	fmt.Println("Finished ", id)
-	// }()
+
 	r.results = make(map[string]*Result, len(rules))
 
 	for _, cr := range rules {
@@ -396,7 +396,7 @@ func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[
 			if err != nil {
 				return r, err
 			}
-
+			r.evalCount++
 			// If the child rule failed, either due to its own expression evaluation
 			// or its children, we have encountered a failure, and we'll count it
 			// The reason to keep this count, rather than look at the child results,

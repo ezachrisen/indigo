@@ -43,10 +43,16 @@ type Result struct {
 
 	// A list of the rules evaluated, in the order they were evaluated
 	// Only available if you turn on diagnostics for the evaluation
-	// This may be different from the rules represented in Results, if
+	// This may be different from the rules represented in Results.
 	// If we're discarding failed/passed rules, they will not be in the results,
 	// and will not show up in diagnostics, but they will be in this list.
 	RulesEvaluated []*Rule
+
+	// EvalCount is the number of rules evaluated, including the parent rule
+	EvalCount int
+
+	// EvalParallel indicates whether the children were evaluated in parallel or in sequence
+	EvalParallelCount int
 }
 
 // String produces a list of rules (including child rules) executed and the result of the evaluation.
