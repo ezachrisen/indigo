@@ -53,6 +53,10 @@ type Result struct {
 
 	// EvalParallel indicates whether the children were evaluated in parallel or in sequence
 	EvalParallelCount int
+
+	// EvalParallelCountLocal is the number of rules evaluated in parallel
+	// for this rule only.
+	EvalParallelCountLocal int
 }
 
 // String produces a list of rules (including child rules) executed and the result of the evaluation.
@@ -61,7 +65,7 @@ func (u *Result) String() string {
 	tw := table.NewWriter()
 	tw.SetTitle("\nINDIGO RESULTS\n")
 	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Expr.\nPass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?", "True\nIf Any?",
-		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail"})
+		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail", "Eval\nCount", "Eval\nParallel", "Eval\nParallel\nLocal"})
 	rows := u.resultsToRows(0)
 
 	for _, r := range rows {
@@ -106,6 +110,9 @@ func (u *Result) resultsToRows(n int) []table.Row {
 		trueFalse(strconv.FormatBool(u.EvalOptions.StopFirstNegativeChild)),
 		trueFalse(strconv.FormatBool(u.EvalOptions.DiscardPass)),
 		trueFalse(strconv.Itoa(int(u.EvalOptions.DiscardFail))),
+		strconv.Itoa(u.EvalCount),
+		strconv.Itoa(u.EvalParallelCount),
+		strconv.Itoa(u.EvalParallelCountLocal),
 	}
 
 	rows = append(rows, row)

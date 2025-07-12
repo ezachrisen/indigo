@@ -2,7 +2,6 @@ package indigo
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"maps"
@@ -104,6 +103,7 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	u.RulesEvaluated = eu.evaluated
 	u.EvalCount += eu.evalCount
 	u.EvalParallelCount += eu.evalParallel
+	u.EvalParallelCountLocal = eu.evalParallelLocal
 
 	// Based on the results of the child rules, determine the result of the parent rule
 	switch r.EvalOptions.TrueIfAny {
@@ -191,6 +191,8 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 			r.passCount += res.passCount
 			r.evalCount += res.evalCount
 			r.evalParallel += res.evalCount
+			r.evalParallelLocal += res.evalParallelLocal
+			fmt.Println("r.evalParallelLocal= ", r.evalParallelLocal)
 			maps.Copy(r.results, res.results)
 		case err := <-errCh:
 			// A worker encountered an error - stop processing and return it
@@ -205,12 +207,13 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 // evalResult is a convenience type to let us pass multiple values on a channel
 type evalResult struct {
-	passCount    int
-	failCount    int
-	evalCount    int
-	evalParallel int
-	results      map[string]*Result
-	evaluated    []*Rule
+	passCount         int
+	failCount         int
+	evalCount         int
+	evalParallel      int
+	evalParallelLocal int
+	results           map[string]*Result
+	evaluated         []*Rule
 }
 
 // makeChunks divides a range [start, len) into batches of the specified size.
@@ -396,7 +399,9 @@ func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[
 			if err != nil {
 				return r, err
 			}
-			r.evalCount++
+			r.evalCount += result.EvalCount
+			r.evalParallel += result.EvalParallelCount
+			r.evalParallelLocal = result.EvalParallelCountLocal
 			// If the child rule failed, either due to its own expression evaluation
 			// or its children, we have encountered a failure, and we'll count it
 			// The reason to keep this count, rather than look at the child results,
@@ -821,19 +826,4 @@ func validateCompileArguments(r *Rule, e *DefaultEngine) error {
 	default:
 		return nil
 	}
-}
-
-const alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-
-// From the Firestore Go Client:
-// https://github.com/googleapis/google-cloud-go/blob/d14ee26877efc7c87f94a1acddff415628781b8d/firestore/collref.go
-func UniqueID() string {
-	b := make([]byte, 10)
-	if _, err := rand.Read(b); err != nil {
-		panic(fmt.Sprintf("firestore: crypto/rand.Read error: %v", err))
-	}
-	for i, byt := range b {
-		b[i] = alphanum[int(byt)%len(alphanum)]
-	}
-	return string(b)
 }

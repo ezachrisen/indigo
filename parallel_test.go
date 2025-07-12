@@ -2,6 +2,7 @@ package indigo_test
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"runtime"
 	"strings"
@@ -14,6 +15,64 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 )
 
+func TestParallelProcessing(t *testing.T) {
+
+	engine := indigo.NewEngine(cel.NewEvaluator())
+
+	x := createMultiLevelRuleTree([]int{2, 2, 4})
+	fmt.Println("x= ", x)
+	err := engine.Compile(x)
+	if err != nil {
+		t.Fatalf("failed to compile: %v", err)
+	}
+
+	result, err := engine.Eval(context.Background(), x, map[string]any{"value": 1}, indigo.Parallel(4, 2, 20))
+	if err != nil {
+		t.Fatalf("failed to evaluate: %v", err)
+	}
+	fmt.Println("result= \n\n", result)
+	fmt.Println("result.EvalCount= ", result.EvalCount)
+	fmt.Println("result.EvalParallelCount= ", result.EvalParallelCount)
+	if result.EvalCount != 23 {
+		t.Errorf("expected 23 evaluations, got %d", result.EvalCount)
+	}
+	if result.EvalParallelCount != 16 {
+		t.Errorf("expected 16 parallel evaluations, got %d", result.EvalParallelCount)
+	}
+
+	err = applyToResults(result, func(r *indigo.Result) error {
+		if len(r.Results) >= 5 {
+			if r.EvalParallelCount != 4 {
+				return fmt.Errorf("expected 4 parallel evaluations, got %d", r.EvalParallelCount)
+			}
+		} else {
+			if r.EvalParallelCount != 0 {
+				return fmt.Errorf("expected 0 parallel evaluations, got %d", r.EvalParallelCount)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+// ApplyToRule applies the function f to the rule r and its children recursively.
+func applyToResults(r *indigo.Result, f func(r *indigo.Result) error) error {
+	err := f(r)
+	if err != nil {
+		return err
+	}
+	for _, c := range r.Results {
+		err := applyToResults(c, f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Test for race conditions when multiple goroutines evaluate the same rule tree concurrently
 func TestParallelRaceConditions(t *testing.T) {
 	if testing.Short() {
@@ -24,7 +83,6 @@ func TestParallelRaceConditions(t *testing.T) {
 
 	// Create a rule tree with many child rules
 	root := createLargeRuleTree(500)
-
 	err := engine.Compile(root)
 	if err != nil {
 		t.Fatalf("failed to compile: %v", err)
@@ -521,6 +579,37 @@ func createLargeRuleTree(numRules int) *indigo.Rule {
 	return root
 }
 
+// Helper function to create a large rule tree for testing
+func createMultiLevelRuleTree(numRulesByLevel []int) *indigo.Rule {
+	schema := indigo.Schema{
+		Elements: []indigo.DataElement{
+			{Name: "value", Type: indigo.Int{}},
+			{Name: "name", Type: indigo.String{}},
+		},
+	}
+
+	root := &indigo.Rule{
+		ID:     uniqueID(),
+		Schema: schema,
+		Rules:  make(map[string]*indigo.Rule),
+		Expr:   "value > 0", // Simple expression that should evaluate to true
+	}
+	if numRulesByLevel == nil {
+		return root
+	}
+	for i := 0; i < numRulesByLevel[0]; i++ {
+		if len(numRulesByLevel) > 1 {
+			r := createMultiLevelRuleTree(numRulesByLevel[1:])
+			root.Rules[r.ID] = r
+		} else {
+			r := createMultiLevelRuleTree(nil)
+			root.Rules[r.ID] = r
+		}
+	}
+
+	return root
+}
+
 // Test for proper cleanup when evaluation panics
 func TestParallelPanicRecovery(t *testing.T) {
 	if testing.Short() {
@@ -594,4 +683,19 @@ func (e *panicEvaluator) Evaluate(data map[string]any, expr string, s indigo.Sch
 		panic("test panic")
 	}
 	return true, nil, nil
+}
+
+const alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+// From the Firestore Go Client:
+// https://github.com/googleapis/google-cloud-go/blob/d14ee26877efc7c87f94a1acddff415628781b8d/firestore/collref.go
+func uniqueID() string {
+	b := make([]byte, 10)
+	if _, err := rand.Read(b); err != nil {
+		panic(fmt.Sprintf("firestore: crypto/rand.Read error: %v", err))
+	}
+	for i, byt := range b {
+		b[i] = alphanum[int(byt)%len(alphanum)]
+	}
+	return string(b)
 }
