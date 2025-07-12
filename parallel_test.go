@@ -26,9 +26,8 @@ func TestParallelProcessing(t *testing.T) {
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	r := createMultiLevelRuleTree([]int{2, 2, 4})
-	t.Logf("rules= \n\n%s\n", r)
+	//t.Logf("rules= \n\n%s\n", r)
 
-	fmt.Println("x= ", r)
 	err := engine.Compile(r)
 	if err != nil {
 		t.Fatalf("failed to compile: %v", err)
@@ -38,7 +37,9 @@ func TestParallelProcessing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to evaluate: %v", err)
 	}
-	t.Logf("result= \n\n%s\n", result)
+
+	//	t.Logf("result= \n\n%s\n", result)
+
 	if result.EvalCount != 23 {
 		t.Errorf("expected 23 evaluations, got %d", result.EvalCount)
 	}
@@ -130,7 +131,7 @@ func TestParallelRaceConditions(t *testing.T) {
 	if errors > 0 {
 		t.Errorf("detected %d errors during concurrent evaluation", errors)
 	}
-	fmt.Println("Evaluated: ", evalCount, " rules, ", parallelCount, " of them in parallel")
+	// t.Logf("Evaluated: %d, %d of them in parallel", evalCount, parallelCount)
 }
 
 // Test for goroutine leaks when context is cancelled

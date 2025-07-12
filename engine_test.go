@@ -1288,8 +1288,8 @@ func (m *trackingMockEvaluator) Compile(expr string, s indigo.Schema, resultType
 
 func (m *trackingMockEvaluator) Evaluate(data map[string]any, expr string, s indigo.Schema, self any, evalData any, resultType indigo.Type, returnDiagnostics bool) (any, *indigo.Diagnostics, error) {
 	atomic.AddInt32(&activeEvals, 1)
-	if activeEvals > maxActiveEvals {
-		maxActiveEvals = activeEvals
+	if atomic.LoadInt32(&activeEvals) > atomic.LoadInt32(&maxActiveEvals) {
+		atomic.StoreInt32(&maxActiveEvals, atomic.LoadInt32(&maxActiveEvals))
 	}
 	defer atomic.AddInt32(&activeEvals, -1)
 
