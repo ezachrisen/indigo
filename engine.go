@@ -103,7 +103,6 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	u.RulesEvaluated = eu.evaluated
 	u.EvalCount += eu.evalCount
 	u.EvalParallelCount += eu.evalParallel
-	u.EvalParallelCountLocal = eu.evalParallelLocal
 
 	// Based on the results of the child rules, determine the result of the parent rule
 	switch r.EvalOptions.TrueIfAny {
@@ -190,9 +189,7 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 			r.failCount += res.failCount
 			r.passCount += res.passCount
 			r.evalCount += res.evalCount
-			r.evalParallel += res.evalCount
-			r.evalParallelLocal += res.evalParallelLocal
-			fmt.Println("r.evalParallelLocal= ", r.evalParallelLocal)
+			r.evalParallel += res.evalCount // we're in parallel mode, so we count the number of rules evaluated
 			maps.Copy(r.results, res.results)
 		case err := <-errCh:
 			// A worker encountered an error - stop processing and return it
@@ -401,7 +398,6 @@ func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[
 			}
 			r.evalCount += result.EvalCount
 			r.evalParallel += result.EvalParallelCount
-			r.evalParallelLocal = result.EvalParallelCountLocal
 			// If the child rule failed, either due to its own expression evaluation
 			// or its children, we have encountered a failure, and we'll count it
 			// The reason to keep this count, rather than look at the child results,

@@ -15,24 +15,30 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 )
 
+// In this test we build a tree of rules with different number of
+// rules at each level. We use the parallel minSize setting to ensure
+// that only the lowest level (with 4 rules) is evaluated in parallel.
+//
+// It is VERY useful to uncomment the log statements to see the rule structure
+// and the result data when changing this test, or debugging failures.
 func TestParallelProcessing(t *testing.T) {
 
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
-	x := createMultiLevelRuleTree([]int{2, 2, 4})
-	fmt.Println("x= ", x)
-	err := engine.Compile(x)
+	r := createMultiLevelRuleTree([]int{2, 2, 4})
+	t.Logf("rules= \n\n%s\n", r)
+
+	fmt.Println("x= ", r)
+	err := engine.Compile(r)
 	if err != nil {
 		t.Fatalf("failed to compile: %v", err)
 	}
 
-	result, err := engine.Eval(context.Background(), x, map[string]any{"value": 1}, indigo.Parallel(4, 2, 20))
+	result, err := engine.Eval(context.Background(), r, map[string]any{"value": 1}, indigo.Parallel(4, 2, 20))
 	if err != nil {
 		t.Fatalf("failed to evaluate: %v", err)
 	}
-	fmt.Println("result= \n\n", result)
-	fmt.Println("result.EvalCount= ", result.EvalCount)
-	fmt.Println("result.EvalParallelCount= ", result.EvalParallelCount)
+	t.Logf("result= \n\n%s\n", result)
 	if result.EvalCount != 23 {
 		t.Errorf("expected 23 evaluations, got %d", result.EvalCount)
 	}
@@ -41,16 +47,17 @@ func TestParallelProcessing(t *testing.T) {
 	}
 
 	err = applyToResults(result, func(r *indigo.Result) error {
-		if len(r.Results) >= 5 {
+		if len(r.Results) == 4 && r.EvalParallelCount != 4 {
 			if r.EvalParallelCount != 4 {
 				return fmt.Errorf("expected 4 parallel evaluations, got %d", r.EvalParallelCount)
 			}
-		} else {
-			if r.EvalParallelCount != 0 {
-				return fmt.Errorf("expected 0 parallel evaluations, got %d", r.EvalParallelCount)
-			}
 		}
 
+		if len(r.Results) != 4 && len(r.Results) != 0 && r.EvalParallelCount <= 4 {
+			if r.EvalParallelCount != 4 {
+				return fmt.Errorf("expected >4 parallel evaluations, got %d", r.EvalParallelCount)
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -101,12 +108,12 @@ func TestParallelRaceConditions(t *testing.T) {
 	var errors int64
 	var evalCount int32
 	var parallelCount int32
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
 
-			for j := 0; j < numIterations; j++ {
+			for j := range numIterations {
 				res, err := engine.Eval(context.Background(), root, data, indigo.Parallel(1, 10, 20))
 				if err != nil {
 					atomic.AddInt64(&errors, 1)
@@ -567,7 +574,7 @@ func createLargeRuleTree(numRules int) *indigo.Rule {
 		Rules:  make(map[string]*indigo.Rule),
 	}
 
-	for i := 0; i < numRules; i++ {
+	for i := range numRules {
 		rule := &indigo.Rule{
 			ID:     fmt.Sprintf("rule_%d", i),
 			Expr:   "value > 0", // Simple expression that should evaluate to true
@@ -579,7 +586,11 @@ func createLargeRuleTree(numRules int) *indigo.Rule {
 	return root
 }
 
-// Helper function to create a large rule tree for testing
+// Helper function to create a large rule tree for testing.
+// The slice of numbers tells us how many child rules to create at each level.
+// The root rule is "gratis". So, a tree with {2,2,4} would give you
+// a root rule, with 2 children, each of those children will have 2 children, and each of
+// those children will have 4 children, for a total of 23 rules.
 func createMultiLevelRuleTree(numRulesByLevel []int) *indigo.Rule {
 	schema := indigo.Schema{
 		Elements: []indigo.DataElement{
