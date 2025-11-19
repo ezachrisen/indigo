@@ -5,37 +5,37 @@ import (
 	"maps"
 	"slices"
 	"sync/atomic"
+	"time"
 )
 
 // Vault provides lock-free, hot-reloadable, hierarchical rule management
 // with full support for add, update, delete, and move operations.
+//
+// It provides safe access to an immutable rule which can be retrieved with the [Rule] function
+// for evaluation or inspection.
+//
+// The client can submit mutations to the Vault rule via the [Mutate]
+// method.
+//
+// To use the Vault, your rules must have globally unique IDs.
 type Vault struct {
-	root           atomic.Pointer[Rule] // current immutable root
-	engine         Engine
+	// Current immutable root
+	root atomic.Pointer[Rule]
+
+	// the Indigo engine which will be used to compile rules before adding them
+	// to the root rule
+	engine Engine
+
+	// A list of compilation options, required for when we compile the rule
+	// before adding to the vault
 	compileOptions []CompilationOption
-}
 
-// RuleMutation defines a single change to the rule tree
-type RuleMutation struct {
-	// Required; gobally unique ID for the rule being changed/added
-	ID string
-
-	// Rule is the new rule that will replace an existing rule or
-	// be added to the parent. If Rule is nil, the rule with ID will
-	// be deleted
-	Rule *Rule
-
-	// Optional for updates and deletes, required for adds
-	Parent string
-
-	// Required when moving a rule from one parent to another
-	NewParent string
+	lastUpdate atomic.Pointer[time.Time]
 }
 
 // NewVault creates a new Vault with an optional initial rule tree.
 // If no initial root is provided, a default rule with id "root" is created.
-// The Vault will compile rules passed to it in ApplyMutations, the compilation options
-// are used at that time.
+// The Vault will compile rules passed to it in [Mutate] using the compilation options.
 func NewVault(engine Engine, initialRoot *Rule, opts ...CompilationOption) (*Vault, error) {
 	v := &Vault{
 		engine:         engine,
@@ -49,57 +49,131 @@ func NewVault(engine Engine, initialRoot *Rule, opts ...CompilationOption) (*Vau
 	if err != nil {
 		return nil, fmt.Errorf("compiling initial root for the vault: %w", err)
 	}
+	v.lastUpdate.Store(&time.Time{})
 	v.root.Store(initialRoot)
 	return v, nil
 }
 
-// CurrentRoot returns the current immutable root rule (for inspection/traversal)
-func (v *Vault) CurrentRoot() *Rule {
+// Rule returns the current immutable root rule for evaluation or inspection.
+func (v *Vault) Rule() *Rule {
 	return v.root.Load()
 }
 
-// ApplyMutations makes the changes to the rule stored in the Vault.
-func (v *Vault) ApplyMutations(mutations []RuleMutation) error {
+func (v *Vault) LastUpdate() time.Time {
+	return *v.lastUpdate.Load()
+}
+
+// ruleMutation defines a single change to the rule tree
+type ruleMutation struct {
+	// Required; gobally unique id for the rule being changed/added
+	id string
+
+	// Optional; rule is the new rule that will replace an existing rule or
+	// be added to the parent. If rule is nil, the rule with ID will
+	// be deleted
+	rule *Rule
+
+	// Optional for updates, moves and deletes, required for adds
+	parent string
+
+	// Required when moving a rule from one parent to another
+	newParent string
+
+	// A time stamp to record as the last time the vault was updated
+	lastUpdate time.Time
+}
+
+// Add returns a mutation that adds the rule to the parent.
+// The parent must exist
+func Add(r Rule, parent string) ruleMutation {
+	return ruleMutation{
+		id:     r.ID,
+		rule:   &r,
+		parent: parent,
+	}
+}
+
+// Update returns a mutation that replaces the rule with the
+// id r.ID with the new rule
+func Update(r Rule) ruleMutation {
+	return ruleMutation{
+		id:   r.ID,
+		rule: &r,
+	}
+}
+
+// Delete deletes the rule with the id
+func Delete(id string) ruleMutation {
+	return ruleMutation{
+		id: id,
+	}
+}
+
+// Move moves the rule with the id to the newParent.
+// The newParent must exist
+func Move(id string, newParent string) ruleMutation {
+	return ruleMutation{
+		id:        id,
+		newParent: newParent,
+	}
+}
+
+func LastUpdate(t time.Time) ruleMutation {
+	return ruleMutation{
+		lastUpdate: t,
+	}
+}
+
+// Mutate makes the changes to the rule stored in the Vault, applying the
+// mutations in sequence. Each rule is compiled before being added to the vault.
+// At the end of all mutations, the resulting root rule becomes the new
+// active rule in the vault, and can be retrieved with the [Rule] function.
+func (v *Vault) Mutate(mutations ...ruleMutation) error {
+	root := v.Rule()
+	mut, err := v.preProcessMoves(root, mutations)
+	if err != nil {
+		return err
+	}
+	return v.applyMutations(root, mut)
+}
+
+func (v *Vault) preProcessMoves(root *Rule, mutations []ruleMutation) ([]ruleMutation, error) {
 	mut := slices.Clone(mutations)
 
 	for _, m := range mut {
-		if m.NewParent != "" {
-			parent := v.findParent(v.CurrentRoot(), m)
+		if m.newParent != "" {
+			parent := v.findParent(v.Rule(), m)
 			if parent == nil {
-				return fmt.Errorf("moving rule %s: from-parent not found", m.ID)
+				return nil, fmt.Errorf("moving rule %s: from-parent not found", m.id)
 			}
-			mut = append(mut, RuleMutation{m.ID, nil, parent.ID, ""}) // delete from current parent
-			// a move operation only needs to give us the rule ID, then the destination parent ID.
-			// If we didn't receive the
-			rule := m.Rule
+			mut = append(mut, Delete(m.id)) // delete from current parent
+			rule := FindRule(v.Rule(), m.id)
 			if rule == nil {
-				rule = FindRule(v.CurrentRoot(), m.ID)
+				return nil, fmt.Errorf("moving rule %s: not found", m.id)
 			}
-			if rule == nil {
-				return fmt.Errorf("moving rule %s: not found", m.ID)
-			}
-			mut = append(mut, RuleMutation{m.ID, rule, m.NewParent, ""}) // add to new parent
+			mut = append(mut, Add(*rule, m.newParent))
+			// mut = append(mut, ruleMutation{m.id, rule, m.newParent, "", time.Time{}}) // add to new parent
 		}
 	}
-	mut = slices.DeleteFunc(mut, func(m RuleMutation) bool {
-		return m.NewParent != ""
+	mut = slices.DeleteFunc(mut, func(m ruleMutation) bool {
+		return m.newParent != ""
 	})
-
-	return v.applyMutations(mut)
+	return mut, nil
 }
 
-func (v *Vault) applyMutations(mutations []RuleMutation) error {
-	oldRoot := v.root.Load()
-	newRoot := shallowCopy(oldRoot)
+func (v *Vault) applyMutations(root *Rule, mutations []ruleMutation) error {
+	newRoot := shallowCopy(root)
 	for _, m := range mutations {
-		switch m.Rule {
-		case nil:
+		switch {
+		case m.rule == nil && m.id != "":
 			if err := v.delete(newRoot, m); err != nil {
-				return fmt.Errorf("deleting rule %s: %w", m.ID, err)
+				return fmt.Errorf("deleting rule %s: %w", m.id, err)
 			}
+		case m.rule == nil && m.id == "":
+			v.lastUpdate.Store(&m.lastUpdate)
 		default:
 			if err := v.upsert(newRoot, m); err != nil {
-				return fmt.Errorf("upserting rule %s: %w", m.ID, err)
+				return fmt.Errorf("upserting rule %s: %w", m.id, err)
 			}
 		}
 	}
@@ -120,184 +194,42 @@ func shallowCopy(r *Rule) *Rule {
 
 // delete removes the rule with m.ID. If given, m.Parent is
 // used to find the parent from which to delete the rule.
-func (v *Vault) delete(r *Rule, m RuleMutation) error {
+func (v *Vault) delete(r *Rule, m ruleMutation) error {
 	parent := v.findParent(r, m)
 	if parent == nil {
-		return fmt.Errorf("parent not found (%s, %s)", m.Parent, m.ID)
+		return fmt.Errorf("parent not found (%s, %s)", m.parent, m.id)
 	}
-	delete(parent.Rules, m.ID)
+	delete(parent.Rules, m.id)
 	return nil
 }
 
 // findParent uses the m.ID and m.Parent to find the parent of the
 // rule with m.ID
-func (v *Vault) findParent(r *Rule, m RuleMutation) (parent *Rule) {
-	if m.Parent != "" {
-		parent = FindRule(r, m.Parent)
+func (v *Vault) findParent(r *Rule, m ruleMutation) (parent *Rule) {
+	if m.parent != "" {
+		parent = FindRule(r, m.parent)
 	}
 	if parent == nil {
-		parent = findParent(r, nil, m.ID)
+		parent = findParent(r, nil, m.id)
 	}
 	return parent
 }
 
 // upsert either updates (replaces) or adds the rule in m.Rule.
 // When adding a new rule, m.Parent is required.
-func (v *Vault) upsert(r *Rule, m RuleMutation) error {
+func (v *Vault) upsert(r *Rule, m ruleMutation) error {
 	parent := v.findParent(r, m)
 	if parent == nil {
-		return fmt.Errorf("parent not found (%s)", m.Parent)
+		return fmt.Errorf("parent not found (%s)", m.parent)
 	}
-	err := v.engine.Compile(m.Rule, v.compileOptions...)
+	err := v.engine.Compile(m.rule, v.compileOptions...)
 	if err != nil {
-		return fmt.Errorf("compiling upsert rule %s: %w", m.Rule.ID, err)
+		return fmt.Errorf("compiling upsert rule %s: %w", m.rule.ID, err)
 	}
 
 	if parent.Rules == nil {
 		parent.Rules = map[string]*Rule{}
 	}
-	parent.Rules[m.ID] = m.Rule
+	parent.Rules[m.id] = m.rule
 	return nil
 }
-
-// // All changes become visible instantly to concurrent Eval calls.
-//
-//	func (v *Vault) ApplyMutations(mutations []RuleMutation) error {
-//		oldRoot := v.root.Load()
-//
-//		desired := make(map[string]*Rule) // ID → final rule (nil = delete)
-//		moves := make(map[string]string)  // ID → new parent ID
-//
-//		for _, m := range mutations {
-//			if m.ID == "" {
-//				continue
-//			}
-//			if m.Rule != nil && m.Rule.ID != m.ID {
-//				return fmt.Errorf("invalid rule")
-//			}
-//
-//			desired[m.ID] = m.Rule
-//
-//			if m.NewParentID != "" {
-//				moves[m.ID] = m.NewParentID
-//			}
-//		}
-//
-//		newRoot := v.rebuildTree(oldRoot, desired, moves)
-//		if newRoot == nil {
-//			newRoot = &Rule{Rules: make(map[string]*Rule)}
-//		}
-//		fmt.Println("after rebuild:", newRoot)
-//		err := v.engine.Compile(newRoot, v.compileOptions...)
-//		if err != nil {
-//			return err
-//		}
-//		v.root.Store(newRoot)
-//		return nil
-//	}
-//
-
-// -------------------------------------------------------------------
-// Internal rebuild logic (private to Vault)
-// -------------------------------------------------------------------
-///
-// func (v *Vault) rebuildTree(orig *Rule, desired map[string]*Rule, moves map[string]string) *Rule {
-// 	if orig == nil {
-// 		orig = &Rule{Rules: make(map[string]*Rule)}
-// 	}
-//
-// 	tree := v.applyDesired(orig, desired, moves)
-// 	return v.applyMoves(tree, moves)
-// }
-//
-// func (v *Vault) applyDesired(orig *Rule, desired map[string]*Rule, moves map[string]string) *Rule {
-// 	if orig == nil {
-// 		return nil
-// 	}
-//
-// 	if want, ok := desired[orig.ID]; ok {
-// 		if want == nil {
-// 			return nil // deleted
-// 		}
-// 		orig = want
-// 	}
-//
-// 	clone := *orig
-// 	clone.Rules = make(map[string]*Rule, len(orig.Rules))
-//
-// 	fmt.Println("before children: ", &clone)
-// 	for key, child := range orig.Rules {
-// 		if newChild := v.applyDesired(child, desired, moves); newChild != nil {
-// 			clone.Rules[key] = newChild
-// 		}
-// 	}
-// 	fmt.Println("After children: ", &clone)
-// 	for id, rule := range desired {
-// 		if rule != nil && rule.ID == id {
-// 			if _, moving := moves[id]; !moving {
-// 				if v.findRuleByID(orig, id) == nil {
-// 					clone.Rules[id] = rule
-// 				}
-// 			}
-// 		}
-// 	}
-//
-// 	return &clone
-// }
-//
-// func (v *Vault) applyMoves(root *Rule, moves map[string]string) *Rule {
-// 	if len(moves) == 0 || root == nil {
-// 		return root
-// 	}
-//
-// 	toMove := make(map[string]*Rule)
-// 	clean := v.detachMoved(root, moves, toMove)
-//
-// 	for id, newParentID := range moves {
-// 		rule := toMove[id]
-// 		if rule == nil {
-// 			continue
-// 		}
-//
-// 		if newParentID == "" {
-// 			if clean.Rules == nil {
-// 				clean.Rules = make(map[string]*Rule)
-// 			}
-// 			clean.Rules[id] = rule
-// 			continue
-// 		}
-//
-// 		parent := v.findRuleByID(clean, newParentID)
-// 		if parent != nil {
-// 			if parent.Rules == nil {
-// 				parent.Rules = make(map[string]*Rule)
-// 			}
-// 			parent.Rules[id] = rule
-// 		}
-// 	}
-//
-// 	return clean
-// }
-//
-// func (v *Vault) detachMoved(node *Rule, moves map[string]string, collector map[string]*Rule) *Rule {
-// 	if node == nil {
-// 		return nil
-// 	}
-//
-// 	clone := *node
-// 	if len(node.Rules) > 0 {
-// 		clone.Rules = make(map[string]*Rule)
-// 		for k, child := range node.Rules {
-// 			if _, shouldMove := moves[child.ID]; shouldMove {
-// 				collector[child.ID] = child
-// 				continue
-// 			}
-// 			if newChild := v.detachMoved(child, moves, collector); newChild != nil {
-// 				clone.Rules[k] = newChild
-// 			}
-// 		}
-// 	} else {
-// 		clone.Rules = make(map[string]*Rule)
-// 	}
-// 	return &clone
-// }
