@@ -175,7 +175,7 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 // have been set by a previous sort operation), or a list of rules whose order
 // is not defined.
 func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool) []*Rule {
-	if fn == nil && len(r.sortedRules) == len(r.Rules) {
+	if fn == nil && len(r.sortedRules) == len(r.Rules) && !force {
 		return r.sortedRules
 	}
 
@@ -183,7 +183,6 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool)
 		return r.sortedRules
 	}
 
-	//	fmt.Println("  ", op, force, "getting keys for ", r.ID)
 	keys := make([]*Rule, len(r.Rules))
 	var i int
 	for k := range r.Rules {

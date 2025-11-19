@@ -163,18 +163,27 @@ func (v *Vault) preProcessMoves(root *Rule, mutations []ruleMutation) ([]ruleMut
 
 func (v *Vault) applyMutations(root *Rule, mutations []ruleMutation) error {
 	newRoot := shallowCopy(root)
+	changes := 0
 	for _, m := range mutations {
 		switch {
 		case m.rule == nil && m.id != "":
 			if err := v.delete(newRoot, m); err != nil {
 				return fmt.Errorf("deleting rule %s: %w", m.id, err)
 			}
+			changes++
 		case m.rule == nil && m.id == "":
 			v.lastUpdate.Store(&m.lastUpdate)
 		default:
 			if err := v.upsert(newRoot, m); err != nil {
 				return fmt.Errorf("upserting rule %s: %w", m.id, err)
 			}
+			changes++
+		}
+	}
+	if changes > 0 {
+		err := v.engine.Compile(newRoot, v.compileOptions...)
+		if err != nil {
+			return err
 		}
 	}
 	v.root.Store(newRoot)
@@ -222,10 +231,10 @@ func (v *Vault) upsert(r *Rule, m ruleMutation) error {
 	if parent == nil {
 		return fmt.Errorf("parent not found (%s)", m.parent)
 	}
-	err := v.engine.Compile(m.rule, v.compileOptions...)
-	if err != nil {
-		return fmt.Errorf("compiling upsert rule %s: %w", m.rule.ID, err)
-	}
+	// err := v.engine.Compile(m.rule, v.compileOptions...)
+	// if err != nil {
+	// 	return fmt.Errorf("compiling upsert rule %s: %w", m.rule.ID, err)
+	// }
 
 	if parent.Rules == nil {
 		parent.Rules = map[string]*Rule{}

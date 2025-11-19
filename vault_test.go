@@ -3,6 +3,8 @@ package indigo_test
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -182,4 +184,103 @@ func TestVault_MoveRule(t *testing.T) {
 	if v.Rule().Rules["rule2"].Rules["b"].Expr != `10 > 1` {
 		t.Errorf("incorrect rule")
 	}
+}
+
+func TestVault_Concurrency(t *testing.T) {
+	schema := indigo.Schema{
+		ID: "xx",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(&schema)))
+	v, err := indigo.NewVault(eng, bigRule())
+	if err != nil {
+		t.Fatal(err)
+	}
+	desiredResult := atomic.Bool{}
+	desiredResult.Store(true)
+	var wg sync.WaitGroup
+
+	// this goroutine will evaluate the rule in the vault continuously
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ctx := context.Background()
+		errCount := 0
+		for i := range 300 {
+			rule := v.Rule()
+
+			// t.Logf("Evaluating: \n%s\n", rule)
+			res, err := eng.Eval(ctx, rule, map[string]any{})
+			if err != nil {
+				panic(err)
+			}
+			expected := desiredResult.Load()
+			// t.Logf("Result: \n%s\n", res)
+			if res.Pass != expected {
+				errCount++
+				if errCount > 3 {
+					t.Errorf("expressionected %t, got %t, iteration %d", expected, res.Pass, i)
+				}
+				if errCount == 3 {
+					errCount = 1
+				}
+			}
+			// we sleep between iterations to ensure that the
+			// rule updates can be observed
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := range 1000 {
+			var r *indigo.Rule
+			var newResult bool
+			if i%2 == 0 {
+				r = indigo.NewRule("b2", " 1 != 1 ")
+				newResult = false
+			} else {
+				r = indigo.NewRule("b2", " 1 == 1 ")
+				newResult = true
+
+			}
+			if err := v.Mutate(indigo.Update(*r)); err != nil {
+				panic(err)
+			}
+			// t.Logf("After update: \n%s\n", v.Rule())
+			desiredResult.Store(newResult)
+			time.Sleep(3 * time.Millisecond)
+		}
+	}()
+
+	wg.Wait()
+}
+
+func bigRule() *indigo.Rule {
+	r := indigo.NewRule("root", "")
+	a := indigo.NewRule("a", " 1 == 1")
+	a1 := indigo.NewRule("a1", " 1 == 1")
+	a2 := indigo.NewRule("a2", " 1 == 1")
+	a3 := indigo.NewRule("a3", " 1 == 1")
+
+	a.Rules["a1"] = a1
+	a.Rules["a2"] = a2
+	a.Rules["a3"] = a3
+
+	b := indigo.NewRule("b", " 1 == 1")
+	b1 := indigo.NewRule("b1", " 1 == 1")
+	b2 := indigo.NewRule("b2", " 1 == 1")
+	b3 := indigo.NewRule("b3", " 1 == 1")
+
+	b.Rules["b1"] = b1
+	b.Rules["b2"] = b2
+	b.Rules["b3"] = b3
+
+	r.Rules["a"] = a
+	r.Rules["b"] = b
+
+	return r
 }

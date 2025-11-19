@@ -48,8 +48,8 @@ func NewEngine(e ExpressionCompilerEvaluator) *DefaultEngine {
 // evaluating. Options passed to this function will override the options set on the rules.
 // Eval uses the Evaluator provided to the engine to perform the expression evaluation.
 func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
-	d map[string]any, opts ...EvalOption) (*Result, error) {
-
+	d map[string]any, opts ...EvalOption,
+) (*Result, error) {
 	if err := validateEvalArguments(r, e, d); err != nil {
 		return nil, err
 	}
@@ -71,7 +71,6 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
 	}
-
 	u := &Result{
 		Rule:           r,
 		ExpressionPass: true, // default boolean result
@@ -196,7 +195,6 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 	// All chunks processed successfully
 	return
-
 }
 
 // evalResult is a convenience type to let us pass multiple values on a channel
@@ -373,12 +371,8 @@ type chunk struct {
 }
 
 func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[string]any,
-	o EvalOptions, opts ...EvalOption) (r evalResult, err error) {
-	// id := UniqueID()
-	// fmt.Println("Starting ", id)
-	// defer func() {
-	// 	fmt.Println("Finished ", id)
-	// }()
+	o EvalOptions, opts ...EvalOption,
+) (r evalResult, err error) {
 	r.results = make(map[string]*Result, len(rules))
 
 	for _, cr := range rules {
@@ -434,7 +428,6 @@ func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[
 		}
 	}
 	return
-
 }
 
 // Compile uses the Evaluator's compile method to check the rule and its children,
@@ -457,7 +450,6 @@ func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
 	if err != nil {
 		return fmt.Errorf("rule %s: %w", r.ID, err)
 	}
-
 	if !o.dryRun {
 		r.Program = prg
 	}
@@ -468,9 +460,7 @@ func (e *DefaultEngine) Compile(r *Rule, opts ...CompilationOption) error {
 			return err
 		}
 	}
-
 	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
-
 	return nil
 }
 
@@ -520,7 +510,6 @@ type ParallelConfig struct {
 
 // EvalOptions determines how the engine should treat the results of evaluating a rule.
 type EvalOptions struct {
-
 	// TrueIfAny makes a parent rule Pass = true if any of its child rules are true.
 	// The default behavior is that a rule is only true if all of its child rules are true, and
 	// the parent rule itself is true.
@@ -699,7 +688,6 @@ func setSelfKey(r *Rule, d map[string]any, o EvalOptions) map[string]any {
 	default:
 		return setSelfKeySequentialMode(r, d)
 	}
-
 }
 
 // setSelfKeyParallelMode handles self key management for parallel rule evaluation.
@@ -756,7 +744,6 @@ func setSelfKeySequentialMode(r *Rule, d map[string]any) map[string]any {
 
 // validateEvalArguments checks the input parameters to engine.Eval
 func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]any) error {
-
 	switch {
 	case r == nil:
 		return errors.New("rule is nil")
@@ -775,19 +762,16 @@ func validateEvalArguments(r *Rule, e *DefaultEngine, d map[string]any) error {
 // This is the result type passed to the evaluator. The evaluator may use it to
 // inspect / validate the result it generates.
 func defaultResultType(r *Rule) Type {
-
 	switch r.ResultType {
 	case nil:
 		return Bool{}
 	default:
 		return r.ResultType
 	}
-
 }
 
 // validateEvalArguments checks the input parameters to engine.Eval
 func validateCompileArguments(r *Rule, e *DefaultEngine) error {
-
 	switch {
 	case r == nil:
 		return errors.New("rule is nil")

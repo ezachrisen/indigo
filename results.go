@@ -51,11 +51,12 @@ type Result struct {
 
 // String produces a list of rules (including child rules) executed and the result of the evaluation.
 func (u *Result) String() string {
-
 	tw := table.NewWriter()
 	tw.SetTitle("\nINDIGO RESULTS\n")
-	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Expr.\nPass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?", "True\nIf Any?",
-		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail"})
+	tw.AppendHeader(table.Row{
+		"\nRule", "Pass/\nFail", "Expr.\nPass/\nFail", "Chil-\ndren", "Output\nValue", "Diagnostics\nAvailable?", "True\nIf Any?",
+		"Stop If\nParent Neg.", "Stop First\nPos. Child", "Stop First\nNeg. Child", "Discard\nPass", "Discard\nFail",
+	})
 	rows := u.resultsToRows(0)
 
 	for _, r := range rows {
@@ -122,7 +123,6 @@ func trueFalse(t string) string {
 
 // String produces a list of rules (including child rules) executed and the result of the evaluation.
 func (u *Result) Summary() string {
-
 	tw := table.NewWriter()
 	tw.SetTitle("\nINDIGO RESULT SUMMARY\n")
 	tw.AppendHeader(table.Row{"\nRule", "Pass/\nFail", "Expr.\nPass/\nFail", "Output\nValue"})
