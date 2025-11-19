@@ -144,7 +144,6 @@ func (r *Rule) String() string {
 	}
 	tw.SetStyle(style)
 	return tw.Render()
-
 }
 
 func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
@@ -176,7 +175,6 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 // have been set by a previous sort operation), or a list of rules whose order
 // is not defined.
 func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool) []*Rule {
-
 	if fn == nil && len(r.sortedRules) == len(r.Rules) {
 		return r.sortedRules
 	}
@@ -194,7 +192,6 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool)
 	}
 
 	if fn != nil && len(keys) > 0 && force {
-
 		//		fmt.Println("  ", op, force, "sorting keys for ", r.ID, "--")
 		sort.Slice(keys, func(i, j int) bool {
 			return fn(keys, i, j)
@@ -223,6 +220,36 @@ func SortRulesAlpha(rules []*Rule, i, j int) bool {
 // SortRulesAlphaDesc will sort rules alphabetically (descending) by their rule ID
 func SortRulesAlphaDesc(rules []*Rule, i, j int) bool {
 	return rules[i].ID > rules[j].ID
+}
+
+func FindRule(root *Rule, id string) *Rule {
+	if root == nil {
+		return nil
+	}
+	if root.ID == id {
+		return root
+	}
+	for _, child := range root.Rules {
+		if found := FindRule(child, id); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func findParent(root, parent *Rule, id string) *Rule {
+	if root == nil {
+		return nil
+	}
+	if root.ID == id {
+		return parent
+	}
+	for _, c := range root.Rules {
+		if p := findParent(c, root, id); p != nil {
+			return p
+		}
+	}
+	return nil
 }
 
 /*
