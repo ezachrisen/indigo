@@ -191,7 +191,6 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool)
 	}
 
 	if fn != nil && len(keys) > 0 && force {
-		//		fmt.Println("  ", op, force, "sorting keys for ", r.ID, "--")
 		sort.Slice(keys, func(i, j int) bool {
 			return fn(keys, i, j)
 		})
