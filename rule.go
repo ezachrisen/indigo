@@ -100,6 +100,27 @@ func NewRule(id string, expr string) *Rule {
 	}
 }
 
+// FindRule returns the rule with the id in the rule or any of its
+// children recursively, and a list of the parent rules in order, starting
+// with the root of the rule tree and ending with the immediate parent of
+// the rule with the id.
+func (r *Rule) FindRule(id string) (rule *Rule, parents []*Rule) {
+	if r == nil {
+		return nil, nil
+	}
+	if r.ID == id {
+		return r, nil
+	}
+	for _, child := range r.Rules {
+		if found, p := child.FindRule(id); found != nil {
+			// Prepend current root to the parent chain
+			parents = append([]*Rule{r}, p...)
+			return found, parents
+		}
+	}
+	return nil, nil
+}
+
 // ApplyToRule applies the function f to the rule r and its children recursively.
 func ApplyToRule(r *Rule, f func(r *Rule) error) error {
 	err := f(r)
@@ -220,20 +241,20 @@ func SortRulesAlphaDesc(rules []*Rule, i, j int) bool {
 	return rules[i].ID > rules[j].ID
 }
 
-func FindRule(root *Rule, id string) *Rule {
-	if root == nil {
-		return nil
-	}
-	if root.ID == id {
-		return root
-	}
-	for _, child := range root.Rules {
-		if found := FindRule(child, id); found != nil {
-			return found
-		}
-	}
-	return nil
-}
+// func FindRule(root *Rule, id string) *Rule {
+// 	if root == nil {
+// 		return nil
+// 	}
+// 	if root.ID == id {
+// 		return root
+// 	}
+// 	for _, child := range root.Rules {
+// 		if found := FindRule(child, id); found != nil {
+// 			return found
+// 		}
+// 	}
+// 	return nil
+// }
 
 func findParent(root, parent *Rule, id string) *Rule {
 	if root == nil {

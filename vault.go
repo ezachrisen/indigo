@@ -130,24 +130,37 @@ func LastUpdate(t time.Time) ruleMutation {
 // active rule in the vault, and can be retrieved with the [Rule] function.
 func (v *Vault) Mutate(mutations ...ruleMutation) error {
 	root := v.Rule()
+
 	mut, err := v.preProcessMoves(root, mutations)
 	if err != nil {
 		return err
 	}
+	rulesTouched := v.rulesTouched(root, mutations)
+	for _, r := range rulesTouched {
+		fmt.Println("touching ", r.ID)
+	}
 	return v.applyMutations(root, mut)
 }
 
+func (v *Vault) rulesTouched(r *Rule, mut []ruleMutation) []*Rule {
+	for _, m := range mut {
+		_ = m
+	}
+	return nil
+}
+
+// preProcessMoves converts a "move" mutation into a "delete" and an "add" mutation
 func (v *Vault) preProcessMoves(root *Rule, mutations []ruleMutation) ([]ruleMutation, error) {
 	mut := slices.Clone(mutations)
 
 	for _, m := range mut {
 		if m.newParent != "" {
-			parent := v.findParent(v.Rule(), m)
+			parent := v.findParent(root, m)
 			if parent == nil {
 				return nil, fmt.Errorf("moving rule %s: from-parent not found", m.id)
 			}
 			mut = append(mut, Delete(m.id)) // delete from current parent
-			rule := FindRule(v.Rule(), m.id)
+			rule, _ := root.FindRule(m.id)
 			if rule == nil {
 				return nil, fmt.Errorf("moving rule %s: not found", m.id)
 			}
@@ -208,7 +221,7 @@ func (v *Vault) delete(r *Rule, m ruleMutation) error {
 // rule with m.ID
 func (v *Vault) findParent(r *Rule, m ruleMutation) (parent *Rule) {
 	if m.parent != "" {
-		parent = FindRule(r, m.parent)
+		parent, _ = r.FindRule(m.parent)
 	}
 	if parent == nil {
 		parent = findParent(r, nil, m.id)

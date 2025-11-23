@@ -81,14 +81,14 @@ func TestVault_DeleteRule(t *testing.T) {
 	if root == nil {
 		t.Fatal("root became nil")
 	}
-	child := indigo.FindRule(v.Rule(), "child")
+	child, _ := root.FindRule("child")
 	if child != nil {
 		t.Error("deleted child still present")
 	}
 
 	// make sure rule is still there in the snapshot
 
-	child = indigo.FindRule(before, "child")
+	child, _ = before.FindRule("child")
 	if child == nil {
 		t.Error("child deleted from snapshot")
 	}
