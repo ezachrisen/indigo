@@ -121,6 +121,16 @@ func (r *Rule) FindRule(id string) (rule *Rule, parents []*Rule) {
 	return nil, nil
 }
 
+func (r *Rule) FindParent(id string) *Rule {
+	_, ancestors := r.FindRule(id)
+	// fmt.Println("Ancestors of ", id, " : ", ancestors)
+
+	if len(ancestors) < 1 {
+		return nil
+	}
+	return ancestors[len(ancestors)-1]
+}
+
 // ApplyToRule applies the function f to the rule r and its children recursively.
 func ApplyToRule(r *Rule, f func(r *Rule) error) error {
 	err := f(r)
@@ -256,20 +266,20 @@ func SortRulesAlphaDesc(rules []*Rule, i, j int) bool {
 // 	return nil
 // }
 
-func findParent(root, parent *Rule, id string) *Rule {
-	if root == nil {
-		return nil
-	}
-	if root.ID == id {
-		return parent
-	}
-	for _, c := range root.Rules {
-		if p := findParent(c, root, id); p != nil {
-			return p
-		}
-	}
-	return nil
-}
+// func findParent(root, parent *Rule, id string) *Rule {
+// 	if root == nil {
+// 		return nil
+// 	}
+// 	if root.ID == id {
+// 		return parent
+// 	}
+// 	for _, c := range root.Rules {
+// 		if p := findParent(c, root, id); p != nil {
+// 			return p
+// 		}
+// 	}
+// 	return nil
+// }
 
 /*
 // sortChildKeys sorts the IDs of the child rules according to the

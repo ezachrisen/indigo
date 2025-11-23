@@ -32,7 +32,6 @@ func TestVault_BasicAddAndEval(t *testing.T) {
 	if err := v.Mutate(indigo.LastUpdate(t1)); err != nil {
 		t.Fatal(err)
 	}
-
 	t2 := time.Date(2022, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
 	if err := v.Mutate(indigo.Add(*r, "root"), indigo.LastUpdate(t2)); err != nil {
 		t.Fatal(err)
@@ -73,7 +72,7 @@ func TestVault_DeleteRule(t *testing.T) {
 	before := v.Rule()
 
 	// Delete child
-	if err := v.Mutate(indigo.Delete("child")); err != nil {
+	if err := v.Mutate(indigo.Remove("child")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -94,7 +93,7 @@ func TestVault_DeleteRule(t *testing.T) {
 	}
 
 	// try to delete a rule that doesn't exist
-	if err := v.Mutate(indigo.Delete("XXX")); err == nil {
+	if err := v.Mutate(indigo.Remove("XXX")); err == nil {
 		t.Fatal("wanted error")
 	}
 }
@@ -115,7 +114,6 @@ func TestVault_UpdateRule(t *testing.T) {
 	if res.Pass {
 		t.Error("eval failed")
 	}
-
 	newRule := &indigo.Rule{ID: "rule1", Expr: `2 + 2 == 4`}
 	if err := v.Mutate(indigo.Update(*newRule)); err != nil {
 		t.Fatal(err)
@@ -183,13 +181,13 @@ func TestVault_MoveRule(t *testing.T) {
 	if err := v.Mutate(indigo.Add(*one, "root"), indigo.Add(*two, "root")); err != nil {
 		t.Fatal(err)
 	}
-	// t.Logf("Before\n%s\n", v.CurrentRoot())
+	t.Logf("Before\n%s\n", v.Rule())
 
 	if err := v.Mutate(indigo.Move("b", "rule2")); err != nil {
 		t.Fatal(err)
 	}
 
-	// t.Logf("After\n%s\n", v.CurrentRoot())
+	t.Logf("After\n%s\n", v.Rule())
 	if v.Rule().Rules["rule2"].Rules["b"].Expr != `10 > 1` {
 		t.Errorf("incorrect rule")
 	}

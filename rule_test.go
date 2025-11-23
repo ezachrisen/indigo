@@ -239,7 +239,7 @@ func TestFindRule(t *testing.T) {
 			for _, r := range gotParents {
 				gotParentIDs = append(gotParentIDs, r.ID)
 			}
-			// t.Logf("Root:\n%s\nSearching for %s, want \n%s\ngot\n%s", root, tt.searchID, strings.Join(tt.wantParentIDs, ","), strings.Join(gotParentIDs, ","))
+			t.Logf("Root:\n%s\nSearching for %s, want \n%s\ngot\n%s", root, tt.searchID, strings.Join(tt.wantParentIDs, ","), strings.Join(gotParentIDs, ","))
 			// Check if rule was found/not found as expected
 			if tt.wantRule && gotRule == nil {
 				t.Errorf("FindRuleParents() expected to find rule %q, but got nil", tt.searchID)
