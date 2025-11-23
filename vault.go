@@ -90,7 +90,7 @@ type mutationOp int
 const (
 	add mutationOp = iota
 	update
-	remove
+	deleteOp
 	move
 	timeUpdate
 )
@@ -116,11 +116,11 @@ func Update(r Rule) vaultMutation {
 	}
 }
 
-// Remove deletes the rule with the id
-func Remove(id string) vaultMutation {
+// Delete deletes the rule with the id
+func Delete(id string) vaultMutation {
 	return vaultMutation{
 		id: id,
-		op: remove,
+		op: deleteOp,
 	}
 }
 
@@ -146,24 +146,30 @@ func LastUpdate(t time.Time) vaultMutation {
 // At the end of all mutations, the resulting root rule becomes the new
 // active rule in the vault, and can be retrieved with the [Rule] function.
 func (v *Vault) Mutate(mutations ...vaultMutation) error {
-	root := v.Rule()
-	mut, err := v.preProcessMoves(root, mutations)
+	r := v.Rule()
+	mut, err := v.preProcessMoves(r, mutations)
 	if err != nil {
 		return fmt.Errorf("preprocessing moves: %w", err)
 	}
-	rulesTouched := v.rulesTouched(root, mutations)
-	for _, r := range rulesTouched {
-		fmt.Println("touching ", r.ID)
-	}
-	return v.applyMutations(root, mut)
+	// rulesTouched := v.rulesTouched(r, mutations)
+	// fmt.Println("Tocuched: ", rulesTouched)
+	// for _, r := range rulesTouched {
+	// 	fmt.Println("touching ", r.ID)
+	// }
+	return v.applyMutations(r, mut)
 }
 
-func (v *Vault) rulesTouched(r *Rule, mut []vaultMutation) []*Rule {
-	for _, m := range mut {
-		_ = m
-	}
-	return nil
-}
+// func (v *Vault) rulesTouched(r *Rule, mut []vaultMutation) []*Rule {
+// 	var rs []*Rule
+// 	fmt.Println("R = ", r)
+// 	for _, m := range mut {
+// 		_, ancestors := r.FindRule(m.id)
+// 		p := r.FindParent(m.id)
+// 		fmt.Println("AS: ", ancestors, m.id, p)
+// 		rs = append(rs, ancestors...)
+// 	}
+// 	return rs
+// }
 
 // preProcessMoves converts a "move" mutation into a "delete" and an "add" mutation
 func (v *Vault) preProcessMoves(root *Rule, mutations []vaultMutation) ([]vaultMutation, error) {
@@ -177,7 +183,7 @@ func (v *Vault) preProcessMoves(root *Rule, mutations []vaultMutation) ([]vaultM
 		if parent == nil {
 			return nil, fmt.Errorf("moving rule %s: from-parent not found", m.id)
 		}
-		mut = append(mut, Remove(m.id)) // delete from current parent
+		mut = append(mut, Delete(m.id)) // delete from current parent
 		rule, _ := root.FindRule(m.id)
 		if rule == nil {
 			return nil, fmt.Errorf("moving rule %s: not found", m.id)
@@ -191,68 +197,136 @@ func (v *Vault) preProcessMoves(root *Rule, mutations []vaultMutation) ([]vaultM
 }
 
 func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
-	newRoot := shallowCopy(root)
-	// fmt.Println("New root=", newRoot)
+	var alreadyCopied []*Rule
+	var err error
 	for _, m := range mutations {
 		switch m.op {
-		case remove:
-			if err := v.delete(newRoot, m.id); err != nil {
+		case deleteOp:
+			root, alreadyCopied, err = v.delete(root, alreadyCopied, m.id)
+			if err != nil {
 				return fmt.Errorf("deleting rule %s: %w", m.id, err)
 			}
 		case timeUpdate:
 			v.lastUpdate.Store(&m.lastUpdate)
+		case add:
+			root, alreadyCopied, err = v.add(root, m.rule, alreadyCopied, m.parent)
+			if err != nil {
+				return fmt.Errorf("adding rule %s: %w", m.rule.ID, err)
+			}
+		case update:
+			root, alreadyCopied, err = v.update(root, m.rule, alreadyCopied)
+			if err != nil {
+				return fmt.Errorf("updating rule %s: %w", m.rule.ID, err)
+			}
 		default:
-			if m.parent == "" {
-				p := newRoot.FindParent(m.id)
-				if p == nil {
-					return fmt.Errorf("parent not found for rule %s", m.id)
-				}
-				m.parent = p.ID
-			}
-			if err := v.upsert(newRoot, m); err != nil {
-				return fmt.Errorf("upserting rule %s: %w", m.id, err)
-			}
+			return fmt.Errorf("unsupported operation: %d", m.op)
+			// default:
+			// 	// root, alreadyCopied = copyAncestorsAndMe(root, alreadyCopied, m.parent)
+			// 	if err := v.add(root, m.rule, m.parent); err != nil {
+			// 		return fmt.Errorf("adding rule %s: %w", m.rule.ID, err)
+			// 	}
+			// 	if m.parent == "" {
+			// 		p := root.FindParent(m.id)
+			// 		if p == nil {
+			// 			return fmt.Errorf("parent not found for rule %s", m.id)
+			// 		}
+			// 		m.parent = p.ID
+			// 	}
+			// 	// root = copyAncestors(root, m.id)
+			// 	if err := v.upsert(root, m); err != nil {
+			// 		return fmt.Errorf("upserting rule %s: %w", m.id, err)
+			// 	}
 		}
 	}
-	v.root.Store(newRoot)
+	v.root.Store(root)
 	return nil
 }
 
-// shallowCopy makes a shallow copy of r, allowing changes to the copy of r.Rules, and r's sortedRules
+// shallowCopy makes a shallow copy of r
 func shallowCopy(r *Rule) *Rule {
 	rr := *r
 	rr.Rules = maps.Clone(r.Rules)
-	rr.sortedRules = slices.Clone(r.sortedRules)
-	for k, c := range rr.Rules {
-		rr.Rules[k] = shallowCopy(c)
-	}
 	return &rr
 }
 
+// // shallowCopy makes a shallow copy of r, allowing changes to the copy of r.Rules, and r's sortedRules
+// func shallowCopy(r *Rule) *Rule {
+// 	rr := *r
+// 	rr.Rules = maps.Clone(r.Rules)
+// 	rr.sortedRules = slices.Clone(r.sortedRules)
+// 	for k, c := range rr.Rules {
+// 		rr.Rules[k] = shallowCopy(c)
+// 	}
+// 	return &rr
+// }
+
 // delete removes the rule with m.ID. If given, m.Parent is
 // used to find the parent from which to delete the rule.
-func (v *Vault) delete(r *Rule, id string) error {
+func (v *Vault) delete(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule, error) {
 	parent := r.FindParent(id)
 	if parent == nil {
-		return fmt.Errorf("parent not found for rule %s", id)
+		return nil, nil, fmt.Errorf("parent not found for rule %s", id)
 	}
-	delete(parent.Rules, id)
-	parent.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
-	return nil
+	r, alreadyCopied = copyAncestorsAndMe(r, alreadyCopied, parent.ID)
+
+	parentInNew := r.FindParent(id)
+	if parentInNew == nil {
+		return nil, nil, fmt.Errorf("parent not found for rule after cloning %s", id)
+	}
+
+	delete(parentInNew.Rules, id)
+	parentInNew.sortedRules = parentInNew.sortChildRules(parentInNew.EvalOptions.SortFunc, true)
+	return r, alreadyCopied, nil
 }
 
-//
-// // findParent uses the m.ID and m.Parent to find the parent of the
-// // rule with m.ID
-// func (v *Vault) findParent(r *Rule, m ruleMutation) (parent *Rule) {
-// 	if m.parent != "" {
-// 		parent, _ = r.FindRule(m.parent)
-// 	}
-// 	// if parent == nil {
-// 	 	parent = findParent(r, nil, m.id)
-// 	// }
-// 	return parent
-// }
+func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule, error) {
+	parent, _ := r.FindRule(newRule.ID)
+	if parent == nil {
+		return nil, nil, fmt.Errorf("parent not found for rule: %s", newRule.ID)
+	}
+	r, alreadyCopied = copyAncestorsAndMe(r, alreadyCopied, parent.ID)
+	err := v.engine.Compile(newRule, v.compileOptions...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
+	}
+
+	parentInNew := r.FindParent(newRule.ID)
+	if parentInNew == nil {
+		return nil, nil, fmt.Errorf("parent not found for rule after cloning: %s", newRule.ID)
+	}
+	if parentInNew.Rules == nil {
+		parentInNew.Rules = map[string]*Rule{}
+	}
+	parentInNew.Rules[newRule.ID] = newRule
+	parentInNew.sortedRules = parentInNew.sortChildRules(parentInNew.EvalOptions.SortFunc, true)
+	return r, alreadyCopied, nil
+}
+
+// upsert either updates (replaces) or adds the rule in m.Rule.
+// When adding a new rule, m.Parent is required.
+func (v *Vault) add(r, newRule *Rule, alreadyCopied []*Rule, parentID string) (*Rule, []*Rule, error) {
+	parent, _ := r.FindRule(parentID)
+	if parent == nil {
+		return nil, nil, fmt.Errorf("parent not found: %s", parentID)
+	}
+
+	r, alreadyCopied = copyAncestorsAndMe(r, alreadyCopied, parent.ID)
+	err := v.engine.Compile(newRule, v.compileOptions...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
+	}
+
+	parentInNew, _ := r.FindRule(parentID)
+	if parentInNew == nil {
+		return nil, nil, fmt.Errorf("parent not found for rule after cloning: %s", newRule.ID)
+	}
+	if parentInNew.Rules == nil {
+		parentInNew.Rules = map[string]*Rule{}
+	}
+	parentInNew.Rules[newRule.ID] = newRule
+	parentInNew.sortedRules = parentInNew.sortChildRules(parentInNew.EvalOptions.SortFunc, true)
+	return r, alreadyCopied, nil
+}
 
 // upsert either updates (replaces) or adds the rule in m.Rule.
 // When adding a new rule, m.Parent is required.
@@ -272,4 +346,22 @@ func (v *Vault) upsert(r *Rule, m vaultMutation) error {
 	parent.Rules[m.id] = m.rule
 	parent.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
 	return nil
+}
+
+func copyAncestorsAndMe(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule) {
+	path := r.Path(id)
+	for _, p := range path {
+		if slices.ContainsFunc(alreadyCopied, func(a *Rule) bool {
+			return a.ID == p.ID
+		}) {
+			continue
+		}
+		// p is the root, has no parents
+		if p == r {
+			r = shallowCopy(r)
+			continue
+		}
+		r.Rules[p.ID] = shallowCopy(p)
+	}
+	return r, path
 }

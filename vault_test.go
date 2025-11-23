@@ -68,11 +68,12 @@ func TestVault_DeleteRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// before snapshot
-	before := v.Rule()
+	// snapshot snapshot
+	snapshot := v.Rule()
 
+	// t.Logf("Snapshot before\n%s\n", snapshot)
 	// Delete child
-	if err := v.Mutate(indigo.Remove("child")); err != nil {
+	if err := v.Mutate(indigo.Delete("child")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,15 +86,20 @@ func TestVault_DeleteRule(t *testing.T) {
 		t.Error("deleted child still present")
 	}
 
-	// make sure rule is still there in the snapshot
+	if snapshot.Expr != "" {
+		t.Error("root expression was updated")
+	}
 
-	child, _ = before.FindRule("child")
+	// make sure rule is still there in the snapshot
+	child, _ = snapshot.FindRule("child")
 	if child == nil {
 		t.Error("child deleted from snapshot")
 	}
 
+	// t.Logf("Snapshot after: \n%s\n", snapshot)
+	// t.Logf("Updated after: \n%s\n", root)
 	// try to delete a rule that doesn't exist
-	if err := v.Mutate(indigo.Remove("XXX")); err == nil {
+	if err := v.Mutate(indigo.Delete("XXX")); err == nil {
 		t.Fatal("wanted error")
 	}
 }
@@ -105,7 +111,8 @@ func TestVault_UpdateRule(t *testing.T) {
 	if err := v.Mutate(indigo.Add(*old, "root")); err != nil {
 		t.Fatal(err)
 	}
-	// t.Logf("Before\n%s\n", v.CurrentRoot())
+	snapshot := v.Rule()
+	// t.Logf("Snapshot before\n%s\n", snapshot)
 
 	res, err := e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
 	if err != nil {
@@ -127,9 +134,14 @@ func TestVault_UpdateRule(t *testing.T) {
 		t.Error("update did not take effect")
 	}
 
-	// t.Logf("After\n%s\n", v.CurrentRoot())
+	// t.Logf("After\n%s\n", v.Rule())
 	if v.Rule().Rules["rule1"].Expr != `2 + 2 == 4` {
 		t.Errorf("incorrect rule")
+	}
+
+	// t.Logf("Snapshot After\n%s\n", snapshot)
+	if e := snapshot.Rules["rule1"].Expr; e != `2+2 == 3` {
+		t.Errorf("snapshot was updated: %s", e)
 	}
 }
 
@@ -140,7 +152,6 @@ func TestVault_AddRule(t *testing.T) {
 	if err := v.Mutate(indigo.Add(*old, "root")); err != nil {
 		t.Fatal(err)
 	}
-	// t.Logf("Before\n%s\n", v.CurrentRoot())
 
 	res, err := e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
 	if err != nil {
@@ -150,22 +161,35 @@ func TestVault_AddRule(t *testing.T) {
 		t.Error("eval failed")
 	}
 
+	// t.Logf("Before adding rule2 to root:\n%s\n", v.Rule())
 	newRule := &indigo.Rule{ID: "rule2", Expr: `10<1`}
 	if err := v.Mutate(indigo.Add(*newRule, "root")); err != nil {
 		t.Fatal(err)
 	}
+	snapshot := v.Rule()
+	// t.Logf("Snapshot before adding rule1.2 to rule1:\n%s\n", snapshot)
+	newRule2 := &indigo.Rule{ID: "rule1.2", Expr: `10<1`}
+	newRule3 := &indigo.Rule{ID: "rule1.3", Expr: `10<1`}
+	if err := v.Mutate(indigo.Add(*newRule2, "rule1"), indigo.Add(*newRule3, "rule1")); err != nil {
+		t.Fatal(err)
+	}
 
-	res, err = e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
+	// t.Logf("After:\n%s\n", v.Rule())
+	_, err = e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// t.Logf("After\n%s\n", v.CurrentRoot())
+	// t.Logf("After\n%s\n", v.Rule())
 	if v.Rule().Rules["rule1"].Expr != `2+2 == 4` {
 		t.Errorf("incorrect rule")
 	}
 	if v.Rule().Rules["rule2"].Expr != `10<1` {
 		t.Errorf("incorrect rule")
+	}
+	// t.Logf("Snapshot after adds: %s", snapshot)
+	if len(snapshot.Rules["rule1"].Rules) > 0 {
+		t.Errorf("snapshot modified")
 	}
 }
 

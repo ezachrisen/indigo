@@ -2,6 +2,7 @@ package indigo
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -104,7 +105,7 @@ func NewRule(id string, expr string) *Rule {
 // children recursively, and a list of the parent rules in order, starting
 // with the root of the rule tree and ending with the immediate parent of
 // the rule with the id.
-func (r *Rule) FindRule(id string) (rule *Rule, parents []*Rule) {
+func (r *Rule) FindRule(id string) (rule *Rule, ancestors []*Rule) {
 	if r == nil {
 		return nil, nil
 	}
@@ -114,16 +115,27 @@ func (r *Rule) FindRule(id string) (rule *Rule, parents []*Rule) {
 	for _, child := range r.Rules {
 		if found, p := child.FindRule(id); found != nil {
 			// Prepend current root to the parent chain
-			parents = append([]*Rule{r}, p...)
-			return found, parents
+			ancestors = append([]*Rule{r}, p...)
+			return found, ancestors
 		}
 	}
 	return nil, nil
 }
 
+// Path returns rule with the id, and all its ancestors
+// starting with the root of the rule tree.
+func (r *Rule) Path(id string) []*Rule {
+	me, ancestors := r.FindRule(id)
+	if me == nil {
+		return nil
+	}
+	slices.Reverse(ancestors)
+	return append(ancestors, me)
+}
+
+// FindParent returns the parent of the rule with the id
 func (r *Rule) FindParent(id string) *Rule {
 	_, ancestors := r.FindRule(id)
-	// fmt.Println("Ancestors of ", id, " : ", ancestors)
 
 	if len(ancestors) < 1 {
 		return nil
