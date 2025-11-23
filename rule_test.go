@@ -1,10 +1,12 @@
 package indigo_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/ezachrisen/indigo"
+	"github.com/ezachrisen/indigo/cel"
 )
 
 func TestNew(t *testing.T) {
@@ -277,4 +279,73 @@ func TestFindRule(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ExampleRule_Tree demonstrates the Tree method which generates a visual
+// tree representation of a rule hierarchy using box-drawing characters.
+func ExampleRule_Tree() {
+	// Create a root rule
+	root := indigo.NewRule("product_validation", "true")
+	root.EvalOptions.SortFunc = indigo.SortRulesAlpha
+
+	// Level 1: Create main category rules
+	pricing := indigo.NewRule("pricing_rules", "")
+	pricing.EvalOptions.SortFunc = indigo.SortRulesAlpha
+	inventory := indigo.NewRule("inventory_rules", "")
+	inventory.EvalOptions.SortFunc = indigo.SortRulesAlpha
+
+	quality := indigo.NewRule("quality_rules", "")
+	quality.EvalOptions.SortFunc = indigo.SortRulesAlpha
+
+	root.Rules["pricing_rules"] = pricing
+	root.Rules["inventory_rules"] = inventory
+	root.Rules["quality_rules"] = quality
+
+	// Level 2: Add sub-rules under pricing
+	discount := indigo.NewRule("discount_validation", "")
+	discount.EvalOptions.SortFunc = indigo.SortRulesAlpha
+
+	priceRange := indigo.NewRule("price_range_check", "")
+	pricing.Rules["discount_validation"] = discount
+	pricing.Rules["price_range_check"] = priceRange
+
+	// Level 2: Add sub-rules under inventory
+	stockAlert := indigo.NewRule("stock_alert", "")
+	inventory.Rules["stock_alert"] = stockAlert
+	inventory.EvalOptions.SortFunc = indigo.SortRulesAlpha
+
+	// Level 2: Add sub-rules under quality
+	reviewCount := indigo.NewRule("review_count", "")
+	verifiedReviews := indigo.NewRule("verified_reviews", "")
+	quality.Rules["review_count"] = reviewCount
+	quality.Rules["verified_reviews"] = verifiedReviews
+
+	// Level 3: Add great-grandchildren under discount_validation
+	minimumDiscount := indigo.NewRule("minimum_discount", "")
+	maximumDiscount := indigo.NewRule("maximum_discount", "")
+	discount.Rules["minimum_discount"] = minimumDiscount
+	discount.Rules["maximum_discount"] = maximumDiscount
+
+	e := indigo.NewEngine(cel.NewEvaluator())
+	err := e.Compile(root)
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+	// Generate and print the tree
+	tree := root.Tree()
+	fmt.Println(tree)
+
+	// Output:
+	// product_validation
+	// ├── inventory_rules
+	// │   └── stock_alert
+	// ├── pricing_rules
+	// │   ├── discount_validation
+	// │   │   ├── maximum_discount
+	// │   │   └── minimum_discount
+	// │   └── price_range_check
+	// └── quality_rules
+	//     ├── review_count
+	//     └── verified_reviews
 }

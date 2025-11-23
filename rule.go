@@ -263,65 +263,54 @@ func SortRulesAlphaDesc(rules []*Rule, i, j int) bool {
 	return rules[i].ID > rules[j].ID
 }
 
-// func FindRule(root *Rule, id string) *Rule {
-// 	if root == nil {
-// 		return nil
-// 	}
-// 	if root.ID == id {
-// 		return root
-// 	}
-// 	for _, child := range root.Rules {
-// 		if found := FindRule(child, id); found != nil {
-// 			return found
-// 		}
-// 	}
-// 	return nil
-// }
-
-// func findParent(root, parent *Rule, id string) *Rule {
-// 	if root == nil {
-// 		return nil
-// 	}
-// 	if root.ID == id {
-// 		return parent
-// 	}
-// 	for _, c := range root.Rules {
-// 		if p := findParent(c, root, id); p != nil {
-// 			return p
-// 		}
-// 	}
-// 	return nil
-// }
-
-/*
-// sortChildKeys sorts the IDs of the child rules according to the
-// SortFunc set in evaluation options. If no SortFunc is set, the evaluation
-// order is not specified.
-// TODO: allow this function to be canceled
-// TODO: cache sorting
-// TODO: add sorting benchmark
-func (r *Rule) sortChildRulesByOption(o EvalOptions) []*Rule {
-	keys := make([]*Rule, 0, len(r.Rules))
-	for k := range r.Rules {
-		keys = append(keys, r.Rules[k])
+// Tree returns a tree representation of the rule hierarchy showing only rule IDs.
+// The tree uses box-drawing characters to visualize parent-child relationships.
+//
+// Example output:
+//
+//	root
+//	├── child_1
+//	│   ├── grandchild_1
+//	│   └── grandchild_2
+//	└── child_2
+//	    └── grandchild_3
+func (r *Rule) Tree() string {
+	if r == nil {
+		return ""
 	}
-
-	if o.SortFunc != nil {
-		sort.Slice(keys, func(i, j int) bool {
-			return o.SortFunc(keys, i, j)
-		})
-	}
-	return keys
+	var sb strings.Builder
+	sb.WriteString(r.ID)
+	sb.WriteString("\n")
+	r.buildTree(&sb, "", true)
+	return sb.String()
 }
 
-// Based on the evaluation options, determine if the order of evaluation matters
-func sortOrderMatters(o EvalOptions) bool {
+// buildTree recursively builds the tree representation with proper indentation
+// and tree characters (├──, └──, │).
+func (r *Rule) buildTree(sb *strings.Builder, prefix string, isRoot bool) {
+	// Get sorted child rules or rules in map order
+	children := r.sortChildRules(nil, false)
 
-	if o.StopFirstNegativeChild || o.StopFirstPositiveChild {
-		return true
+	for i, child := range children {
+		isLast := i == len(children)-1
+
+		// Determine the tree characters to use
+		var connector, childPrefix string
+		if isLast {
+			connector = "└── "
+			childPrefix = "    "
+		} else {
+			connector = "├── "
+			childPrefix = "│   "
+		}
+
+		// Write the current child
+		sb.WriteString(prefix)
+		sb.WriteString(connector)
+		sb.WriteString(child.ID)
+		sb.WriteString("\n")
+
+		// Recursively process this child's children
+		child.buildTree(sb, prefix+childPrefix, false)
 	}
-
-	return false
-
 }
-*/

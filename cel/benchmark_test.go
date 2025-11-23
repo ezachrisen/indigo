@@ -24,13 +24,13 @@ import (
 //
 // Example 1: depth=3, breadth=2
 //
-//	Root (level_3)
-//	├── level_3_child_0 (level_2)
-//	│   ├── level_2_child_0 (level_1)
-//	│   └── level_2_child_1 (level_1)
-//	└── level_3_child_1 (level_2)
-//	    ├── level_2_child_0 (level_1)
-//	    └── level_2_child_1 (level_1)
+//	Root
+//	├── level_3_child_0
+//	│   ├── level_2_child_0
+//	│   └── level_2_child_1
+//	└── level_3_child_1
+//	    ├── level_2_child_0
+//	    └── level_2_child_1
 //
 // Total rules: 7 (1 root + 2 level-2 + 4 level-1)
 //
