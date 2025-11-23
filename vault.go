@@ -31,7 +31,7 @@ type Vault struct {
 	compileOptions []CompilationOption
 
 	// An optional timestamp maintained by the client to keep track of when the
-	// Vault was last updated
+	// Vault was last updated. Initialized to time.Time{} on Vault creation.
 	lastUpdate atomic.Pointer[time.Time]
 }
 
@@ -66,7 +66,7 @@ func (v *Vault) LastUpdate() time.Time {
 	return *v.lastUpdate.Load()
 }
 
-// vaultMutation defines a single change to the rule tree
+// vaultMutation defines a single change to the the vault
 type vaultMutation struct {
 	// Required; gobally unique id for the rule being changed/added
 	id string
@@ -83,11 +83,14 @@ type vaultMutation struct {
 	newParent string
 
 	// A time stamp to record as the last time the vault was updated
+	// Will update the Vault's last update time
 	lastUpdate time.Time
 
+	// What kind of operation this is
 	op mutationOp
 }
 
+// mutationOp is an enum for the types of mutations supported by the Vault
 type mutationOp int
 
 const (
@@ -159,33 +162,29 @@ func (v *Vault) Mutate(mutations ...vaultMutation) error {
 }
 
 // preProcessMoves converts a "move" mutation into a "delete" and an "add" mutation
-func (v *Vault) preProcessMoves(root *Rule, mutations []vaultMutation) ([]vaultMutation, error) {
-	mut := slices.Clone(mutations)
-
+// When we process mutations later, the "move" operation will be ignored.
+func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutation, error) {
 	for _, m := range mut {
 		if m.op != move {
 			continue
 		}
-		parent := root.FindParent(m.newParent)
-		if parent == nil {
-			return nil, fmt.Errorf("moving rule %s: from-parent not found", m.id)
-		}
-		mut = append(mut, Delete(m.id)) // delete from current parent
 		rule, _ := root.FindRule(m.id)
 		if rule == nil {
 			return nil, fmt.Errorf("moving rule %s: not found", m.id)
 		}
-		mut = append(mut, Add(*rule, m.newParent))
+		mut = append(mut, Delete(m.id))            // delete from current parent
+		mut = append(mut, Add(*rule, m.newParent)) // add to new parent
 	}
-	mut = slices.DeleteFunc(mut, func(m vaultMutation) bool {
-		return m.newParent != ""
-	})
 	return mut, nil
 }
 
+// applyMutations performs the mutations against the root rule.
 func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
+	// we keep track of which rules have already been cloned, i.e., made safe
+	// for modifications
 	var alreadyCopied []*Rule
 	var err error
+
 	for _, m := range mutations {
 		switch m.op {
 		case deleteOp:
@@ -193,18 +192,26 @@ func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
 			if err != nil {
 				return fmt.Errorf("deleting rule %s: %w", m.id, err)
 			}
+
 		case timeUpdate:
 			v.lastUpdate.Store(&m.lastUpdate)
+
 		case add:
 			root, alreadyCopied, err = v.add(root, m.rule, alreadyCopied, m.parent)
 			if err != nil {
 				return fmt.Errorf("adding rule %s: %w", m.rule.ID, err)
 			}
+
 		case update:
 			root, alreadyCopied, err = v.update(root, m.rule, alreadyCopied)
 			if err != nil {
 				return fmt.Errorf("updating rule %s: %w", m.rule.ID, err)
 			}
+
+		case move:
+			// we've already handled move operations
+			continue
+
 		default:
 			return fmt.Errorf("unsupported operation: %d", m.op)
 		}
@@ -213,15 +220,14 @@ func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
 	return nil
 }
 
-// shallowCopy makes a shallow copy of r
+// shallowCopy makes a shallow copy of r, so that we can modify its Rules map.
 func shallowCopy(r *Rule) *Rule {
 	rr := *r
 	rr.Rules = maps.Clone(r.Rules)
 	return &rr
 }
 
-// delete removes the rule with m.ID. If given, m.Parent is
-// used to find the parent from which to delete the rule.
+// delete removes the rule with the id from the root rule r.
 func (v *Vault) delete(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule, error) {
 	parent := r.FindParent(id)
 	if parent == nil {
@@ -239,8 +245,9 @@ func (v *Vault) delete(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rul
 	return r, alreadyCopied, nil
 }
 
+// update replaces the rule with the id newRule.ID with newRule inside the root rule r.
 func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule, error) {
-	parent, _ := r.FindRule(newRule.ID)
+	parent := r.FindParent(newRule.ID)
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule: %s", newRule.ID)
 	}
@@ -250,7 +257,8 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule,
 		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
 	}
 
-	parentInNew := r.FindParent(newRule.ID)
+	// we have to find the parent again because it will have been cloned in makeSafePath
+	parentInNew, _ := r.FindRule(parent.ID)
 	if parentInNew == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule after cloning: %s", newRule.ID)
 	}
@@ -258,33 +266,31 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule,
 		parentInNew.Rules = map[string]*Rule{}
 	}
 	parentInNew.Rules[newRule.ID] = newRule
+	// This step is handled automatically when we compile parent, but we do not want to
+	// recompile parent, so we do it manually here
 	parentInNew.sortedRules = parentInNew.sortChildRules(parentInNew.EvalOptions.SortFunc, true)
 	return r, alreadyCopied, nil
 }
 
-// upsert either updates (replaces) or adds the rule in m.Rule.
-// When adding a new rule, m.Parent is required.
+// add adds the newRule to the parent rule with parentID, somewhere inside the root rule r
 func (v *Vault) add(r, newRule *Rule, alreadyCopied []*Rule, parentID string) (*Rule, []*Rule, error) {
-	parent, _ := r.FindRule(parentID)
-	if parent == nil {
-		return nil, nil, fmt.Errorf("parent not found: %s", parentID)
-	}
-
-	r, alreadyCopied = makeSafePath(r, alreadyCopied, parent.ID)
+	r, alreadyCopied = makeSafePath(r, alreadyCopied, parentID)
 	err := v.engine.Compile(newRule, v.compileOptions...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
 	}
 
-	parentInNew, _ := r.FindRule(parentID)
-	if parentInNew == nil {
+	parent, _ := r.FindRule(parentID)
+	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule after cloning: %s", newRule.ID)
 	}
-	if parentInNew.Rules == nil {
-		parentInNew.Rules = map[string]*Rule{}
+	if parent.Rules == nil {
+		parent.Rules = map[string]*Rule{}
 	}
-	parentInNew.Rules[newRule.ID] = newRule
-	parentInNew.sortedRules = parentInNew.sortChildRules(parentInNew.EvalOptions.SortFunc, true)
+	parent.Rules[newRule.ID] = newRule
+	// This step is handled automatically when we compile parent, but we do not want to
+	// recompile parent, so we do it manually here
+	parent.sortedRules = parent.sortChildRules(parent.EvalOptions.SortFunc, true)
 	return r, alreadyCopied, nil
 }
 
@@ -306,5 +312,6 @@ func makeSafePath(root *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule)
 		}
 		root.Rules[p.ID] = shallowCopy(p)
 	}
-	return root, path
+	alreadyCopied = append(alreadyCopied, path...)
+	return root, alreadyCopied
 }

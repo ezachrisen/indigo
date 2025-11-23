@@ -17,7 +17,7 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 )
 
-// Test the scenario where the rule has childs and exists (or not) childs with true as their results
+// Test the scenario where the rule has children and exists (or not) children with true as their results
 func TestTrueIfAnyBehavior(t *testing.T) {
 	engine := indigo.NewEngine(cel.NewEvaluator())
 	data := map[string]any{}

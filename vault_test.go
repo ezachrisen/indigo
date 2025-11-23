@@ -205,19 +205,22 @@ func TestVault_MoveRule(t *testing.T) {
 	if err := v.Mutate(indigo.Add(*one, "root"), indigo.Add(*two, "root")); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("Before\n%s\n", v.Rule())
+	// t.Logf("Before\n%s\n", v.Rule())
 
 	if err := v.Mutate(indigo.Move("b", "rule2")); err != nil {
 		t.Fatal(err)
 	}
 
-	t.Logf("After\n%s\n", v.Rule())
+	// t.Logf("After\n%s\n", v.Rule())
 	if v.Rule().Rules["rule2"].Rules["b"].Expr != `10 > 1` {
 		t.Errorf("incorrect rule")
 	}
 }
 
 func TestVault_Concurrency(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
 	schema := indigo.Schema{
 		ID: "xx",
 		Elements: []indigo.DataElement{
@@ -225,7 +228,7 @@ func TestVault_Concurrency(t *testing.T) {
 		},
 	}
 	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(&schema)))
-	v, err := indigo.NewVault(eng, bigRule())
+	v, err := indigo.NewVault(eng, threeRules())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,12 +237,10 @@ func TestVault_Concurrency(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// this goroutine will evaluate the rule in the vault continuously
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		ctx := context.Background()
 		errCount := 0
-		for i := range 300 {
+		for i := range 3000 {
 			rule := v.Rule()
 
 			// t.Logf("Evaluating: \n%s\n", rule)
@@ -252,7 +253,7 @@ func TestVault_Concurrency(t *testing.T) {
 			if res.Pass != expected {
 				errCount++
 				if errCount > 3 {
-					t.Errorf("expressionected %t, got %t, iteration %d", expected, res.Pass, i)
+					t.Errorf("expected %t, got %t, iteration %d", expected, res.Pass, i)
 				}
 				if errCount == 3 {
 					errCount = 1
@@ -262,12 +263,10 @@ func TestVault_Concurrency(t *testing.T) {
 			// rule updates can be observed
 			time.Sleep(10 * time.Millisecond)
 		}
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := range 1000 {
+	wg.Go(func() {
+		for i := range 10000 {
 			var r *indigo.Rule
 			var newResult bool
 			if i%2 == 0 {
@@ -279,18 +278,31 @@ func TestVault_Concurrency(t *testing.T) {
 
 			}
 			if err := v.Mutate(indigo.Update(*r)); err != nil {
-				panic(err)
+				t.Fatal(err)
 			}
+
+			// Move c1 back and forth between a and c
+			cr := v.Rule()
+			if _, ok := cr.Rules["c"].Rules["c1"]; ok {
+				if err := v.Mutate(indigo.Move("c1", "a")); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := v.Mutate(indigo.Move("c1", "c")); err != nil {
+					t.Fatal(err)
+				}
+			}
+
 			// t.Logf("After update: \n%s\n", v.Rule())
 			desiredResult.Store(newResult)
 			time.Sleep(3 * time.Millisecond)
 		}
-	}()
+	})
 
 	wg.Wait()
 }
 
-func bigRule() *indigo.Rule {
+func threeRules() *indigo.Rule {
 	r := indigo.NewRule("root", "")
 	a := indigo.NewRule("a", " 1 == 1")
 	a1 := indigo.NewRule("a1", " 1 == 1")
@@ -310,8 +322,17 @@ func bigRule() *indigo.Rule {
 	b.Rules["b2"] = b2
 	b.Rules["b3"] = b3
 
+	c := indigo.NewRule("c", " 1 == 1")
+	c1 := indigo.NewRule("c1", " 1 == 1")
+	c2 := indigo.NewRule("c2", " 1 == 1")
+	c3 := indigo.NewRule("c3", " 1 == 1")
+
+	c.Rules["c1"] = c1
+	c.Rules["c2"] = c2
+	c.Rules["c3"] = c3
+
 	r.Rules["a"] = a
 	r.Rules["b"] = b
-
+	r.Rules["c"] = c
 	return r
 }
