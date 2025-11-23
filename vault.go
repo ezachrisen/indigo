@@ -14,7 +14,7 @@ import (
 // It provides safe access to an immutable rule which can be retrieved with the [Rule] function
 // for evaluation or inspection.
 //
-// The client can submit mutations to the Vault rule via the [Mutate]
+// The client can submit mutations to the Vault via the [Mutate]
 // method.
 //
 // To use the Vault, your rules must have globally unique IDs.
@@ -30,6 +30,8 @@ type Vault struct {
 	// before adding to the vault
 	compileOptions []CompilationOption
 
+	// An optional timestamp maintained by the client to keep track of when the
+	// Vault was last updated
 	lastUpdate atomic.Pointer[time.Time]
 }
 
@@ -59,6 +61,7 @@ func (v *Vault) Rule() *Rule {
 	return v.root.Load()
 }
 
+// LastUpdate returns the last time the Vault was updated via a LastUpdate mutation
 func (v *Vault) LastUpdate() time.Time {
 	return *v.lastUpdate.Load()
 }
@@ -134,6 +137,7 @@ func Move(id string, newParent string) vaultMutation {
 	}
 }
 
+// LastUpdate updates the LastUpdate timestamp in the Vault
 func LastUpdate(t time.Time) vaultMutation {
 	return vaultMutation{
 		lastUpdate: t,
@@ -151,25 +155,8 @@ func (v *Vault) Mutate(mutations ...vaultMutation) error {
 	if err != nil {
 		return fmt.Errorf("preprocessing moves: %w", err)
 	}
-	// rulesTouched := v.rulesTouched(r, mutations)
-	// fmt.Println("Tocuched: ", rulesTouched)
-	// for _, r := range rulesTouched {
-	// 	fmt.Println("touching ", r.ID)
-	// }
 	return v.applyMutations(r, mut)
 }
-
-// func (v *Vault) rulesTouched(r *Rule, mut []vaultMutation) []*Rule {
-// 	var rs []*Rule
-// 	fmt.Println("R = ", r)
-// 	for _, m := range mut {
-// 		_, ancestors := r.FindRule(m.id)
-// 		p := r.FindParent(m.id)
-// 		fmt.Println("AS: ", ancestors, m.id, p)
-// 		rs = append(rs, ancestors...)
-// 	}
-// 	return rs
-// }
 
 // preProcessMoves converts a "move" mutation into a "delete" and an "add" mutation
 func (v *Vault) preProcessMoves(root *Rule, mutations []vaultMutation) ([]vaultMutation, error) {
@@ -220,22 +207,6 @@ func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
 			}
 		default:
 			return fmt.Errorf("unsupported operation: %d", m.op)
-			// default:
-			// 	// root, alreadyCopied = copyAncestorsAndMe(root, alreadyCopied, m.parent)
-			// 	if err := v.add(root, m.rule, m.parent); err != nil {
-			// 		return fmt.Errorf("adding rule %s: %w", m.rule.ID, err)
-			// 	}
-			// 	if m.parent == "" {
-			// 		p := root.FindParent(m.id)
-			// 		if p == nil {
-			// 			return fmt.Errorf("parent not found for rule %s", m.id)
-			// 		}
-			// 		m.parent = p.ID
-			// 	}
-			// 	// root = copyAncestors(root, m.id)
-			// 	if err := v.upsert(root, m); err != nil {
-			// 		return fmt.Errorf("upserting rule %s: %w", m.id, err)
-			// 	}
 		}
 	}
 	v.root.Store(root)
@@ -249,17 +220,6 @@ func shallowCopy(r *Rule) *Rule {
 	return &rr
 }
 
-// // shallowCopy makes a shallow copy of r, allowing changes to the copy of r.Rules, and r's sortedRules
-// func shallowCopy(r *Rule) *Rule {
-// 	rr := *r
-// 	rr.Rules = maps.Clone(r.Rules)
-// 	rr.sortedRules = slices.Clone(r.sortedRules)
-// 	for k, c := range rr.Rules {
-// 		rr.Rules[k] = shallowCopy(c)
-// 	}
-// 	return &rr
-// }
-
 // delete removes the rule with m.ID. If given, m.Parent is
 // used to find the parent from which to delete the rule.
 func (v *Vault) delete(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule, error) {
@@ -267,7 +227,7 @@ func (v *Vault) delete(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rul
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule %s", id)
 	}
-	r, alreadyCopied = copyAncestorsAndMe(r, alreadyCopied, parent.ID)
+	r, alreadyCopied = makeSafePath(r, alreadyCopied, parent.ID)
 
 	parentInNew := r.FindParent(id)
 	if parentInNew == nil {
@@ -284,7 +244,7 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule,
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule: %s", newRule.ID)
 	}
-	r, alreadyCopied = copyAncestorsAndMe(r, alreadyCopied, parent.ID)
+	r, alreadyCopied = makeSafePath(r, alreadyCopied, parent.ID)
 	err := v.engine.Compile(newRule, v.compileOptions...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
@@ -310,7 +270,7 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied []*Rule, parentID string) (*
 		return nil, nil, fmt.Errorf("parent not found: %s", parentID)
 	}
 
-	r, alreadyCopied = copyAncestorsAndMe(r, alreadyCopied, parent.ID)
+	r, alreadyCopied = makeSafePath(r, alreadyCopied, parent.ID)
 	err := v.engine.Compile(newRule, v.compileOptions...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
@@ -328,28 +288,11 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied []*Rule, parentID string) (*
 	return r, alreadyCopied, nil
 }
 
-// upsert either updates (replaces) or adds the rule in m.Rule.
-// When adding a new rule, m.Parent is required.
-func (v *Vault) upsert(r *Rule, m vaultMutation) error {
-	parent, _ := r.FindRule(m.parent)
-	if parent == nil {
-		return fmt.Errorf("parent not found (%s)", m.parent)
-	}
-	err := v.engine.Compile(m.rule, v.compileOptions...)
-	if err != nil {
-		return fmt.Errorf("compiling upsert rule %s: %w", m.rule.ID, err)
-	}
-
-	if parent.Rules == nil {
-		parent.Rules = map[string]*Rule{}
-	}
-	parent.Rules[m.id] = m.rule
-	parent.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
-	return nil
-}
-
-func copyAncestorsAndMe(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule) {
-	path := r.Path(id)
+// makeSafePath makes shallow copies of rules between the root and the rule with the id,
+// so that updates can be made to those rules. If a rule has already been copied, cloning
+// is skipped.
+func makeSafePath(root *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule) {
+	path := root.Path(id)
 	for _, p := range path {
 		if slices.ContainsFunc(alreadyCopied, func(a *Rule) bool {
 			return a.ID == p.ID
@@ -357,11 +300,11 @@ func copyAncestorsAndMe(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Ru
 			continue
 		}
 		// p is the root, has no parents
-		if p == r {
-			r = shallowCopy(r)
+		if p == root {
+			root = shallowCopy(root)
 			continue
 		}
-		r.Rules[p.ID] = shallowCopy(p)
+		root.Rules[p.ID] = shallowCopy(p)
 	}
-	return r, path
+	return root, path
 }
