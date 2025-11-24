@@ -17,6 +17,9 @@ import (
 // The client can submit mutations to the Vault via the [Mutate]
 // method.
 //
+// Clients do not see the updated rules until all mutations submitted to [Mutate]
+// succeed; if one fails no updates are applied.
+//
 // To use the Vault, your rules must have globally unique IDs.
 type Vault struct {
 	// Current immutable root
@@ -152,6 +155,27 @@ func LastUpdate(t time.Time) vaultMutation {
 // mutations in sequence. Each rule is compiled before being added to the vault.
 // At the end of all mutations, the resulting root rule becomes the new
 // active rule in the vault, and can be retrieved with the [Rule] function.
+//
+// Clients do not see the updated rules until all mutations submitted to [Mutate]
+// succeed; if one fails no updates are applied.
+//
+// This ensures that clients see a consistent rule set without partial updates.
+//
+// Mutations incur memory cost equal to the total size of the ancestor rules of
+// the rule being mutated; only children who are affected are copied.
+//
+// In this examople, if grandhchild_2 is modified, the root and the child_1
+// rules will be copied, and their child rule maps cloned (though the rules in the maps,
+// such as child_2 and grandchild_2, grandchild_3 will not be cloned.)
+//
+//	root                             <-- Cloned
+//	├── child_1                      <-- Cloned
+//	│   ├── grandchild_1
+//	│   └── grandchild_2             <-- Inserted into the cloned child_1 Rules map
+//	└── child_2
+//	    └── grandchild_3
+//
+// Moves incur the cost in both the origin and destination ancestors.
 func (v *Vault) Mutate(mutations ...vaultMutation) error {
 	r := v.Rule()
 	mut, err := v.preProcessMoves(r, mutations)
@@ -169,6 +193,12 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 			continue
 		}
 		rule, _ := root.FindRule(m.id)
+		if m.newParent == m.id {
+			return nil, fmt.Errorf("cannot move rule %s to itself", m.id)
+		}
+		if found, _ := rule.FindRule(m.newParent); found != nil {
+			return nil, fmt.Errorf("cannot move rule %s to its descendant %s", m.id, m.newParent)
+		}
 		if rule == nil {
 			return nil, fmt.Errorf("moving rule %s: not found", m.id)
 		}
@@ -275,6 +305,12 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule,
 // add adds the newRule to the parent rule with parentID, somewhere inside the root rule r
 func (v *Vault) add(r, newRule *Rule, alreadyCopied []*Rule, parentID string) (*Rule, []*Rule, error) {
 	r, alreadyCopied = makeSafePath(r, alreadyCopied, parentID)
+	if newRule.ID == "" {
+		return nil, nil, fmt.Errorf("rule ID cannot be empty")
+	}
+	if existing, _ := r.FindRule(newRule.ID); existing != nil {
+		return nil, nil, fmt.Errorf("rule with ID %s already exists", newRule.ID)
+	}
 	err := v.engine.Compile(newRule, v.compileOptions...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)

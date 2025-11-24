@@ -336,3 +336,133 @@ func threeRules() *indigo.Rule {
 	r.Rules["c"] = c
 	return r
 }
+
+func TestVault_AddInvalidInputs(t *testing.T) {
+	_, v := setup(t)
+
+	// Add with empty ID
+	r := indigo.Rule{ID: "", Expr: "true"}
+	err := v.Mutate(indigo.Add(r, "root"))
+	if err == nil {
+		t.Error("expected error for empty ID")
+	}
+
+	// Add to non-existent parent
+	r2 := indigo.Rule{ID: "test", Expr: "true"}
+	err = v.Mutate(indigo.Add(r2, "nonexistent"))
+	if err == nil {
+		t.Error("expected error for non-existent parent")
+	}
+
+	// Add duplicate ID
+	r3 := indigo.Rule{ID: "dup", Expr: "true"}
+	err = v.Mutate(indigo.Add(r3, "root"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r4 := indigo.Rule{ID: "dup", Expr: "false"}
+	err = v.Mutate(indigo.Add(r4, "root"))
+	if err == nil {
+		t.Error("expected error for duplicate ID")
+	}
+}
+
+func TestVault_UpdateInvalid(t *testing.T) {
+	_, v := setup(t)
+
+	// Update non-existent
+	r := indigo.Rule{ID: "nonexistent", Expr: "true"}
+	err := v.Mutate(indigo.Update(r))
+	if err == nil {
+		t.Error("expected error for updating non-existent rule")
+	}
+}
+
+func TestVault_MoveInvalid(t *testing.T) {
+	_, v := setup(t)
+
+	// Setup some rules
+	a := indigo.Rule{ID: "a", Expr: "true", Rules: map[string]*indigo.Rule{
+		"child": {ID: "child", Expr: "true"},
+	}}
+	err := v.Mutate(indigo.Add(a, "root"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Move to non-existent parent
+	err = v.Mutate(indigo.Move("a", "nonexistent"))
+	if err == nil {
+		t.Error("expected error for moving to non-existent parent")
+	}
+
+	// Move non-existent rule
+	err = v.Mutate(indigo.Move("nonexistent", "root"))
+	if err == nil {
+		t.Error("expected error for moving non-existent rule")
+	}
+
+	// Move to self
+	err = v.Mutate(indigo.Move("a", "a"))
+	if err == nil {
+		t.Error("expected error for moving to self")
+	}
+
+	// Move to descendant
+	err = v.Mutate(indigo.Move("a", "child"))
+	if err == nil {
+		t.Error("expected error for moving to descendant")
+	}
+}
+
+func TestVault_DeleteInvalid(t *testing.T) {
+	_, v := setup(t)
+
+	// Delete root
+	err := v.Mutate(indigo.Delete("root"))
+	if err == nil {
+		t.Error("expected error for deleting root")
+	}
+}
+
+func TestVault_CompilationError(t *testing.T) {
+	_, v := setup(t)
+
+	// Add rule with invalid expression
+	r := indigo.Rule{ID: "invalid", Expr: "invalid syntax {{{{"}
+	err := v.Mutate(indigo.Add(r, "root"))
+	if err == nil {
+		t.Error("expected compilation error")
+	}
+
+	// Update to invalid
+	valid := indigo.Rule{ID: "valid", Expr: "true"}
+	err = v.Mutate(indigo.Add(valid, "root"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidUpdate := indigo.Rule{ID: "valid", Expr: "invalid {{{{"}
+	err = v.Mutate(indigo.Update(invalidUpdate))
+	if err == nil {
+		t.Error("expected compilation error on update")
+	}
+}
+
+func TestVault_MultipleMutationsWithError(t *testing.T) {
+	_, v := setup(t)
+
+	r1 := indigo.Rule{ID: "r1", Expr: "true"}
+	r2 := indigo.Rule{ID: "r2", Expr: "true"}
+	invalid := indigo.Rule{ID: "", Expr: "true"} // empty ID
+
+	err := v.Mutate(indigo.Add(r1, "root"), indigo.Add(invalid, "root"), indigo.Add(r2, "root"))
+	if err == nil {
+		t.Error("expected error in multiple mutations")
+	}
+
+	// Check that valid mutations before error were NOT applied
+	root := v.Rule()
+	if _, ok := root.Rules["r1"]; ok {
+		t.Error("r1 was added despite error")
+	}
+}
