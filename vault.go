@@ -85,6 +85,9 @@ type vaultMutation struct {
 	// Required when moving a rule from one parent to another
 	newParent string
 
+	// Required when changing the ID of a rule
+	newID string
+
 	// A time stamp to record as the last time the vault was updated
 	// Will update the Vault's last update time
 	lastUpdate time.Time
@@ -101,6 +104,7 @@ const (
 	update
 	deleteOp
 	move
+	rename
 	timeUpdate
 )
 
@@ -176,6 +180,8 @@ func LastUpdate(t time.Time) vaultMutation {
 //	    └── grandchild_3
 //
 // Moves incur the cost in both the origin and destination ancestors.
+//
+// To clear a vault, replace the root rule with a new, empty rule.
 func (v *Vault) Mutate(mutations ...vaultMutation) error {
 	r := v.Rule()
 	mut, err := v.preProcessMoves(r, mutations)
@@ -239,11 +245,8 @@ func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
 			}
 
 		case move:
-			// we've already handled move operations
+			// we've already handled the move operation in [preprocessMoves]
 			continue
-
-		default:
-			return fmt.Errorf("unsupported operation: %d", m.op)
 		}
 	}
 	v.root.Store(root)
@@ -277,6 +280,12 @@ func (v *Vault) delete(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rul
 
 // update replaces the rule with the id newRule.ID with newRule inside the root rule r.
 func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule, error) {
+	// Special case to allow replacing the root
+	if newRule.ID == r.ID {
+		r = newRule
+		return r, alreadyCopied, nil
+	}
+
 	parent := r.FindParent(newRule.ID)
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule: %s", newRule.ID)
@@ -293,7 +302,7 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule,
 		return nil, nil, fmt.Errorf("parent not found for rule after cloning: %s", newRule.ID)
 	}
 	if parentInNew.Rules == nil {
-		parentInNew.Rules = map[string]*Rule{}
+		return nil, nil, fmt.Errorf("inconsistent state; parent whose child is being updated has no children")
 	}
 	parentInNew.Rules[newRule.ID] = newRule
 	// This step is handled automatically when we compile parent, but we do not want to
