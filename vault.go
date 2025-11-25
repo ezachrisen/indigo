@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -22,6 +23,11 @@ import (
 //
 // To use the Vault, your rules must have globally unique IDs.
 type Vault struct {
+	// The mutex is used to ensure multiple writers (calling Mutate) do not interfere
+	// with each other; the mutex is not used for readers, who always retrieve
+	// a clean Rule without waiting for a read lock with the [Rule] method.
+	mu sync.Mutex
+
 	// Current immutable root
 	root atomic.Pointer[Rule]
 
@@ -104,7 +110,6 @@ const (
 	update
 	deleteOp
 	move
-	rename
 	timeUpdate
 )
 
@@ -183,6 +188,9 @@ func LastUpdate(t time.Time) vaultMutation {
 //
 // To clear a vault, replace the root rule with a new, empty rule.
 func (v *Vault) Mutate(mutations ...vaultMutation) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
 	r := v.Rule()
 	mut, err := v.preProcessMoves(r, mutations)
 	if err != nil {

@@ -3,6 +3,7 @@ package indigo_test
 import (
 	"context"
 	"flag"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -498,4 +499,39 @@ func setup(t *testing.T) (indigo.Engine, *indigo.Vault) {
 		t.Fatal(err)
 	}
 	return eng, v
+}
+
+func TestVault_ConcurrentMutations_RaceCondition(t *testing.T) {
+	// Setup
+	eng := indigo.NewEngine(cel.NewEvaluator())
+	v, err := indigo.NewVault(eng, indigo.NewRule("root", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Number of concurrent writers
+	numWriters := 50
+	var wg sync.WaitGroup
+	wg.Add(numWriters)
+
+	// Each writer adds a unique rule
+	for i := 0; i < numWriters; i++ {
+		go func(id int) {
+			defer wg.Done()
+			ruleID := fmt.Sprintf("rule_%d", id)
+			newRule := indigo.NewRule(ruleID, "true")
+
+			if err := v.Mutate(indigo.Add(*newRule, "root")); err != nil {
+				t.Errorf("Mutate failed for %s: %v", ruleID, err)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Verify
+	finalRule := v.Rule()
+	if len(finalRule.Rules) != numWriters {
+		t.Errorf("Race condition detected! Expected %d rules, got %d", numWriters, len(finalRule.Rules))
+	}
 }
