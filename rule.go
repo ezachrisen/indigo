@@ -238,18 +238,6 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool)
 			return fn(keys, i, j)
 		})
 	}
-
-	/*
-		if len(keys) > 0 {
-		fmt.Printf("  sorted: ")
-			for _, x := range keys {
-				if x != nil {
-					fmt.Printf("%s ", x.ID)
-				}
-			}
-			fmt.Printf("\n")
-		}
-	*/
 	return keys
 }
 
@@ -295,8 +283,9 @@ func (r *Rule) buildTree(sb *strings.Builder, prefix string, depth int) {
 		return
 	}
 	i := 0
-	for _, child := range r.Rules {
-		isLast := i == len(r.Rules)-1
+	sorted := r.sortChildRules(SortRulesAlpha, true)
+	for _, child := range sorted {
+		isLast := i == len(sorted)-1
 		// Determine the tree characters to use
 		var connector, childPrefix string
 		if isLast {
