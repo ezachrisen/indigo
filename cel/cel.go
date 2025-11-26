@@ -59,7 +59,6 @@ func FixedSchema(schema *indigo.Schema) CelOption {
 //
 // Any errors in compilation are returned with a nil program
 func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type, collectDiagnostics bool, _ bool) (any, error) {
-
 	// A blank expression is ok, but it won't pass through the compilation
 	if expr == "" {
 		return nil, nil
@@ -67,7 +66,6 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 
 	prog := celProgram{}
 	var err error
-
 	e.fixedOnce.Do(func() {
 		if e.fixedSchema == nil {
 			return
@@ -104,7 +102,6 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 		// Remove some wonky formatting from CEL's error message.
 		return nil, fmt.Errorf("parsing rule:\n%s", strings.ReplaceAll(fmt.Sprintf("%s", iss.Err()), "<input>:", ""))
 	}
-
 	// Type-check the parsed AST against the declarations
 	c, iss := env.Check(ast)
 	if iss != nil && iss.Err() != nil {
@@ -127,12 +124,10 @@ func (e *Evaluator) Compile(expr string, s indigo.Schema, resultType indigo.Type
 	if err != nil {
 		return nil, fmt.Errorf("generating program: %w", err)
 	}
-
 	return prog, nil
 }
 
 func celEnv(schema indigo.Schema) (*celgo.Env, error) {
-
 	opts, err := convertIndigoSchemaToDeclarations(schema)
 	if err != nil {
 		return nil, err
@@ -143,14 +138,13 @@ func celEnv(schema indigo.Schema) (*celgo.Env, error) {
 		return nil, err
 	}
 	return env, nil
-
 }
 
 // Evaluate a rule against the input data.
 // Called by indigo.Engine.Evaluate for the rule and its children.
 func (*Evaluator) Evaluate(data map[string]any, expr string, _ indigo.Schema, _ any,
-	evalData any, expectedResultType indigo.Type, returnDiagnostics bool) (any, *indigo.Diagnostics, error) {
-
+	evalData any, expectedResultType indigo.Type, returnDiagnostics bool,
+) (any, *indigo.Diagnostics, error) {
 	program, ok := evalData.(celProgram)
 
 	// If the rule doesn't have a program, return a default result
@@ -169,7 +163,6 @@ func (*Evaluator) Evaluate(data map[string]any, expr string, _ indigo.Schema, _ 
 	// Do not check the error yet. Grab the diagnostics first
 	var diagnostics *indigo.Diagnostics
 	if returnDiagnostics {
-		//		fmt.Println("collecting diagnostics")
 		diagnostics, err = collectDiagnostics(program.ast, details, data)
 		if err != nil {
 			return nil, nil, fmt.Errorf("collecting diagnostics: %w", err)
@@ -183,7 +176,6 @@ func (*Evaluator) Evaluate(data map[string]any, expr string, _ indigo.Schema, _ 
 	if rawValue == nil {
 		return nil, diagnostics, nil
 	}
-	//	fmt.Println("Before returning", expr, "diagnostics = ", diagnostics)
 	// The output from CEL evaluation is a ref.Val.
 	// The underlying Go value is returned by .Value()
 	// One type requires special handling: protocol buffers dynamically constructed

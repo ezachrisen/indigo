@@ -2,6 +2,7 @@ package indigo
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -100,6 +101,48 @@ func NewRule(id string, expr string) *Rule {
 	}
 }
 
+// FindRule returns the rule with the id in the rule or any of its
+// children recursively, and a list of the parent rules in order, starting
+// with the root of the rule tree and ending with the immediate parent of
+// the rule with the id.
+func (r *Rule) FindRule(id string) (rule *Rule, ancestors []*Rule) {
+	if r == nil {
+		return nil, nil
+	}
+	if r.ID == id {
+		return r, nil
+	}
+	for _, child := range r.Rules {
+		if found, p := child.FindRule(id); found != nil {
+			// Prepend current root to the parent chain
+			ancestors = append([]*Rule{r}, p...)
+			return found, ancestors
+		}
+	}
+	return nil, nil
+}
+
+// Path returns rule with the id, and all its ancestors
+// starting with the root of the rule tree.
+func (r *Rule) Path(id string) []*Rule {
+	me, ancestors := r.FindRule(id)
+	if me == nil {
+		return nil
+	}
+	slices.Reverse(ancestors)
+	return append(ancestors, me)
+}
+
+// FindParent returns the parent of the rule with the id
+func (r *Rule) FindParent(id string) *Rule {
+	_, ancestors := r.FindRule(id)
+
+	if len(ancestors) < 1 {
+		return nil
+	}
+	return ancestors[len(ancestors)-1]
+}
+
 // ApplyToRule applies the function f to the rule r and its children recursively.
 func ApplyToRule(r *Rule, f func(r *Rule) error) error {
 	err := f(r)
@@ -144,7 +187,6 @@ func (r *Rule) String() string {
 	}
 	tw.SetStyle(style)
 	return tw.Render()
-
 }
 
 func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
@@ -176,8 +218,7 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 // have been set by a previous sort operation), or a list of rules whose order
 // is not defined.
 func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool) []*Rule {
-
-	if fn == nil && len(r.sortedRules) == len(r.Rules) {
+	if fn == nil && len(r.sortedRules) == len(r.Rules) && !force {
 		return r.sortedRules
 	}
 
@@ -185,7 +226,6 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool)
 		return r.sortedRules
 	}
 
-	//	fmt.Println("  ", op, force, "getting keys for ", r.ID)
 	keys := make([]*Rule, len(r.Rules))
 	var i int
 	for k := range r.Rules {
@@ -194,24 +234,10 @@ func (r *Rule) sortChildRules(fn func(rules []*Rule, i, j int) bool, force bool)
 	}
 
 	if fn != nil && len(keys) > 0 && force {
-
-		//		fmt.Println("  ", op, force, "sorting keys for ", r.ID, "--")
 		sort.Slice(keys, func(i, j int) bool {
 			return fn(keys, i, j)
 		})
 	}
-
-	/*
-		if len(keys) > 0 {
-		fmt.Printf("  sorted: ")
-			for _, x := range keys {
-				if x != nil {
-					fmt.Printf("%s ", x.ID)
-				}
-			}
-			fmt.Printf("\n")
-		}
-	*/
 	return keys
 }
 
@@ -225,35 +251,58 @@ func SortRulesAlphaDesc(rules []*Rule, i, j int) bool {
 	return rules[i].ID > rules[j].ID
 }
 
-/*
-// sortChildKeys sorts the IDs of the child rules according to the
-// SortFunc set in evaluation options. If no SortFunc is set, the evaluation
-// order is not specified.
-// TODO: allow this function to be canceled
-// TODO: cache sorting
-// TODO: add sorting benchmark
-func (r *Rule) sortChildRulesByOption(o EvalOptions) []*Rule {
-	keys := make([]*Rule, 0, len(r.Rules))
-	for k := range r.Rules {
-		keys = append(keys, r.Rules[k])
+// Tree returns a tree representation of the rule hierarchy showing only rule IDs.
+// The tree uses box-drawing characters to visualize parent-child relationships.
+// Recursion is limited to a maximum depth of 20 levels.
+//
+// Example output:
+//
+//	root
+//	├── child_1
+//	│   ├── grandchild_1
+//	│   └── grandchild_2
+//	└── child_2
+//	    └── grandchild_3
+func (r *Rule) Tree() string {
+	if r == nil {
+		return ""
 	}
-
-	if o.SortFunc != nil {
-		sort.Slice(keys, func(i, j int) bool {
-			return o.SortFunc(keys, i, j)
-		})
-	}
-	return keys
+	var sb strings.Builder
+	sb.WriteString(r.ID)
+	sb.WriteString("\n")
+	r.buildTree(&sb, "", 0)
+	return sb.String()
 }
 
-// Based on the evaluation options, determine if the order of evaluation matters
-func sortOrderMatters(o EvalOptions) bool {
-
-	if o.StopFirstNegativeChild || o.StopFirstPositiveChild {
-		return true
+// buildTree recursively builds the tree representation with proper indentation
+// and tree characters (├──, └──, │).
+// depth limits recursion to a maximum of 20 levels.
+func (r *Rule) buildTree(sb *strings.Builder, prefix string, depth int) {
+	// Stop if we've reached the maximum depth
+	if depth >= 20 {
+		return
 	}
+	i := 0
+	sorted := r.sortChildRules(SortRulesAlpha, true)
+	for _, child := range sorted {
+		isLast := i == len(sorted)-1
+		// Determine the tree characters to use
+		var connector, childPrefix string
+		if isLast {
+			connector = "└── "
+			childPrefix = "    "
+		} else {
+			connector = "├── "
+			childPrefix = "│   "
+		}
 
-	return false
-
+		// Write the current child
+		sb.WriteString(prefix)
+		sb.WriteString(connector)
+		sb.WriteString(child.ID)
+		sb.WriteString("\n")
+		// Recursively process this child's children
+		child.buildTree(sb, prefix+childPrefix, depth+1)
+		i++
+	}
 }
-*/
