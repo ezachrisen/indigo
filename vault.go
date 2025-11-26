@@ -22,6 +22,9 @@ import (
 // succeed; if one fails no updates are applied.
 //
 // To use the Vault, your rules must have globally unique IDs.
+//
+// Clients should NOT modify rules outside the vault. Any rule added to the vault
+// or retrieved from it should be considered read-only.
 type Vault struct {
 	// The mutex is used to ensure multiple writers (calling Mutate) do not interfere
 	// with each other; the mutex is not used for readers, who always retrieve
