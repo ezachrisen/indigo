@@ -3,7 +3,6 @@ package indigo
 import (
 	"fmt"
 	"maps"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -231,7 +230,7 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
 	// we keep track of which rules have already been cloned, i.e., made safe
 	// for modifications
-	var alreadyCopied []*Rule
+	alreadyCopied := make(map[*Rule]any)
 	var err error
 
 	for _, m := range mutations {
@@ -274,7 +273,7 @@ func shallowCopy(r *Rule) *Rule {
 }
 
 // delete removes the rule with the id from the root rule r.
-func (v *Vault) delete(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule, error) {
+func (v *Vault) delete(r *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, map[*Rule]any, error) {
 	parent := r.FindParent(id)
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule %s", id)
@@ -292,7 +291,7 @@ func (v *Vault) delete(r *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rul
 }
 
 // update replaces the rule with the id newRule.ID with newRule inside the root rule r.
-func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule, error) {
+func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any, error) {
 	// Special case to allow replacing the root
 	if newRule.ID == r.ID {
 		r = newRule
@@ -325,7 +324,7 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied []*Rule) (*Rule, []*Rule,
 }
 
 // add adds the newRule to the parent rule with parentID, somewhere inside the root rule r
-func (v *Vault) add(r, newRule *Rule, alreadyCopied []*Rule, parentID string) (*Rule, []*Rule, error) {
+func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID string) (*Rule, map[*Rule]any, error) {
 	r, alreadyCopied = makeSafePath(r, alreadyCopied, parentID)
 	if newRule.ID == "" {
 		return nil, nil, fmt.Errorf("rule ID cannot be empty")
@@ -355,21 +354,20 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied []*Rule, parentID string) (*
 // makeSafePath makes shallow copies of rules between the root and the rule with the id,
 // so that updates can be made to those rules. If a rule has already been copied, cloning
 // is skipped.
-func makeSafePath(root *Rule, alreadyCopied []*Rule, id string) (*Rule, []*Rule) {
+func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, map[*Rule]any) {
 	path := root.Path(id)
 	for _, p := range path {
-		if slices.ContainsFunc(alreadyCopied, func(a *Rule) bool {
-			return a.ID == p.ID
-		}) {
+		if _, ok := alreadyCopied[p]; ok {
 			continue
 		}
 		// p is the root, has no parents
 		if p == root {
 			root = shallowCopy(root)
+			alreadyCopied[p] = nil
 			continue
 		}
 		root.Rules[p.ID] = shallowCopy(p)
+		alreadyCopied[p] = nil
 	}
-	alreadyCopied = append(alreadyCopied, path...)
 	return root, alreadyCopied
 }
