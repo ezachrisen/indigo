@@ -115,21 +115,23 @@ const (
 
 // Add returns a mutation that adds the rule to the parent.
 // The parent must exist
-func Add(r Rule, parent string) vaultMutation {
+func Add(r *Rule, parent string) vaultMutation {
 	return vaultMutation{
 		id:     r.ID,
-		rule:   &r,
+		rule:   r,
 		parent: parent,
 		op:     add,
 	}
 }
 
 // Update returns a mutation that replaces the rule with the
-// id r.ID with the new rule
-func Update(r Rule) vaultMutation {
+// id r.ID with the new rule. Keep in mind that this not only updates
+// the rule's fields, such as expression or meta, but also all of its
+// children.
+func Update(r *Rule) vaultMutation {
 	return vaultMutation{
 		id:   r.ID,
-		rule: &r,
+		rule: r,
 		op:   update,
 	}
 }
@@ -216,8 +218,8 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 		if rule == nil {
 			return nil, fmt.Errorf("moving rule %s: not found", m.id)
 		}
-		mut = append(mut, Delete(m.id))            // delete from current parent
-		mut = append(mut, Add(*rule, m.newParent)) // add to new parent
+		mut = append(mut, Delete(m.id))           // delete from current parent
+		mut = append(mut, Add(rule, m.newParent)) // add to new parent
 	}
 	return mut, nil
 }

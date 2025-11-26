@@ -265,6 +265,7 @@ func SortRulesAlphaDesc(rules []*Rule, i, j int) bool {
 
 // Tree returns a tree representation of the rule hierarchy showing only rule IDs.
 // The tree uses box-drawing characters to visualize parent-child relationships.
+// Recursion is limited to a maximum depth of 20 levels.
 //
 // Example output:
 //
@@ -281,19 +282,21 @@ func (r *Rule) Tree() string {
 	var sb strings.Builder
 	sb.WriteString(r.ID)
 	sb.WriteString("\n")
-	r.buildTree(&sb, "", true)
+	r.buildTree(&sb, "", 0)
 	return sb.String()
 }
 
 // buildTree recursively builds the tree representation with proper indentation
 // and tree characters (├──, └──, │).
-func (r *Rule) buildTree(sb *strings.Builder, prefix string, isRoot bool) {
-	// Get sorted child rules or rules in map order
-	children := r.sortChildRules(nil, false)
-
-	for i, child := range children {
-		isLast := i == len(children)-1
-
+// depth limits recursion to a maximum of 20 levels.
+func (r *Rule) buildTree(sb *strings.Builder, prefix string, depth int) {
+	// Stop if we've reached the maximum depth
+	if depth >= 20 {
+		return
+	}
+	i := 0
+	for _, child := range r.Rules {
+		isLast := i == len(r.Rules)-1
 		// Determine the tree characters to use
 		var connector, childPrefix string
 		if isLast {
@@ -309,8 +312,8 @@ func (r *Rule) buildTree(sb *strings.Builder, prefix string, isRoot bool) {
 		sb.WriteString(connector)
 		sb.WriteString(child.ID)
 		sb.WriteString("\n")
-
 		// Recursively process this child's children
-		child.buildTree(sb, prefix+childPrefix, false)
+		child.buildTree(sb, prefix+childPrefix, depth+1)
+		i++
 	}
 }

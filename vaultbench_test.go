@@ -75,7 +75,7 @@ func BenchmarkVault_Mutate_LargeTree_10k(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// This is the hot path we're measuring
-		err := vault.Mutate(indigo.Update(updateRule))
+		err := vault.Mutate(indigo.Update(&updateRule))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -133,6 +133,6 @@ func BenchmarkVault_Mutate_SmallTree(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		vault.Mutate(indigo.Update(update))
+		vault.Mutate(indigo.Update(&update))
 	}
 }

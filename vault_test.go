@@ -28,6 +28,13 @@ func debugLogf(t *testing.T, format string, args ...any) {
 	}
 }
 
+func debugTree(t *testing.T, note string, r *indigo.Rule) {
+	t.Helper()
+	if debugOutput {
+		t.Logf("\n\n%s\n\n%s\n\n", note, r.Tree())
+	}
+}
+
 func TestVault_BasicAddAndEval(t *testing.T) {
 	e, v := setup(t)
 	r := &indigo.Rule{
@@ -39,7 +46,7 @@ func TestVault_BasicAddAndEval(t *testing.T) {
 		t.Fatal(err)
 	}
 	t2 := time.Date(2022, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
-	if err := v.Mutate(indigo.Add(*r, "root"), indigo.LastUpdate(t2)); err != nil {
+	if err := v.Mutate(indigo.Add(r, "root"), indigo.LastUpdate(t2)); err != nil {
 		t.Fatal(err)
 	}
 	lu := v.LastUpdate()
@@ -70,7 +77,7 @@ func TestVault_DeleteRule(t *testing.T) {
 		"child": {ID: "child", Expr: `true`},
 	}}
 
-	err := v.Mutate(indigo.Add(a, "root"))
+	err := v.Mutate(indigo.Add(&a, "root"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +121,7 @@ func TestVault_UpdateRule(t *testing.T) {
 	e, v := setup(t)
 
 	old := &indigo.Rule{ID: "rule1", Expr: `2+2 == 3`}
-	if err := v.Mutate(indigo.Add(*old, "root")); err != nil {
+	if err := v.Mutate(indigo.Add(old, "root")); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := v.Rule()
@@ -128,7 +135,7 @@ func TestVault_UpdateRule(t *testing.T) {
 		t.Error("eval failed")
 	}
 	newRule := &indigo.Rule{ID: "rule1", Expr: `2 + 2 == 4`}
-	if err := v.Mutate(indigo.Update(*newRule)); err != nil {
+	if err := v.Mutate(indigo.Update(newRule)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -152,7 +159,7 @@ func TestVault_UpdateRule(t *testing.T) {
 
 	// Update the root (clearing the vault)
 	newRoot := &indigo.Rule{ID: "root", Expr: ` 1 == 1 `}
-	if err := v.Mutate(indigo.Update(*newRoot)); err != nil {
+	if err := v.Mutate(indigo.Update(newRoot)); err != nil {
 		t.Fatal(err)
 	}
 	if e := snapshot.Rules["rule1"].Expr; e != `2+2 == 3` {
@@ -168,7 +175,7 @@ func TestVault_AddRule(t *testing.T) {
 	e, v := setup(t)
 
 	old := &indigo.Rule{ID: "rule1", Expr: `2+2 == 4`}
-	if err := v.Mutate(indigo.Add(*old, "root")); err != nil {
+	if err := v.Mutate(indigo.Add(old, "root")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -182,14 +189,14 @@ func TestVault_AddRule(t *testing.T) {
 
 	debugLogf(t, "Before adding rule2 to root:\n%s\n", v.Rule())
 	newRule := &indigo.Rule{ID: "rule2", Expr: `10<1`}
-	if err := v.Mutate(indigo.Add(*newRule, "root")); err != nil {
+	if err := v.Mutate(indigo.Add(newRule, "root")); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := v.Rule()
 	debugLogf(t, "Snapshot before adding rule1.2 to rule1:\n%s\n", snapshot)
 	newRule2 := &indigo.Rule{ID: "rule1.2", Expr: `10<1`}
 	newRule3 := &indigo.Rule{ID: "rule1.3", Expr: `10<1`}
-	if err := v.Mutate(indigo.Add(*newRule2, "rule1"), indigo.Add(*newRule3, "rule1")); err != nil {
+	if err := v.Mutate(indigo.Add(newRule2, "rule1"), indigo.Add(newRule3, "rule1")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -221,7 +228,7 @@ func TestVault_MoveRule(t *testing.T) {
 	one.Rules["b"] = b
 
 	two := &indigo.Rule{ID: "rule2", Expr: `1+1 == 2`}
-	if err := v.Mutate(indigo.Add(*one, "root"), indigo.Add(*two, "root")); err != nil {
+	if err := v.Mutate(indigo.Add(one, "root"), indigo.Add(two, "root")); err != nil {
 		t.Fatal(err)
 	}
 	debugLogf(t, "Before\n%s\n", v.Rule())
@@ -301,7 +308,7 @@ func TestVault_Concurrency(t *testing.T) {
 				newResult = true
 
 			}
-			if err := v.Mutate(indigo.Update(*r)); err != nil {
+			if err := v.Mutate(indigo.Update(r)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -366,26 +373,26 @@ func TestVault_AddInvalidInputs(t *testing.T) {
 
 	// Add with empty ID
 	r := indigo.Rule{ID: "", Expr: "true"}
-	err := v.Mutate(indigo.Add(r, "root"))
+	err := v.Mutate(indigo.Add(&r, "root"))
 	if err == nil {
 		t.Error("expected error for empty ID")
 	}
 
 	// Add to non-existent parent
 	r2 := indigo.Rule{ID: "test", Expr: "true"}
-	err = v.Mutate(indigo.Add(r2, "nonexistent"))
+	err = v.Mutate(indigo.Add(&r2, "nonexistent"))
 	if err == nil {
 		t.Error("expected error for non-existent parent")
 	}
 
 	// Add duplicate ID
 	r3 := indigo.Rule{ID: "dup", Expr: "true"}
-	err = v.Mutate(indigo.Add(r3, "root"))
+	err = v.Mutate(indigo.Add(&r3, "root"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	r4 := indigo.Rule{ID: "dup", Expr: "false"}
-	err = v.Mutate(indigo.Add(r4, "root"))
+	err = v.Mutate(indigo.Add(&r4, "root"))
 	if err == nil {
 		t.Error("expected error for duplicate ID")
 	}
@@ -396,7 +403,7 @@ func TestVault_UpdateInvalid(t *testing.T) {
 
 	// Update non-existent
 	r := indigo.Rule{ID: "nonexistent", Expr: "true"}
-	err := v.Mutate(indigo.Update(r))
+	err := v.Mutate(indigo.Update(&r))
 	if err == nil {
 		t.Error("expected error for updating non-existent rule")
 	}
@@ -409,7 +416,7 @@ func TestVault_MoveInvalid(t *testing.T) {
 	a := indigo.Rule{ID: "a", Expr: "true", Rules: map[string]*indigo.Rule{
 		"child": {ID: "child", Expr: "true"},
 	}}
-	err := v.Mutate(indigo.Add(a, "root"))
+	err := v.Mutate(indigo.Add(&a, "root"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,19 +461,19 @@ func TestVault_CompilationError(t *testing.T) {
 
 	// Add rule with invalid expression
 	r := indigo.Rule{ID: "invalid", Expr: "invalid syntax {{{{"}
-	err := v.Mutate(indigo.Add(r, "root"))
+	err := v.Mutate(indigo.Add(&r, "root"))
 	if err == nil {
 		t.Error("expected compilation error")
 	}
 
 	// Update to invalid
 	valid := indigo.Rule{ID: "valid", Expr: "true"}
-	err = v.Mutate(indigo.Add(valid, "root"))
+	err = v.Mutate(indigo.Add(&valid, "root"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	invalidUpdate := indigo.Rule{ID: "valid", Expr: "invalid {{{{"}
-	err = v.Mutate(indigo.Update(invalidUpdate))
+	err = v.Mutate(indigo.Update(&invalidUpdate))
 	if err == nil {
 		t.Error("expected compilation error on update")
 	}
@@ -479,7 +486,7 @@ func TestVault_MultipleMutationsWithError(t *testing.T) {
 	r2 := indigo.Rule{ID: "r2", Expr: "true"}
 	invalid := indigo.Rule{ID: "", Expr: "true"} // empty ID
 
-	err := v.Mutate(indigo.Add(r1, "root"), indigo.Add(invalid, "root"), indigo.Add(r2, "root"))
+	err := v.Mutate(indigo.Add(&r1, "root"), indigo.Add(&invalid, "root"), indigo.Add(&r2, "root"))
 	if err == nil {
 		t.Error("expected error in multiple mutations")
 	}
@@ -521,7 +528,7 @@ func TestVault_ConcurrentMutations_RaceCondition(t *testing.T) {
 			ruleID := fmt.Sprintf("rule_%d", id)
 			newRule := indigo.NewRule(ruleID, "true")
 
-			if err := v.Mutate(indigo.Add(*newRule, "root")); err != nil {
+			if err := v.Mutate(indigo.Add(newRule, "root")); err != nil {
 				t.Errorf("Mutate failed for %s: %v", ruleID, err)
 			}
 		}(i)
@@ -533,5 +540,117 @@ func TestVault_ConcurrentMutations_RaceCondition(t *testing.T) {
 	finalRule := v.Rule()
 	if len(finalRule.Rules) != numWriters {
 		t.Errorf("Race condition detected! Expected %d rules, got %d", numWriters, len(finalRule.Rules))
+	}
+}
+
+// The Make Safe Path test verifies that mutations on the Vault
+// are not seen outside the vault by someone who grabbed to rule before
+// mutations happened.
+//
+// The test operates on this rule tree:
+//
+// ┌────────────────────────────────────────────────────────┐
+// │                                                        │
+// │ INDIGO RULES                                           │
+// │                                                        │
+// ├─────────────────┬────────┬────────────┬────────┬───────┤
+// │                 │        │            │ Result │       │
+// │ Rule            │ Schema │ Expression │ Type   │ Meta  │
+// ├─────────────────┼────────┼────────────┼────────┼───────┤
+// │ root            │        │            │ <nil>  │ <nil> │
+// │   childA        │        │            │ <nil>  │ <nil> │
+// │     grandChildB │        │            │ <nil>  │ <nil> │
+// └─────────────────┴────────┴────────────┴────────┴───────┘
+func TestVault_MakeSafePath(t *testing.T) {
+	// Setup
+	originalRoot := indigo.NewRule("root", "")
+	originalChildA := indigo.NewRule("childA", "")
+	originalGrandChildB := indigo.NewRule("grandChildB", "")
+	originalChildA.Rules[originalGrandChildB.ID] = originalGrandChildB
+	originalRoot.Rules[originalChildA.ID] = originalChildA
+	eng := indigo.NewEngine(cel.NewEvaluator())
+	v, err := indigo.NewVault(eng, originalRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//----------------------------------------
+	// We'll preserve the baseline so we can compare to it
+	// after we mutate the vault
+	baseline := v.Rule()
+	debugLogf(t, "baseline:\n%s\n", baseline)
+
+	if baseline.Rules["childA"] != originalChildA {
+		t.Error("childA unexpected poninter value")
+	}
+
+	if baseline.Rules["childA"].Rules["grandChildB"] != originalGrandChildB {
+		t.Error("grandChildB unexpected poninter value")
+	}
+
+	// Now, let's try to update grandChildB with a new rule.
+	// This will trigger makeSafePath for the path root -> childA -> grandChildB
+	newGrandChildB := indigo.NewRule("grandChildB", "true")
+	err = v.Mutate(indigo.Update(newGrandChildB))
+	if err != nil {
+		// If makeSafePath fails to copy correctly, this Mutate call might return an error
+		// like "parent not found for rule after cloning", which would indicate the bug.
+		t.Fatalf("Mutating deep rule failed: %v", err)
+	}
+
+	//----------------------------------------
+	// Verify the new state
+	after := v.Rule()
+
+	debugLogf(t, "baseline after grandChildB update:\n%s\n", baseline)
+	debugLogf(t, "after grandChildB update:\n%s\n", after)
+
+	// Check if the original tree was untouched (immutable copy-on-write)
+	if baseline.Rules["childA"] != originalChildA {
+		t.Logf("inVault: %p, original = %p\n", baseline.Rules["childA"], &originalChildA)
+		t.Error("Original root's childA should not be modified")
+	}
+	if originalChildA.Rules["grandChildB"] != originalGrandChildB {
+		t.Error("Original childA's grandChildB should not be modified")
+	}
+
+	// Verify that the updated grandChildB is in the new tree
+	foundGrandChildB, _ := after.FindRule("grandChildB")
+	if foundGrandChildB == nil {
+		t.Fatal("grandChildB not found in the final rule tree after update")
+	}
+	if foundGrandChildB.Expr != "true" {
+		t.Errorf("grandChildB expr not updated correctly, expected 'true', got '%s'", foundGrandChildB.Expr)
+	}
+	if foundGrandChildB == newGrandChildB {
+		// This is good, it means the new rule was inserted.
+		// The key is that its ancestors in the new tree are *copies*, not the originals.
+	} else {
+		t.Error("foundGrandChildB should be the newGrandChildB instance")
+	}
+
+	// Check that the path to grandChildB consists of new copies
+	// Parent of grandChildB should be a new instance of childA
+	parentOfGrandChildB := after.FindParent("grandChildB")
+	if parentOfGrandChildB == nil {
+		t.Fatal("Parent of grandChildB not found in final tree")
+	}
+	if parentOfGrandChildB == originalChildA {
+		t.Error("Parent of grandChildB should be a copy, not the original childA")
+	}
+	if parentOfGrandChildB.ID != "childA" {
+		t.Errorf("Parent ID mismatch, expected 'childA', got '%s'", parentOfGrandChildB.ID)
+	}
+
+	// Parent of childA (in the new tree) should be a new instance of root
+	parentOfChildA := after.FindParent("childA")
+	if parentOfChildA == nil {
+		t.Fatal("Parent of childA not found in final tree")
+	}
+	if parentOfChildA == originalRoot {
+		t.Error("Parent of childA should be a copy, not the original root")
+	}
+	if parentOfChildA.ID != "root" {
+		t.Errorf("Parent ID mismatch, expected 'root', got '%s'", parentOfChildA.ID)
 	}
 }
