@@ -78,7 +78,14 @@ type Rule struct {
 	// Options determining how the child rules should be handled.
 	EvalOptions EvalOptions `json:"eval_options"`
 
-	// Shards is a list of rules
+	// Shards is a list of rules that define a sharding strategy for the rule's children.
+	// If a rule has many rules, and some of them share a common characteristic, such as applying to
+	// cars registered in specific states, or to students in a particular status, the child rules can be
+	// grouped into a set of "shards", where all the children share the grouping criteria. For example,
+	// if you have 1000 rules that apply only to students in the "Admitted"  status and 600 rules that apply only to
+	// students in the "Enrolled" status, you can create two shards, one for each of the statuses. By calling
+	// BuildShards on the rule, the child rules will be re-arranged into shards using the rules you provided.
+	// See the shard tests and the [BuildShards] function for more information.
 	Shards []*Rule
 
 	// sortedRules contains a list of child rules, sorted by the
@@ -107,6 +114,7 @@ func NewRule(id string, expr string) *Rule {
 	}
 }
 
+// Add is a convenience function to add rr to r's Rules list
 func (r *Rule) Add(rr *Rule) error {
 	if rr == nil {
 		return fmt.Errorf("attempt to add nil rule")
@@ -114,51 +122,21 @@ func (r *Rule) Add(rr *Rule) error {
 	if r.Rules == nil {
 		r.Rules = map[string]*Rule{}
 	}
-	parent := r
-	// parent := r.TargetParent(rr)
-	// if parent == nil {
-	// 	return fmt.Errorf("no target parent found for %s", rr.ID)
-	// }
-	// if parent.Rules == nil {
-	// 	parent.Rules = map[string]*Rule{}
-	// }
-	parent.Rules[rr.ID] = rr
+	r.Rules[rr.ID] = rr
 	return nil
 }
 
-func (r *Rule) targetParent(rr *Rule) (*Rule, error) {
-	shardCount := 0
-	for _, shard := range r.sortedRules {
-		if !shard.shard {
-			continue
-		}
-		shardCount++
-		switch f := shard.Meta.(type) {
-		case func(*Rule) bool:
-			if f(rr) {
-				return shard, nil
-			}
-		default:
-			if shard.ID != defaultRuleID {
-				return nil, fmt.Errorf("unsupported meta type for shard %s: %t", shard.ID, shard.Meta)
-			}
-			return shard, nil
-		}
-	}
-	// If we're in a sharding situation, and no shard matched rr, we must
-	// be able to place rr in the default shard
-	if shardCount > 0 {
-		def, ok := r.Rules[defaultRuleID]
-		if !ok {
-			return nil, fmt.Errorf("rule %s does not match the a shard definition for %s and no default shard found", rr.ID, r.ID)
-		}
-		def.Rules[rr.ID] = rr
-	}
-	return r, nil
-}
-
+// defaultRuleID is the ID for the default shard rule. When define a set of shards
+// we need to account for any rules that do not meet the any shard definition. Such rules are
+// collected in the "default" shard rule.
 const defaultRuleID = "default"
 
+// BuildShards uses r's shard rules (if any) to sort child rules into their respective shards.
+//
+// Shard definitions can be recursive, i.e., rule A can have shards X and Y, and X can be further
+// subdivided into X1 and X2.
+//
+// Recursively applies shard rules on r's children.
 func (r *Rule) BuildShards() error {
 	detached := maps.Clone(r.Rules)
 	r.Rules = map[string]*Rule{}
@@ -197,12 +175,46 @@ func (r *Rule) BuildShards() error {
 
 	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
 	for _, newChild := range r.Rules {
+		// fmt.Println("child ", newChild.ID, r.ID)
 		err := newChild.BuildShards()
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// targetParent determines whether rr should be a direct child of r,
+// or placed in a shard (if any exist)
+func (r *Rule) targetParent(rr *Rule) (*Rule, error) {
+	shardCount := 0
+	for _, shard := range r.sortedRules {
+		if !shard.shard {
+			continue
+		}
+		shardCount++
+		switch f := shard.Meta.(type) {
+		case func(*Rule) bool:
+			if f(rr) {
+				return shard, nil
+			}
+		default:
+			if shard.ID != defaultRuleID {
+				return nil, fmt.Errorf("unsupported meta type for shard %s: %t", shard.ID, shard.Meta)
+			}
+			return shard, nil
+		}
+	}
+	// If we're in a sharding situation, and no shard matched rr, we must
+	// be able to place rr in the default shard
+	if shardCount > 0 {
+		def, ok := r.Rules[defaultRuleID]
+		if !ok {
+			return nil, fmt.Errorf("rule %s does not match the a shard definition for %s and no default shard found", rr.ID, r.ID)
+		}
+		def.Rules[rr.ID] = rr
+	}
+	return r, nil
 }
 
 // FindRule returns the rule with the id in the rule or any of its
