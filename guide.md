@@ -2172,6 +2172,8 @@ To use a vault your rules have to have globally unique IDs.
 
 Mutations do cause copies of rules to be made, but only the minimum number possible. This includes the parent of the rule being updated and any ancestors up to and including the root node. Child nodes are not copied.
 
+Go's garbage collector will "clean up" versions of the Vault rule that are not needed anymore. If you hold on to the rule after using it for evaluation, you will extend the time the memory is held. This might be a consideration of you are running many long-running batch processes that evaluate rules while at the same time receiving many and frequent rule updates.
+
 ## Using a Vault
 
 Creating a vault is simple:
