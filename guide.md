@@ -2104,7 +2104,7 @@ func BenchmarkParallelEval(b *testing.B) {
 
 Start with conservative settings and increase parallelism based on measured performance improvements in your specific environment.
 
-# 12. Sharding
+# 13. Sharding
 
 Parallel execution may improve the time it takes to process a set of rules, but doesn't change the amount of work the engine has to do. If your rule structure allows it, we can use sharding to reduce the number of rules that need to be evaluated.
 
@@ -2145,6 +2145,53 @@ After evaluation, the results will be organized under root by shard ("shard1" an
 ``Unshard()`` modifies the Result, removing the shard layer(s), but leaving the rule hierarchy otherwise untouched. If you care about the structure of the rules (parent/child relationships), this is a good way of looking at the results.
 
 ``Flat()`` gives you an iterator that returns all rule results (except for the shard rules), but without the parent/child hierarchy; in other words, a flat list of results. This is good when you only care about the rules that passed, and not the structure of the rules.
+
+# 14. Vaults
+
+Vaults provide lock-free, hot-reloadable, hierarchical rule management with full support for add, update, delete, and move operations.
+
+Imagine you have a server that is receiving thousands of API calls per second, and it uses a rule set to respond. During the lifetime of the server, rules may change. As we pointed out in the introduction, rules are useful because they allow users to modify logic without rebuilding and redeploying an app. So it is reasonable to expect that rules will change, sometimes frequently.
+
+You could manually use a mutex to protect your rule set, but during update operations all readers (who are serving thousands of API calls per second), must wait. This could cause potentially fatal deadlock situations.
+
+Instead, Indigo provides a Vault for this use case. Vaults use the Go sync package to allow each reader to obtain an immutable rule for evaluation, while allowing changes to an "offline" copy of the rule. When changes are complete, that version of the rule becomes the new active rule, and readers will receive it the next time they ask for the rule.
+
+## Mutations
+
+Rather than directly update the rule in the vault, writers submit lists of mutations to the Vault; the Vault then applies the mutations and updates the active rule. It does so by copying the least number of rules necessary so that the active version of the rule (which readers are using) is not modified.
+
+Vaults support add, update, delete and move mutations.
+
+The Vault guarantees that the active rule in the vault is only updated if all mutation succeed, and that readers never see an inconsistent rule state during updates.
+
+## Caveats
+
+Vaults are useful when a small number of changes happen each time. If you have 1,000 rules and 3 of them change every few minutes, submitting these changes to the vault each time is a good idea. However, if 990 of the rules change each time, you might want to build a completely new rule outside the vault, and only use its "update" mutation on the root rule to publish the new rule to readers.
+
+To use a vault your rules have to have globally unique IDs.
+
+Mutations do cause copies of rules to be made, but only the minimum number possible. This includes the parent of the rule being updated and any ancestors up to and including the root node. Child nodes are not copied.
+
+## Using a Vault
+
+Creating a vault is simple:
+
+```go
+v := indigo.NewVault(engine, indigo.NewRule("root", ""))
+child1 := indigo.NewRule("child1", "my expression")
+err := v.Mutate(indigo.Add(child1, "root"))
+```
+
+This creates a new vault with the Indigo engine and a default root rule. We then mutate the vault by adding child1 as a child of the root rule. The engine is required in the Vault because we will compile the rule before adding it to the vault.
+
+Using a rule from the vault is also simple:
+
+```go
+r := v.Rule()
+res, err := engine.Eval(...)
+```
+
+Readers and writers of the Vault do not need to obtain or release a mutex lock. The reader can hold on to the rule for as long as it needs it, maybe run a long batch process.
 
 ***
 </br>
