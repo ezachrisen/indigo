@@ -63,8 +63,6 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 		return nil, fmt.Errorf("rule %s: sortFunc and parallel options are incompatible - parallel processing cannot guarantee evaluation order", r.ID)
 	}
 
-	//		setSelfKey(r, d)
-
 	// Evaluate the rule's expression using the engine's ExpressionEvaluator
 	val, diagnostics, err := e.e.Evaluate(d, r.Expr, r.Schema, r.Self, r.Program,
 		defaultResultType(r), o.ReturnDiagnostics)
@@ -210,11 +208,6 @@ type evalResult struct {
 // with start and end positions. The last chunk may be smaller than batchSize
 // if the remaining range is not evenly divisible.
 //
-// This function uses recursion to build the chunk list, which is an interesting
-// approach but not necessarily the most efficient for large datasets. An iterative
-// approach might be more suitable for production code, but recursion demonstrates
-// functional programming concepts in Go.
-//
 // Parameters:
 //   - start: the starting position of the range (inclusive)
 //   - len: the end position of the range (exclusive) - this is the total length
@@ -243,7 +236,6 @@ func makeChunks(start, len, batchSize int) (chunks []chunk) {
 	chunks = append(chunks, c)
 
 	// Recursively create chunks for the remaining range
-	// Note: This is tail recursion - the recursive call is the last operation
 	chunks = append(chunks, makeChunks(c.end, len, batchSize)...)
 	return
 }

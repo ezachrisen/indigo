@@ -1,6 +1,7 @@
 package indigo_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -135,15 +136,17 @@ func TestShards(t *testing.T) {
 		root.Add(eastHSHonors)
 		root.Add(eastAtRisk)
 		generic := indigo.NewRule("anyAtRisk", `class == 2026 && gpa < 2.0`)
+		genericChild := indigo.NewRule("anyAtRiskChild", `gpa > 0.0`)
+		generic.Add(genericChild)
 		root.Add(generic)
+
 		debugLogf(t, "Before sharding:\n%s\n", root)
-		fmt.Println(root.Tree())
-		// }
-		debugLogf(t, "After sharding:\n%s\n", root)
+
 		// Before building the shards, root looks like this:
 		//
 		// root
 		// ├── anyAtRisk
+		// │   └── anyAtRiskChild
 		// ├── centralAtRisk
 		// ├── centralHonors
 		// ├── eastAtRisk
@@ -152,11 +155,11 @@ func TestShards(t *testing.T) {
 		// ├── woodlawnForeignAtRisk
 		// ├── woodlawnForeignHonors
 		// └── woodlawnHonors
-		//
 		err := root.BuildShards()
 		if err != nil {
 			t.Fatal(err)
 		}
+		debugLogf(t, "After sharding:\n%s\n", root)
 		gotTree := root.Tree()
 		// After building the shards, root should look like this:
 		wantTree := `
@@ -166,6 +169,7 @@ root
 │   └── centralHonors
 ├── default
 │   └── anyAtRisk
+│       └── anyAtRiskChild
 ├── east
 │   ├── eastAtRisk
 │   └── eastHonors
@@ -187,25 +191,90 @@ root
 		if err != nil {
 			t.Fatal(err)
 		}
+		d := map[string]any{
+			"school":      "Central",
+			"class":       2026,
+			"gpa":         3.7,
+			"nationality": "US",
+		}
+
+		res, err := e.Eval(context.Background(), root, d, indigo.ReturnDiagnostics(true))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wantResults := `
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                                  │
+│ INDIGO RESULTS                                                                                                                                   │
+│                                                                                                                                                  │
+├─────────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+│                             │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+│ Rule                        │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+│                             │       │ Fail  │       │        │             │         │             │            │            │         │         │
+├─────────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+│ root                        │ FAIL  │ PASS  │ 4     │ true   │             │         │             │            │            │         │ 0       │
+│   central                   │ FAIL  │ PASS  │ 2     │ true   │ yes         │         │             │            │            │         │ 0       │
+│     centralAtRisk           │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│     centralHonors           │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
+│   default                   │ FAIL  │ PASS  │ 1     │ true   │             │         │             │            │            │         │ 0       │
+│     anyAtRisk               │ FAIL  │ FAIL  │ 1     │ false  │ yes         │         │             │            │            │         │ 0       │
+│       anyAtRiskChild        │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
+│   east                      │ FAIL  │ FAIL  │ 2     │ false  │ yes         │         │             │            │            │         │ 0       │
+│     eastAtRisk              │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│     eastHonors              │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│   woodlawn                  │ FAIL  │ FAIL  │ 2     │ false  │ yes         │         │             │            │            │         │ 0       │
+│     default                 │ FAIL  │ PASS  │ 2     │ true   │             │         │             │            │            │         │ 0       │
+│       woodlawnAtRisk        │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│       woodlawnHonors        │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│     woodlawnForeign         │ FAIL  │ FAIL  │ 2     │ false  │ yes         │         │             │            │            │         │ 0       │
+│       woodlawnForeignAtRisk │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│       woodlawnForeignHonors │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+└─────────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+		`
+		gotResults := res.String()
+		wantResults = strings.TrimSpace(wantResults)
+		gotResults = strings.TrimSpace(gotResults)
+		if gotResults != wantResults {
+			t.Errorf("Wanted \n%s\n\nGot\n%s\n", wantResults, gotResults)
+		}
+		for r := range res.Flat() {
+			fmt.Println(r.Rule.ID)
+		}
+		err = res.Unshard()
+		if err != nil {
+			t.Error(err)
+		}
+		wantUnsharded := `
+┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                              │
+│ INDIGO RESULTS                                                                                                                               │
+│                                                                                                                                              │
+├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+│                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+│ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+│                         │       │ Fail  │       │        │             │         │             │            │            │         │         │
+├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+│ root                    │ FAIL  │ PASS  │ 9     │ true   │             │         │             │            │            │         │ 0       │
+│   anyAtRisk             │ FAIL  │ FAIL  │ 1     │ false  │ yes         │         │             │            │            │         │ 0       │
+│     anyAtRiskChild      │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
+│   centralAtRisk         │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│   centralHonors         │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
+│   eastAtRisk            │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│   eastHonors            │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│   woodlawnAtRisk        │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│   woodlawnForeignAtRisk │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│   woodlawnForeignHonors │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│   woodlawnHonors        │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+└─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+		`
+
+		gotUnsharded := res.String()
+
+		wantUnsharded = strings.TrimSpace(wantUnsharded)
+		gotUnsharded = strings.TrimSpace(gotUnsharded)
+		if gotUnsharded != wantUnsharded {
+			t.Errorf("Wanted \n%s\n\nGot\n%s\n", wantUnsharded, gotUnsharded)
+		}
 	}
-	// t.FailNow()
-	// d := map[string]any{
-	// 	"school":      "Central",
-	// 	"class":       2026,
-	// 	"gpa":         3.7,
-	// 	"nationality": "US",
-	// }
-	//
-	// res, err := e.Eval(context.Background(), root, d, indigo.ReturnDiagnostics(true))
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	// if _, ok := res.Results["centralHonors"]; !ok {
-	// 	t.Error("expected centralHonors")
-	// }
-	//
-	// ev := evaluated(res)
-	// if _, ok := ev["woodlawnHonors"]; ok {
-	// 	t.Error("woodlawn honors should not have been evaluated for a central student")
-	// }
 }
