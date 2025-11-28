@@ -91,7 +91,8 @@ func (u *Result) Unshard() error {
 
 // Flat returns all results from r as a single iterable list,
 // without rule hierarchy. Skips all shard rules, but results
-// from the shards is included.
+// from the shards is included. This is useful when you only care about which rules
+// passed, and you don't care about the hierarchy of parent/child rules.
 func (r *Result) Flat() iter.Seq[*Result] {
 	return func(yield func(*Result) bool) {
 		var dfs func(*Result) bool
@@ -109,6 +110,7 @@ func (r *Result) Flat() iter.Seq[*Result] {
 			for k := range node.Results {
 				keys = append(keys, k)
 			}
+			slices.Sort(keys)
 			for i := len(keys) - 1; i >= 0; i-- {
 				dfs(node.Results[keys[i]])
 			}

@@ -148,6 +148,8 @@ func (r *Rule) BuildShards() error {
 			return fmt.Errorf("reserved shard ID %s used (indigo will automatically add a default shard)", defaultRuleID)
 		}
 		sh.shard = true
+		// this will ensure that rules in the shard are only evaluated if the shard rule itself is true
+		sh.EvalOptions.StopIfParentNegative = true
 		r.Rules[sh.ID] = sh
 	}
 	if len(r.Shards) > 0 {

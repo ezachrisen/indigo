@@ -2,7 +2,6 @@ package indigo_test
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -87,34 +86,11 @@ func TestShards(t *testing.T) {
 	// This loop will catch any errors where the sort works most of the time, but fails sometimes.
 	for range 1 {
 
+		//--------------------------------------------------------------------------------
+		// SETUP
+
+		// Normal rules
 		root := indigo.NewRule("root", "")
-
-		// shard stuff
-
-		centralShard := indigo.NewRule("central", `school == "Central"`)
-		centralShard.Meta = func(r *indigo.Rule) bool {
-			return strings.Contains(r.Expr, `"Central"`)
-		}
-
-		woodlawnShard := indigo.NewRule("woodlawn", `school == "woodlawn"`)
-		woodlawnShard.Meta = func(r *indigo.Rule) bool {
-			return strings.Contains(r.Expr, `"woodlawn"`)
-		}
-
-		woodlawnForeignShard := indigo.NewRule("woodlawnForeign", `school == "woodlawn" && nationality != "US"`)
-		woodlawnForeignShard.Meta = func(r *indigo.Rule) bool {
-			return strings.Contains(r.Expr, `"woodlawn"`) && strings.Contains(r.Expr, `!= "US"`)
-		}
-		woodlawnShard.Shards = []*indigo.Rule{woodlawnForeignShard}
-
-		eastShard := indigo.NewRule("east", `school == "east"`)
-		eastShard.Meta = func(r *indigo.Rule) bool {
-			return strings.Contains(r.Expr, `"east"`)
-		}
-
-		root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
-
-		//--------------------------------------------------
 
 		centralHSHonors := indigo.NewRule("centralHonors", `school =="Central" && class == 2026 && gpa > 3.5`)
 		centralAtRisk := indigo.NewRule("centralAtRisk", `school =="Central" && class == 2026 && gpa < 2.5`)
@@ -140,6 +116,31 @@ func TestShards(t *testing.T) {
 		generic.Add(genericChild)
 		root.Add(generic)
 
+		// Let's define some shards
+		centralShard := indigo.NewRule("central", `school == "Central"`)
+		centralShard.Meta = func(r *indigo.Rule) bool {
+			return strings.Contains(r.Expr, `"Central"`)
+		}
+
+		woodlawnShard := indigo.NewRule("woodlawn", `school == "woodlawn"`)
+		woodlawnShard.Meta = func(r *indigo.Rule) bool {
+			return strings.Contains(r.Expr, `"woodlawn"`)
+		}
+
+		woodlawnForeignShard := indigo.NewRule("woodlawnForeign", `school == "woodlawn" && nationality != "US"`)
+		woodlawnForeignShard.Meta = func(r *indigo.Rule) bool {
+			return strings.Contains(r.Expr, `"woodlawn"`) && strings.Contains(r.Expr, `!= "US"`)
+		}
+		woodlawnShard.Shards = []*indigo.Rule{woodlawnForeignShard}
+
+		eastShard := indigo.NewRule("east", `school == "east"`)
+		eastShard.Meta = func(r *indigo.Rule) bool {
+			return strings.Contains(r.Expr, `"east"`)
+		}
+		//
+		//	Attach the shards to the rule
+		root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
+
 		debugLogf(t, "Before sharding:\n%s\n", root)
 
 		// Before building the shards, root looks like this:
@@ -155,12 +156,17 @@ func TestShards(t *testing.T) {
 		// ├── woodlawnForeignAtRisk
 		// ├── woodlawnForeignHonors
 		// └── woodlawnHonors
+
+		//--------------------------------------------------------------------------------
+		// Apply the shards to the rule
+
 		err := root.BuildShards()
 		if err != nil {
 			t.Fatal(err)
 		}
 		debugLogf(t, "After sharding:\n%s\n", root)
 		gotTree := root.Tree()
+
 		// After building the shards, root should look like this:
 		wantTree := `
 root
@@ -181,11 +187,11 @@ root
         ├── woodlawnForeignAtRisk
         └── woodlawnForeignHonors
 	`
-		wantTree = strings.TrimSpace(wantTree)
-		gotTree = strings.TrimSpace(gotTree)
-		if gotTree != wantTree {
-			t.Errorf("Wanted \n%s\n\nGot\n%s\n", wantTree, gotTree)
-		}
+		compareStrings(wantTree, gotTree, t)
+
+		//--------------------------------------------------------------------------------
+		// Evaluate the rule
+
 		e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
 		err = e.Compile(root, indigo.CollectDiagnostics(true))
 		if err != nil {
@@ -203,78 +209,86 @@ root
 			t.Fatal(err)
 		}
 
+		//--------------------------------------------------------------------------------
+		// Check the results
+
+		// Note that all shard rules under root are evaluated.
+		// The central rules are evaluated because the student data we used was for a Central high school student.
+		// The default shard and its children are also evaluated; the default shard is ALWAYS evaluated.
+		// The east and woodlawn child rules are not evaluated since the shard east and woodlawn shard rules prevent it.
+		// Viewing the results like this exposes the shards in the results.
 		wantResults := `
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                                                                                  │
-│ INDIGO RESULTS                                                                                                                                   │
-│                                                                                                                                                  │
-├─────────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
-│                             │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
-│ Rule                        │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
-│                             │       │ Fail  │       │        │             │         │             │            │            │         │         │
-├─────────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
-│ root                        │ FAIL  │ PASS  │ 4     │ true   │             │         │             │            │            │         │ 0       │
-│   central                   │ FAIL  │ PASS  │ 2     │ true   │ yes         │         │             │            │            │         │ 0       │
-│     centralAtRisk           │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│     centralHonors           │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
-│   default                   │ FAIL  │ PASS  │ 1     │ true   │             │         │             │            │            │         │ 0       │
-│     anyAtRisk               │ FAIL  │ FAIL  │ 1     │ false  │ yes         │         │             │            │            │         │ 0       │
-│       anyAtRiskChild        │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
-│   east                      │ FAIL  │ FAIL  │ 2     │ false  │ yes         │         │             │            │            │         │ 0       │
-│     eastAtRisk              │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│     eastHonors              │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│   woodlawn                  │ FAIL  │ FAIL  │ 2     │ false  │ yes         │         │             │            │            │         │ 0       │
-│     default                 │ FAIL  │ PASS  │ 2     │ true   │             │         │             │            │            │         │ 0       │
-│       woodlawnAtRisk        │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│       woodlawnHonors        │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│     woodlawnForeign         │ FAIL  │ FAIL  │ 2     │ false  │ yes         │         │             │            │            │         │ 0       │
-│       woodlawnForeignAtRisk │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│       woodlawnForeignHonors │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-└─────────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+┌───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                           │
+│ INDIGO RESULTS                                                                                                                            │
+│                                                                                                                                           │
+├──────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+│                      │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+│ Rule                 │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+│                      │       │ Fail  │       │        │             │         │             │            │            │         │         │
+├──────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+│ root                 │ FAIL  │ PASS  │ 4     │ true   │             │         │             │            │            │         │ 0       │
+│   central            │ FAIL  │ PASS  │ 2     │ true   │ yes         │         │ yes         │            │            │         │ 0       │
+│     centralAtRisk    │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│     centralHonors    │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
+│   default            │ FAIL  │ PASS  │ 1     │ true   │             │         │             │            │            │         │ 0       │
+│     anyAtRisk        │ FAIL  │ FAIL  │ 1     │ false  │ yes         │         │             │            │            │         │ 0       │
+│       anyAtRiskChild │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
+│   east               │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │ yes         │            │            │         │ 0       │
+│   woodlawn           │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │ yes         │            │            │         │ 0       │
+└──────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 		`
 		gotResults := res.String()
-		wantResults = strings.TrimSpace(wantResults)
-		gotResults = strings.TrimSpace(gotResults)
-		if gotResults != wantResults {
-			t.Errorf("Wanted \n%s\n\nGot\n%s\n", wantResults, gotResults)
-		}
-		for r := range res.Flat() {
-			fmt.Println(r.Rule.ID)
-		}
+		compareStrings(wantResults, gotResults, t)
+
+		// We can also remove the shard rules from the results, leaving the original structure. This preserves any parent/child relationships
+		// in the original rule, but omits the shard rules.
 		err = res.Unshard()
 		if err != nil {
 			t.Error(err)
 		}
 		wantUnsharded := `
-┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                                                                                                                              │
-│ INDIGO RESULTS                                                                                                                               │
-│                                                                                                                                              │
-├─────────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
-│                         │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
-│ Rule                    │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
-│                         │       │ Fail  │       │        │             │         │             │            │            │         │         │
-├─────────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
-│ root                    │ FAIL  │ PASS  │ 9     │ true   │             │         │             │            │            │         │ 0       │
-│   anyAtRisk             │ FAIL  │ FAIL  │ 1     │ false  │ yes         │         │             │            │            │         │ 0       │
-│     anyAtRiskChild      │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
-│   centralAtRisk         │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│   centralHonors         │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
-│   eastAtRisk            │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│   eastHonors            │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│   woodlawnAtRisk        │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│   woodlawnForeignAtRisk │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│   woodlawnForeignHonors │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-│   woodlawnHonors        │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
-└─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
-		`
-
+┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                                                         │
+│ INDIGO RESULTS                                                                                                                          │
+│                                                                                                                                         │
+├────────────────────┬───────┬───────┬───────┬────────┬─────────────┬─────────┬─────────────┬────────────┬────────────┬─────────┬─────────┤
+│                    │ Pass/ │ Expr. │ Chil- │ Output │ Diagnostics │ True    │ Stop If     │ Stop First │ Stop First │ Discard │ Discard │
+│ Rule               │ Fail  │ Pass/ │ dren  │ Value  │ Available?  │ If Any? │ Parent Neg. │ Pos. Child │ Neg. Child │ Pass    │ Fail    │
+│                    │       │ Fail  │       │        │             │         │             │            │            │         │         │
+├────────────────────┼───────┼───────┼───────┼────────┼─────────────┼─────────┼─────────────┼────────────┼────────────┼─────────┼─────────┤
+│ root               │ FAIL  │ PASS  │ 3     │ true   │             │         │             │            │            │         │ 0       │
+│   anyAtRisk        │ FAIL  │ FAIL  │ 1     │ false  │ yes         │         │             │            │            │         │ 0       │
+│     anyAtRiskChild │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
+│   centralAtRisk    │ FAIL  │ FAIL  │ 0     │ false  │ yes         │         │             │            │            │         │ 0       │
+│   centralHonors    │ PASS  │ PASS  │ 0     │ true   │ yes         │         │             │            │            │         │ 0       │
+└────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
+`
 		gotUnsharded := res.String()
+		compareStrings(wantUnsharded, gotUnsharded, t)
 
-		wantUnsharded = strings.TrimSpace(wantUnsharded)
-		gotUnsharded = strings.TrimSpace(gotUnsharded)
-		if gotUnsharded != wantUnsharded {
-			t.Errorf("Wanted \n%s\n\nGot\n%s\n", wantUnsharded, gotUnsharded)
+		// We can also view the results in in a "flat" way, where all returned rules are available via an iterator, but shard rules are omitted from the results
+		wantFlat := `
+root
+anyAtRisk
+anyAtRiskChild
+centralHonors
+centralAtRisk
+		`
+		flat := []string{}
+		for r := range res.Flat() {
+			flat = append(flat, r.Rule.ID)
 		}
+		gotFlat := strings.Join(flat, "\n")
+		compareStrings(wantFlat, gotFlat, t)
+	}
+}
+
+func compareStrings(want, got string, t *testing.T) {
+	t.Helper()
+	want = strings.TrimSpace(want)
+	got = strings.TrimSpace(got)
+	if got != want {
+		t.Errorf("Wanted\n%s\n\nGot\n%s\n", want, got)
 	}
 }

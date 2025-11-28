@@ -1,9 +1,8 @@
 # Indigo Guide
 
-Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules. Rules are expressions (such as ``"a > b"``) that are evaluated, and the outcomes used to direct appliation logic. Indigo does not itself provide a language for expressions, relying instead on a backend compiler (```interface ExpressionCompiler```) and evaluator (```interface ExpressionEvaluator```) to provide that. You can create your own backend evaluator, or use the default one, Google's Common Expression Language, CEL. 
+Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules. Rules are expressions (such as ``"a > b"``) that are evaluated, and the outcomes used to direct appliation logic. Indigo does not itself provide a language for expressions, relying instead on a backend compiler (```interface ExpressionCompiler```) and evaluator (```interface ExpressionEvaluator```) to provide that. You can create your own backend evaluator, or use the default one, Google's Common Expression Language, CEL.
 
 The purpose of the guide is to describe how Indigo's rules and the evaluation engine works. We encourage you to read the Indigo source code and examples as primary material, and consider this document as a companion to guide you through the concepts.
-
 
 Useful links
 
@@ -12,9 +11,7 @@ Useful links
 
 - [CEL Codelabs](https://codelabs.developers.google.com/codelabs/cel-go#0)
 
-
 ***
-
 
 [1. Introduction](#1-introduction)
 
@@ -26,26 +23,26 @@ Useful links
 
    1. Compilation and Evaluation
    1. Schemas
-   1. Data Types 
+   1. Data Types
    1. Boolean Scalar Expressions
    1. Operators
    1. Creating a Rule
    1. Compilation
    1. Input Data
-   1. Evaluation 
-   1. Evaluation Results 
-   1. Short Circuit Evaluation 
+   1. Evaluation
+   1. Evaluation Results
+   1. Short Circuit Evaluation
 
 [3. Indigo Rules Engine Types](#3-indigo-rules-engine-types)
 
-   1. The Engine type 
-   1. The Rule type 
+   1. The Engine type
+   1. The Rule type
 
 [4. Lists and Maps](#4-lists-and-maps)
 
    1. Lists
    1. Maps
-   1. Using the 'in' operator 
+   1. Using the 'in' operator
 
 [5. Macros and Functions](#5-macros-and-functions)
 
@@ -101,6 +98,10 @@ Useful links
    1. Enabling Parallel Evaluation
    1. Limitations
 
+   13. Vaults
+
+   14. Sharding
+
 [Appendix: More CEL Resources](#appendix-more-cel-resources)
 
 </br>
@@ -112,47 +113,49 @@ Useful links
 # 1. Introduction
 
 ## What is a rule?
-A rule is an expression that can be evaluated to produce an outcome. The outcome may be true or false, or it may be a number, or a string or any other value. The same can be said of any computer language code, but what makes rules different is that their expression language is "configurable" by end users of the software, allowing users (not developers) to modify how the software works without re-compiling or re-deploying the software. 
 
-Rules are data fed into the software, and the software processes the rules. 
+A rule is an expression that can be evaluated to produce an outcome. The outcome may be true or false, or it may be a number, or a string or any other value. The same can be said of any computer language code, but what makes rules different is that their expression language is "configurable" by end users of the software, allowing users (not developers) to modify how the software works without re-compiling or re-deploying the software.
+
+Rules are data fed into the software, and the software processes the rules.
 
 Consider these two equivalent rules, one written in Go, the other in a simplified "rule expression language":
 
-
 ##### Rule in Go
+
 ```go
   func qualify(x int) bool {
     if x > 10 {
       return true
     } else {
       return false
-	}
+ }
   }
 ```
 
-
-If the business logic changes, and instead of x > 10 we want x > 15, the Go program must be changed and recompiled. Of course, we could make the value a parameter, but what if instead of simply comparing x to a value, we also want to compare y to another value? We will have to continue changing the qualify function. 
+If the business logic changes, and instead of x > 10 we want x > 15, the Go program must be changed and recompiled. Of course, we could make the value a parameter, but what if instead of simply comparing x to a value, we also want to compare y to another value? We will have to continue changing the qualify function.
 
 ##### Rule in Expression Language
+
 ```go
 x > 10
 ```
 
-In the rule language example, we have an expression entered by the user at run-time as a string, and evaluated by the software. We are assuming that the software knows how to interpret the expression and produce a true/false result. If the logic changes, the user can change the rule at run-time without changing the software. 
+In the rule language example, we have an expression entered by the user at run-time as a string, and evaluated by the software. We are assuming that the software knows how to interpret the expression and produce a true/false result. If the logic changes, the user can change the rule at run-time without changing the software.
 
 ## Why use rules?
-Rules are not appropriate for all situations. For one thing, rules are much slower to evaluate than compiled code. Rules are also more difficult to debug, and because users are able to enter them into the software, they are less predictable than thoroughly tested, quality software. 
 
-So why use them? The primary reason to use rules is that they allow business logic to be configured outside of the software itself. It removes business logic from the software, and makes the software into a data processing *platform*, where the rules are the *data*. 
+Rules are not appropriate for all situations. For one thing, rules are much slower to evaluate than compiled code. Rules are also more difficult to debug, and because users are able to enter them into the software, they are less predictable than thoroughly tested, quality software.
 
-A side benefit of using rules in software is that it changes the way engineers think about writing the application. Instead of focusing on the specific business logic that must be implemented, engineers instead think about how to enable *configurable*, *dynamic* business logic that users control. 
+So why use them? The primary reason to use rules is that they allow business logic to be configured outside of the software itself. It removes business logic from the software, and makes the software into a data processing *platform*, where the rules are the *data*.
 
+A side benefit of using rules in software is that it changes the way engineers think about writing the application. Instead of focusing on the specific business logic that must be implemented, engineers instead think about how to enable *configurable*, *dynamic* business logic that users control.
 
 ## Expressions and rules in Indigo
-The Indigo rules engine goes beyond evaluating individual expressions (such as the "rule expression language" example above) and provides a structure and mechanisms to evaluate *groups* of rules arranged in specific ways for specific purposes. Indigo "outsources" the actual expression evaluation to Google's Common Expression Language, though other languages can be plugged in as well. 
 
+The Indigo rules engine goes beyond evaluating individual expressions (such as the "rule expression language" example above) and provides a structure and mechanisms to evaluate *groups* of rules arranged in specific ways for specific purposes. Indigo "outsources" the actual expression evaluation to Google's Common Expression Language, though other languages can be plugged in as well.
 
 ## General approach to using rules
+
 You can think of Indigo as a "filter" or a "true/false" checker. You prepare a record with data you want to check, send the record to Indigo, and Indigo will tell you if the record meets the requirements of the rule. Let's say you have 100 students, and you want to determine which students need to take at least 1 language course to graduate. You would set up your rule, then call Indigo for **each** of the 100 students, one by one. As we go through this guide, it's important to understand that it is a very simple process: send the 1 record to Indigo, get the answer, proceed. There is no magic here!
 
 </br>
@@ -161,87 +164,85 @@ You can think of Indigo as a "filter" or a "true/false" checker. You prepare a r
 ***
 </br>
 
-
 # 2. Expression Evaluation
 
-We start by looking at how to evaluate individual expressions. In this section we will use the terms "expression" and "rule" interchangeably. Later in this guide we will consider ways to arrange rules in hierarchies for different purposes. 
+We start by looking at how to evaluate individual expressions. In this section we will use the terms "expression" and "rule" interchangeably. Later in this guide we will consider ways to arrange rules in hierarchies for different purposes.
 
-All of examples use [Google's Common Expression Language](https://github.com/google/cel-go), CEL for short. 
-
+All of examples use [Google's Common Expression Language](https://github.com/google/cel-go), CEL for short.
 
 **Note:** In this guide we will touch on the basics of the language, for complete coverage you should read the [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md).
 
-
 > See the `cel/example_test.go` file's `Example_basic()` function for the code used in the examples.
 
-
-
 ## Compilation and Evaluation
-Indigo supports two-step processing of rules. The first step, compilation, is performed only once, when the rule is created or changed. The second step, evaluation, is performed whenever the software has new data to check against the rule. 
 
-During compilation the rule syntax, functions and data types are checked to ensure the expression is correct. The string is then transformed into an abstract syntax tree that the evaluator will later use to perform the evaluation. The engine only performs the compilation once, but can then evaluate the rules millions of times after. 
+Indigo supports two-step processing of rules. The first step, compilation, is performed only once, when the rule is created or changed. The second step, evaluation, is performed whenever the software has new data to check against the rule.
+
+During compilation the rule syntax, functions and data types are checked to ensure the expression is correct. The string is then transformed into an abstract syntax tree that the evaluator will later use to perform the evaluation. The engine only performs the compilation once, but can then evaluate the rules millions of times after.
 
 ## Input Data
+
 In our simple rule example from the introduction, the 'x' was the input data:
 
 ```go
 x > 10
 ```
 
-In order to evaluate the rule, we had to provide the value of x in our "real" world. 
+In order to evaluate the rule, we had to provide the value of x in our "real" world.
 
 In reality, rules may have many pieces of data, such as in this expression:
 
 ```go
 x > 10 && y != "blue" 
 ```
-Indigo allows you to pass a list of data elements to evaluation. 
 
+Indigo allows you to pass a list of data elements to evaluation.
 
 ## Schemas
-One of the strengths of CEL is that it provides type safe rule expressions, and violations of type safety is detected at compile time. This is very useful, since rule-writers get immediate feedback on the validity of their rules. 
 
-Building on our x and y example above , we have to define that in the *schema* for rules that use ``x`` and ``y``, ``x`` is an integer and ``y`` is a string. 
+One of the strengths of CEL is that it provides type safe rule expressions, and violations of type safety is detected at compile time. This is very useful, since rule-writers get immediate feedback on the validity of their rules.
+
+Building on our x and y example above , we have to define that in the *schema* for rules that use ``x`` and ``y``, ``x`` is an integer and ``y`` is a string.
 
 In Indigo, the indigo.Schema type is used to specify the schema:
-
 
 ```go
 // cel/example_test.go:Example_basic()
 schema := indigo.Schema{
-	Elements: []indigo.DataElement{
-		{Name: "x", Type: indigo.Int{}},
-		{Name: "y", Type: indigo.String{}},
-	},
+ Elements: []indigo.DataElement{
+  {Name: "x", Type: indigo.Int{}},
+  {Name: "y", Type: indigo.String{}},
+ },
 }
 ```
 
-The schema is a list of indigo.DataElements. Each data element has a Name, which is the **variable** name that users will use in rule expressions. 
+The schema is a list of indigo.DataElements. Each data element has a Name, which is the **variable** name that users will use in rule expressions.
 
-Every rule needs to have a schema, **but a schema can be used by many rules**. As we will see later when evaluating multiple rules, each rule must use the same or compatible schemas. 
+Every rule needs to have a schema, **but a schema can be used by many rules**. As we will see later when evaluating multiple rules, each rule must use the same or compatible schemas.
 
 ### Data types
+
 The data types supported by Indigo are in the `schema.go` file:
 
 - String
 - Integer
-- Float 
+- Float
 - Bool
 - Duration
 - Timestamp
-- Lists 
-- Maps 
-- Proto 
+- Lists
+- Maps
+- Proto
 
-Proto is the only type that can have a "nested" structure, similar to a Go struct. Go structs are not supported. 
+Proto is the only type that can have a "nested" structure, similar to a Go struct. Go structs are not supported.
 
-### Output Schema 
+### Output Schema
 
-Just as we specify the data types of the input to the rule, we can also specify the data type we expect as a result of rule evaluation. Unlike input schemas which can have many types, the output schema is a single type, and the default is boolean. 
+Just as we specify the data types of the input to the rule, we can also specify the data type we expect as a result of rule evaluation. Unlike input schemas which can have many types, the output schema is a single type, and the default is boolean.
 
-During compilation CEL will verify that the expression produces the type of output you specified in your output schema. 
+During compilation CEL will verify that the expression produces the type of output you specified in your output schema.
 
-You specify the output type by setting the ``ResultType`` field on the rule. 
+You specify the output type by setting the ``ResultType`` field on the rule.
 
 #### Exercises
 
@@ -250,10 +251,10 @@ Modify the example `cel/example_test.go:Example_basic()` and run ``go test`` in 
 1. Change the declared data type of `x` to a boolean
 1. Change the ResultType of the rule to a string
 
+## Boolean Scalar Expressions
 
-## Boolean Scalar Expressions 
-The simplest type of rule compares scalar values to each other to produce a true/false outcome. 
-Our simple x and y rule is such an expression: 
+The simplest type of rule compares scalar values to each other to produce a true/false outcome.
+Our simple x and y rule is such an expression:
 
 ```go
 x > 10 && y != "blue" 
@@ -273,42 +274,39 @@ CEL derives the value of the output from the value of the expression, in this ca
 
 ## Operators
 
-Supported logical operators: ``&& || !``. Parentheses can be used to group expressions. 
+Supported logical operators: ``&& || !``. Parentheses can be used to group expressions.
 
 Supported comparison operators: `` < <= >= > == != in ``
 
 Supported math operators: `` + - * / % ``
 
+## Creating a rule
 
-## Creating a rule 
-
-An Indigo rule is a Go struct, so it can be created like this: 
-
+An Indigo rule is a Go struct, so it can be created like this:
 
 ```go
 // cel/example_test.go:Example_basic()
 rule := indigo.Rule{
-	Schema:     schema,
-	ResultType: indigo.Bool{},
-	Expr:       `x > 10 && y != "blue"`,
+ Schema:     schema,
+ ResultType: indigo.Bool{},
+ Expr:       `x > 10 && y != "blue"`,
 }
 ```
 
-This initializes the rule, sets its schema, the expected output (boolean) and the expression to evaluate. Indigo defaults the result type to boolean if you don't specify one. 
+This initializes the rule, sets its schema, the expected output (boolean) and the expression to evaluate. Indigo defaults the result type to boolean if you don't specify one.
 
-There is also a convenience function called indigo.NewRule, which also initializes a map of child rules. We'll get to child rules later. 
+There is also a convenience function called indigo.NewRule, which also initializes a map of child rules. We'll get to child rules later.
 
-## Compilation 
+## Compilation
 
 Before compiling the rule, we need to create an instance of indigo.DefaultEngine:
-
 
 ```go
 // cel/example_test.go:Example_basic()
 engine := indigo.NewEngine(cel.NewEvaluator())
 ```
 
-This creates a new engine that will use CEL as its expression evaluation language. See the section on Indigo rules engine types for language evaluators and how the Indigo interface types work. 
+This creates a new engine that will use CEL as its expression evaluation language. See the section on Indigo rules engine types for language evaluators and how the Indigo interface types work.
 
 With an engine, we can now compile the rule:
 
@@ -316,12 +314,12 @@ With an engine, we can now compile the rule:
 // cel/example_test.go:Example_basic()
 err := engine.Compile(&rule)
 if err != nil {
-	fmt.Println(err)
-	return
+ fmt.Println(err)
+ return
 }
 ```
 
-If there are any compilation errors, the returned error message will tell you what the error is, and where in your expression the error occurred. 
+If there are any compilation errors, the returned error message will tell you what the error is, and where in your expression the error occurred.
 
 For example, here's an invalid rule and the corresponding compilation error message:
 
@@ -339,15 +337,15 @@ ERROR: <input>:1:11: undeclared reference to 'z' (in container '')
 
 ## Input Data
 
-Now that we have a compiled rule, we can start to evaluate data against it. Let's assume we are serving an API that receives data, and it's our job to check the data against the rule and report the results. 
+Now that we have a compiled rule, we can start to evaluate data against it. Let's assume we are serving an API that receives data, and it's our job to check the data against the rule and report the results.
 
-We prepare the data for evaluation like this: 
+We prepare the data for evaluation like this:
 
 ```go
 // cel/example_test.go:Example_basic()
 data := map[string]interface{}{
-	"x": 11,
-	"y": "red",
+ "x": 11,
+ "y": "red",
 }
 ```
 
@@ -356,45 +354,43 @@ The data is placed in a map, where the **key** is the variable **name** you spec
 ```go
 // Flashback to the schema definition earlier in this section
 schema := indigo.Schema{
-	Elements: []indigo.DataElement{
-		{Name: "x", Type: indigo.Int{}},
-		{Name: "y", Type: indigo.String{}},
-	},
+ Elements: []indigo.DataElement{
+  {Name: "x", Type: indigo.Int{}},
+  {Name: "y", Type: indigo.String{}},
+ },
 }
 ```
 
-A data map does not need to define values for all variables in a schema, but if a variable is used in a rule, it must be in the data map. 
+A data map does not need to define values for all variables in a schema, but if a variable is used in a rule, it must be in the data map.
 
-## Evaluation 
+## Evaluation
 
 We are finally ready to evaluate the input data (x=11, y=red) against the rule to determine if the rule is true or false:
 
 ```go
 results, err := engine.Eval(context.Background(), &rule, data)
 if err != nil {
-	fmt.Println(err)
-	return
+ fmt.Println(err)
+ return
 }
 fmt.Println(results.ExpressionPass)
 
 // Output: true
 ```
 
-The evaluation returns an ``indigo.Result struct``, and an error. It is not an error if the rule returns false; an error is an unexpected issue, such as incorrect data passed. 
+The evaluation returns an ``indigo.Result struct``, and an error. It is not an error if the rule returns false; an error is an unexpected issue, such as incorrect data passed.
 
-Eval accepts a context.Context, and will stop evaluation if the context's deadline expires or is canceled, returning no results and the context's error. 
+Eval accepts a context.Context, and will stop evaluation if the context's deadline expires or is canceled, returning no results and the context's error.
 
+## Evaluation Results
 
+The ``indigo.Result`` struct contains the output of the expression evaluation, and additional information to help calling code process the results. For now, we'll focus on the boolean ``Result.ExpressionPass`` field. This field will tell you if the output of the expression is true or false, which is what we are interested in our example. Later we will look more in depth at the Results type.
 
-## Evaluation Results 
+## Short Circuiting
 
-The ``indigo.Result`` struct contains the output of the expression evaluation, and additional information to help calling code process the results. For now, we'll focus on the boolean ``Result.ExpressionPass`` field. This field will tell you if the output of the expression is true or false, which is what we are interested in our example. Later we will look more in depth at the Results type. 
+Many languages, including Go, implement and/or short-circuiting.
 
-## Short Circuiting 
-
-Many languages, including Go, implement and/or short-circuiting. 
-
-For example, in this statement, the comparison ``b == "blue"`` will never be executed: 
+For example, in this statement, the comparison ``b == "blue"`` will never be executed:
 
 ```go
 var a *int 
@@ -405,20 +401,17 @@ if a!=nil && b == "blue" {
 }
 ```
 
-CEL also implements short circuiting, but even allows for a!=nil to be the second clause of an && comparison. See the [table](https://github.com/google/cel-go/blob/master/README.md#partial-state) for examples. 
-
-
+CEL also implements short circuiting, but even allows for a!=nil to be the second clause of an && comparison. See the [table](https://github.com/google/cel-go/blob/master/README.md#partial-state) for examples.
 
 #### Exercises
 
 Modify the example `cel/example_test.go:Example_basic()` and run ``go test`` in the ``cel`` directory.
 
 1. Comment out the input value for y
-   Notice the error message, what does it mean? 
+   Notice the error message, what does it mean?
 
 1. Change the input value of x to 7
    Why did this not give an error message? (Although we got false when we wanted true)
-
 
 </br>
 </br>
@@ -432,43 +425,40 @@ This section is a deeper dive into how Indigo is organized. Knowing this will ma
 
 ## The Engine Types
 
-Indigo's rules engine is specified by an interface called Engine, which is composed of two interfaces, a Compiler and an Evaluator. The Compiler interface specifies the Compile method, and Evaluator specifies the Eval method. 
+Indigo's rules engine is specified by an interface called Engine, which is composed of two interfaces, a Compiler and an Evaluator. The Compiler interface specifies the Compile method, and Evaluator specifies the Eval method.
 
-The DefaultEngine struct type implements the Engine interface, and most users will use this type. Since it implements Engine, DefaultEngine implements both Compile and Evaluate. Alternate implementations are possible, including rule evaluators that do not support compilation, for example. 
+The DefaultEngine struct type implements the Engine interface, and most users will use this type. Since it implements Engine, DefaultEngine implements both Compile and Evaluate. Alternate implementations are possible, including rule evaluators that do not support compilation, for example.
 
-The engine types are concerned with processing groups of rules organized in a hierarchies. The engine types **do not** concern themselves with the exact nature of the expressions being compiled or evaluated. Instead, they rely on the expression types for that. 
+The engine types are concerned with processing groups of rules organized in a hierarchies. The engine types **do not** concern themselves with the exact nature of the expressions being compiled or evaluated. Instead, they rely on the expression types for that.
 
-## The Expression Types 
-There are two expression interfaces, ExpressionEvaluator, which specifies the evaluation of a single expression, and ExpressionCompiler, which specifies the compilation of a single expression. 
+## The Expression Types
 
-These two interfaces are combined in the ExpressionCompilerEvaluator. 
+There are two expression interfaces, ExpressionEvaluator, which specifies the evaluation of a single expression, and ExpressionCompiler, which specifies the compilation of a single expression.
+
+These two interfaces are combined in the ExpressionCompilerEvaluator.
 
 The indigo/cel.Evaluator implements the ExpressionCompilerEvaluator.
 
-Users of Indigo do not need to interact directly with expression compilation or evaluation; the DefaultEngine handles this. 
+Users of Indigo do not need to interact directly with expression compilation or evaluation; the DefaultEngine handles this.
 
-## Rule ownership 
+## Rule ownership
 
-Rules are owned by the Go code that calls Indigo engine methods. The indigo.DefaultEngine does **not** store or maintain rules. It is the responsibility of the calling code to be goroutine-safe and to persist rule data for as long as it is needed in the life of the application. 
+Rules are owned by the Go code that calls Indigo engine methods. The indigo.DefaultEngine does **not** store or maintain rules. It is the responsibility of the calling code to be goroutine-safe and to persist rule data for as long as it is needed in the life of the application.
 
-During compilation, an Engine may update a rule by setting the Program field to the compilation output of the rule. The Engine may require that data later during the evaluation phase. It is the responsibility of the calling code to ensure that the Program data is not modified, and that if the rule expression is changed, the rule must be recompiled. 
-
-
+During compilation, an Engine may update a rule by setting the Program field to the compilation output of the rule. The Engine may require that data later during the evaluation phase. It is the responsibility of the calling code to ensure that the Program data is not modified, and that if the rule expression is changed, the rule must be recompiled.
 
 ## Using a Non-CEL Evaluator
 
-There are several Go implementations of scripting languages, such as Javscript implemented by [Otto](https://github.com/robertkrimen/otto), and Lua. These languages are good choices for rule evaluation as well. 
+There are several Go implementations of scripting languages, such as Javscript implemented by [Otto](https://github.com/robertkrimen/otto), and Lua. These languages are good choices for rule evaluation as well.
 
 To illustrate how Indigo's interface types work together, here's how you could implement and use a different evaluator such as Otto:
 
 1. In your own module, create a new struct, ``MyEvaluator``
-1. Decide if the language requires compilation; if it does, implement the ExpressionCompiler interface, including converting types from Indigo types to the evaluator's types. 
+1. Decide if the language requires compilation; if it does, implement the ExpressionCompiler interface, including converting types from Indigo types to the evaluator's types.
 1. Implement the ExpressionEvaluator interface
 1. When instantiating indigo.DefaultEngine, pass ``MyEvaluator``
 
-Now, when you call indigo.DefaultEngine.Compile or .Evaluate, it will use your evaluator with your expression language. 
-
-
+Now, when you call indigo.DefaultEngine.Compile or .Evaluate, it will use your evaluator with your expression language.
 
 </br>
 </br>
@@ -477,40 +467,38 @@ Now, when you call indigo.DefaultEngine.Compile or .Evaluate, it will use your e
 </br>
 
 # 4. Lists and Maps
-In [section 2](#2-expression-evaluation), we saw how to use scalar values in input data and rule evaluation. Indigo also supports lists and maps in the expression language. These types function much the same as Go slices and maps. 
 
-## Lists 
+In [section 2](#2-expression-evaluation), we saw how to use scalar values in input data and rule evaluation. Indigo also supports lists and maps in the expression language. These types function much the same as Go slices and maps.
+
+## Lists
 
 Below is an example of how to define a list, pass a list in the input data, and how to use a list in a rule expression:
 
-
 > All of the examples in this section are from cel/example_test.go:Example_list()
-
 
 ```go
 
 schema := indigo.Schema{
-	Elements: []indigo.DataElement{
-		{Name: "grades", Type: indigo.List{ValueType: indigo.Float{}}},
-	},
+ Elements: []indigo.DataElement{
+  {Name: "grades", Type: indigo.List{ValueType: indigo.Float{}}},
+ },
 }
 
 rule := indigo.Rule{
-	Schema:     schema,
-	ResultType: indigo.Bool{},
-	Expr:       `size(grades) > 3`,
+ Schema:     schema,
+ ResultType: indigo.Bool{},
+ Expr:       `size(grades) > 3`,
 }
 
 data := map[string]interface{}{
-	"grades": []float64{3.4, 3.6, 3.8, 2.9},
+ "grades": []float64{3.4, 3.6, 3.8, 2.9},
 }
 
 ```
 
-As you can see in the example, when we declare the list variable "grades" in the schema, we need to specify the type of elements we're storing with the ``ValueType`` field. Any Indigo type can be a ``ValueType``. 
+As you can see in the example, when we declare the list variable "grades" in the schema, we need to specify the type of elements we're storing with the ``ValueType`` field. Any Indigo type can be a ``ValueType``.
 
-In a rule we can access an individual element: 
-
+In a rule we can access an individual element:
 
 ```go
 rule.Expr = `grades[1] == 3.6`
@@ -522,26 +510,23 @@ With CEL [macros](https://github.com/google/cel-spec/blob/master/doc/langdef.md#
 rule.Expr = `grades.exists(g, g < 3.0)`
 ```
 
-In the macro we define an arbitrary variable g, which will represent each element **value** in the list as CEL executes the macro. 
+In the macro we define an arbitrary variable g, which will represent each element **value** in the list as CEL executes the macro.
 
 This rule will evaluate to true, since one of the grades is 2.9.
 
 See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros) for more macros.
 
-
 ## Maps
-Maps work like Go maps, where values are indexed by a key, such as a string. 
 
-
+Maps work like Go maps, where values are indexed by a key, such as a string.
 
 > All of the examples in this section are from cel/example_test.go:Example_map()
 
-
 ```go
 schema := indigo.Schema{
-	Elements: []indigo.DataElement{
-		{Name: "flights", Type: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.String{}}},
-	},
+ Elements: []indigo.DataElement{
+  {Name: "flights", Type: indigo.Map{KeyType: indigo.String{}, ValueType: indigo.String{}}},
+ },
 }
 
 data := map[string]interface{}{
@@ -549,14 +534,13 @@ data := map[string]interface{}{
 }
 
 rule := indigo.Rule{
-	Schema:     schema, ①
-	ResultType: indigo.Bool{},
-	Expr:       `flights.exists(k, flights[k] == "Delayed")`,
+ Schema:     schema, ①
+ ResultType: indigo.Bool{},
+ Expr:       `flights.exists(k, flights[k] == "Delayed")`,
 }
 ```
 
-
-For maps we have to specify the key type as well as the value type. 
+For maps we have to specify the key type as well as the value type.
 
 In macros that operate on maps, the value (k) is the map **key**, and we can use that to access values in the map. This will return false, since UA 1500 is delayed:
 
@@ -565,7 +549,7 @@ flights["UA1500"] == "On Time"
 
 ```
 
-## Using the 'in' operator 
+## Using the 'in' operator
 
 In addition to the ``exists`` macro, we can use the operator ``in`` to determine if a value is in a list, or a key is in a map.
 
@@ -575,21 +559,20 @@ In the data we have a map and a list:
 
 ```go
 data := map[string]interface{}{
-	"flights": map[string]string{"UA1500": "On Time", 
+ "flights": map[string]string{"UA1500": "On Time", 
                "DL232": "Delayed", "AA1622": "Delayed"},
-	"holding": []string{"SW123", "BA355", "UA91"},
+ "holding": []string{"SW123", "BA355", "UA91"},
 }
 
 rule := indigo.Rule{
-	Schema:     schema,
-	ResultType: indigo.Bool{},
-	Expr:       `"UA1500" in flights && "SW123" in holding`,
+ Schema:     schema,
+ ResultType: indigo.Bool{},
+ Expr:       `"UA1500" in flights && "SW123" in holding`,
 }
 
 ```
 
-The rule checks if the **key** "UA1500" is in the ``flights`` map, and if the **value** "SW123" is in the ``holding`` list. 
-
+The rule checks if the **key** "UA1500" is in the ``flights`` map, and if the **value** "SW123" is in the ``holding`` list.
 
 </br>
 </br>
@@ -598,14 +581,16 @@ The rule checks if the **key** "UA1500" is in the ``flights`` map, and if the **
 </br>
 
 # 5. Macros and Functions
-CEL provides macros and functions that to help us evaluate conditions other than ``==`` or ``>``. 
+
+CEL provides macros and functions that to help us evaluate conditions other than ``==`` or ``>``.
 
 ## Macros
+
 We have already seen one macro (`exists`), but here are some of the macros CEL provides:
 
-- ``has`` checks if a field exists 
-- ``all`` will be true if all elements meet the predicate 
-- ``exists_one`` will be true if only 1 element matches the 
+- ``has`` checks if a field exists
+- ``all`` will be true if all elements meet the predicate
+- ``exists_one`` will be true if only 1 element matches the
 - ``filter`` can be applied to a list and returns a new list with the matching elements
 
 Macros can be chained, as in this example from the [CEL Codelabs tutorial](https://codelabs.developers.google.com/codelabs/cel-go#10):
@@ -618,21 +603,21 @@ jwt.extra_claims.exists(c, c.startsWith('group'))
               .all(g, g.endsWith('@acme.co')))
 ```
 
-See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros) for a complete list of macros. 
+See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#macros) for a complete list of macros.
 
-There is no macro to do aggregate math on lists or maps. It is recommended to do such calculations outside rule evaluation and provide the data in the input. See [this discussion](https://groups.google.com/g/cel-go-discuss/c/1Y_1APJHk0c/m/JSsKRdGeAQAJ) in the CEL group for more information. 
-
+There is no macro to do aggregate math on lists or maps. It is recommended to do such calculations outside rule evaluation and provide the data in the input. See [this discussion](https://groups.google.com/g/cel-go-discuss/c/1Y_1APJHk0c/m/JSsKRdGeAQAJ) in the CEL group for more information.
 
 ## Functions
-Functions allow us to manipulate input values to assist in evaluation. See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) for a complete list. 
+
+Functions allow us to manipulate input values to assist in evaluation. See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) for a complete list.
 
 Here are a few favorites:
 
-- ``size`` gets the length of a string, list or map 
+- ``size`` gets the length of a string, list or map
 - ``contains`` checks if a string contains another string
 - ``startsWith`` checks if a string begins with a prefix
-- ``endsWith`` checks if a string ends with a suffix 
-- ``matches`` matches a string against a regular expression 
+- ``endsWith`` checks if a string ends with a suffix
+- ``matches`` matches a string against a regular expression
 
 There are also functions related to types, such as:
 
@@ -641,9 +626,7 @@ There are also functions related to types, such as:
 
 CEL comes with [extension functions](https://github.com/google/cel-go/tree/master/ext) that can be enabled as well, adding more string functions, for example.
 
-We'll cover functions related to timestamps and durations later. 
-
-
+We'll cover functions related to timestamps and durations later.
 
 </br>
 </br>
@@ -652,20 +635,20 @@ We'll cover functions related to timestamps and durations later.
 </br>
 
 # 6. Using Protocol Buffers in Rules
-Until now all of our rules have operated on simple values, either as individual variables (numbers, strings) or as lists of such simple values. Missing from Indigo and CEL is the ability to use Go structs as input data. (An experimental implementation of struct-support exists in Indigo, but is not recommended). 
 
-Instead, CEL provides support for using Protocol Buffer types in rules. This opens more possibilities for organizing data we pass to rules. If our application serves gRPC APIs, and defines its types with protocol buffers, we can seamlessly pass protocol buffers from our Go code to Indigo rules (and the reverse, as we'll see later). 
+Until now all of our rules have operated on simple values, either as individual variables (numbers, strings) or as lists of such simple values. Missing from Indigo and CEL is the ability to use Go structs as input data. (An experimental implementation of struct-support exists in Indigo, but is not recommended).
 
-The design decisions made in CEL are congruent with those made by protocol buffers, and this is not an accident. CEL natively supports ``google.protobuf.Timestamp`` and ``google.protobuf.Duration``. We'll see more about that later. 
+Instead, CEL provides support for using Protocol Buffer types in rules. This opens more possibilities for organizing data we pass to rules. If our application serves gRPC APIs, and defines its types with protocol buffers, we can seamlessly pass protocol buffers from our Go code to Indigo rules (and the reverse, as we'll see later).
 
-See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#protocol-buffer-data-conversion) for how protocol buffers are converted into CEL's internal representation. 
+The design decisions made in CEL are congruent with those made by protocol buffers, and this is not an accident. CEL natively supports ``google.protobuf.Timestamp`` and ``google.protobuf.Duration``. We'll see more about that later.
 
+See the [CEL documentation](https://github.com/google/cel-spec/blob/master/doc/langdef.md#protocol-buffer-data-conversion) for how protocol buffers are converted into CEL's internal representation.
 
-To use create protocol buffer definitions and generate the code for them, follow Google's tutorial [here](https://developers.google.com/protocol-buffers/docs/gotutorial). In the rest of the guide we'll assume you have a working knowledge of protocol buffers. 
+To use create protocol buffer definitions and generate the code for them, follow Google's tutorial [here](https://developers.google.com/protocol-buffers/docs/gotutorial). In the rest of the guide we'll assume you have a working knowledge of protocol buffers.
 
 After you've defined your protocol buffers and imported the generated package into your Go code, you can declare an Indigo schema with a protocol buffer type.
 
-Indigo includes a sample protocol buffer [student.proto](../testdata/proto/student.proto), used in all the examples. 
+Indigo includes a sample protocol buffer [student.proto](../testdata/proto/student.proto), used in all the examples.
 
 ```proto
 syntax = "proto3";
@@ -684,8 +667,8 @@ message Student {
   google.protobuf.Timestamp enrollment_date = 7; 
   
   enum status_type {
-	ENROLLED = 0;
-	PROBATION = 1;
+ ENROLLED = 0;
+ PROBATION = 1;
   }
   
   map<string, string> attrs = 6;
@@ -693,8 +676,8 @@ message Student {
   repeated double grades = 5;
 
   message Suspension {
-	string cause = 1;
-	google.protobuf.Timestamp date = 2;
+ string cause = 1;
+ google.protobuf.Timestamp date = 2;
   }
 
   repeated Suspension suspensions = 8;
@@ -713,13 +696,14 @@ A few things to note about this protocol buffer definition:
 - It has timestamps (an imported type)
 - It has durations (an imported type)
 - It has enumerations
-- It has maps and lists 
-- It has an embedded message type 
+- It has maps and lists
+- It has an embedded message type
 
-Generally, you can assume that any valid protocol buffer can be used in an Indigo rule. 
+Generally, you can assume that any valid protocol buffer can be used in an Indigo rule.
 
 ## Rules using protocol buffer types
-Rules using protocol buffer types work exactly like rules with simple types such as strings and numbers. 
+
+Rules using protocol buffer types work exactly like rules with simple types such as strings and numbers.
 
 > The code in this section is from cel/example_test.go:Example_protoBasic
 
@@ -728,12 +712,12 @@ In some ways, using protocol buffers instead of native Go types is easier, becau
 ```go
 education := indigo.Schema{
   Elements: []indigo.DataElement{
-	  {Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+   {Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
   },
 }
 data := map[string]interface{}{
   "student": &school.Student{
-	  Age: 21,
+   Age: 21,
   },
 }
 
@@ -745,13 +729,14 @@ rule := indigo.Rule{
 // Output: false
 ```
 
-
-When we declare the schema we provide the address of an instance of the protocol buffer type (``&school.Student{}``). This means that the code that declares a schema has to have access to the generated code. (Later we'll see how to dynamically load protocol buffer types). 
+When we declare the schema we provide the address of an instance of the protocol buffer type (``&school.Student{}``). This means that the code that declares a schema has to have access to the generated code. (Later we'll see how to dynamically load protocol buffer types).
 
 ## Field names in rule expressions
-In the Go code (where we define the data map), the field ``Age`` is capitalized. That's because protocol buffers are rendered as Go structs where all fields are exported. However, **inside** the rule expression, ``age`` is lower case. That is because **inside** rule expressions, the names are the names used in the ``.proto`` file. So, the field ``enrollment_date`` will be ``EnrollmentDate`` in Go, but ``enrollment_date`` in rule expressions. 
+
+In the Go code (where we define the data map), the field ``Age`` is capitalized. That's because protocol buffers are rendered as Go structs where all fields are exported. However, **inside** the rule expression, ``age`` is lower case. That is because **inside** rule expressions, the names are the names used in the ``.proto`` file. So, the field ``enrollment_date`` will be ``EnrollmentDate`` in Go, but ``enrollment_date`` in rule expressions.
 
 ## Nested fields
+
 The Student protocol buffer includes a nested field, ``suspensions``, which is a list of objects of the ``Suspension`` protocol buffer type. To access these elements, we don't need to do anything special:
 
 > The sample code is from cel/example_test.go:Example_protoNestedMessages()
@@ -759,16 +744,16 @@ The Student protocol buffer includes a nested field, ``suspensions``, which is a
 ```go
 education := indigo.Schema{
   Elements: []indigo.DataElement{
-	  {Name: "x", Type: indigo.Proto{Message: &school.Student{}}}},
+   {Name: "x", Type: indigo.Proto{Message: &school.Student{}}}},
 }
 
 data := map[string]interface{}{
   "x": &school.Student{
-	  Grades: []float64{3.0, 2.9, 4.0, 2.1},
-	  Suspensions: []*school.Student_Suspension{
-		  &school.Student_Suspension{Cause: "Cheating"},
-		  &school.Student_Suspension{Cause: "Fighting"},
-	  },
+   Grades: []float64{3.0, 2.9, 4.0, 2.1},
+   Suspensions: []*school.Student_Suspension{
+    &school.Student_Suspension{Cause: "Cheating"},
+    &school.Student_Suspension{Cause: "Fighting"},
+   },
   },
 }
 
@@ -781,14 +766,15 @@ rule := indigo.Rule{
 
 ```
 
-In this example, we've chosen the variable name ``x``, to illustrate that the variable name can be anything, and that it should not be confused with the protocol buffer type ``Student``. 
+In this example, we've chosen the variable name ``x``, to illustrate that the variable name can be anything, and that it should not be confused with the protocol buffer type ``Student``.
 
-In the rule, we access the list of suspensions, then iterate through them and check if the cause for the suspension was fighting. Again, note that inside the rule, the names used are the **protocol buffer field names**. 
+In the rule, we access the list of suspensions, then iterate through them and check if the cause for the suspension was fighting. Again, note that inside the rule, the names used are the **protocol buffer field names**.
 
 ## Enums
+
 Referring to protocol buffer enums in rule expressions is simple and convenient. The definition of ``Student`` included an enum (``status_type``) and a field on the ``Student`` called ``status`` of type ``status_type``. The relevant parts of the protocol buffer definition are repeated here:
 
-```proto 
+```proto
 package testdata.school;
 ...
 
@@ -797,22 +783,22 @@ message Student {
   status_type status = 4;
   ...
   enum status_type {
-	ENROLLED = 0;
-	PROBATION = 1;
+ ENROLLED = 0;
+ PROBATION = 1;
   }
   ...
 }
 ```
 
-We can use the name of the enum value directly in the expression. So instead of using 0 for the ENROLLED state, we can use the enum constant name: 
+We can use the name of the enum value directly in the expression. So instead of using 0 for the ENROLLED state, we can use the enum constant name:
 
 > The sample code is from [Example_protoEnum()](cel/example_test.go)
 
 ```go
 
 rule := indigo.Rule{
-	Schema: education,
-	Expr:   `student.status == testdata.school.Student.status_type.PROBATION`,
+ Schema: education,
+ Expr:   `student.status == testdata.school.Student.status_type.PROBATION`,
 }
 
 ```
@@ -820,6 +806,7 @@ rule := indigo.Rule{
 ## Referring to protocol buffer types in rule expressions
 
 To refer to the constant name, we needed to use the full name, which includes the protocol buffer **package** name ``testdata``:
+
 ```go
       testdata.school.Student.status_type.PROBATION
       |--------------|   ^          ^        ^
@@ -836,60 +823,59 @@ To refer to the constant name, we needed to use the full name, which includes th
                         
  ```
 
-This is the way to refer to all protocol buffer types within rules. 
+This is the way to refer to all protocol buffer types within rules.
 
-## Oneofs 
+## Oneofs
 
-We have extended our Student definition with housing information, which can be either on or off campus: 
+We have extended our Student definition with housing information, which can be either on or off campus:
 
 ```proto
 
   oneof housing_address {
-	Address off_campus = 10;
-	CampusAddress on_campus = 11;
+ Address off_campus = 10;
+ CampusAddress on_campus = 11;
   }
 
 
   message Address {
-	string street = 1;
-	string city = 2;
-	string state = 3;
-	string zip = 4;
+ string street = 1;
+ string city = 2;
+ string state = 3;
+ string zip = 4;
   }
 
 
   message CampusAddress {
-	string building = 1;
-	string room = 2;
+ string building = 1;
+ string room = 2;
   }
 
 ```
 
-We then set the oneof field in the data, and a rule that checks if the student lives in a particular building: 
+We then set the oneof field in the data, and a rule that checks if the student lives in a particular building:
 
 ```go
 data := map[string]interface{}{
-	"student": &school.Student{
-		Status: school.Student_ENROLLED,
-		HousingAddress: &school.Student_OnCampus{
-			&school.Student_CampusAddress{
-				Building: "Hershey",
-				Room:     "308",
-			},
-		},
-	},
+ "student": &school.Student{
+  Status: school.Student_ENROLLED,
+  HousingAddress: &school.Student_OnCampus{
+   &school.Student_CampusAddress{
+    Building: "Hershey",
+    Room:     "308",
+   },
+  },
+ },
 }
 
 rule := indigo.Rule{
-	Schema: education,
-	Expr:   `has(student.on_campus) && student.on_campus.building == "Hershey"`,
+ Schema: education,
+ Expr:   `has(student.on_campus) && student.on_campus.building == "Hershey"`,
 }
 
 // Output: true
 ```
 
-This also demonstrates using the ``has`` macro: it checks if a field is set (exists). 
-
+This also demonstrates using the ``has`` macro: it checks if a field is set (exists).
 
 </br>
 </br>
@@ -899,7 +885,7 @@ This also demonstrates using the ``has`` macro: it checks if a field is set (exi
 
 # 7. Timestamps and Durations
 
-CEL uses protocol buffer types for timestamps and durations, and they closely mirror the corresponding Go types (``time.Time`` and ``time.Duration``). There are also CEL functions to convert timestamp and duration strings to their protocol buffer types. Even if we don't use any protocol buffer types of our own, CEL uses proto versions of timestamps and durations. This illustrates the close relationship between CEL and protocol buffers. 
+CEL uses protocol buffer types for timestamps and durations, and they closely mirror the corresponding Go types (``time.Time`` and ``time.Duration``). There are also CEL functions to convert timestamp and duration strings to their protocol buffer types. Even if we don't use any protocol buffer types of our own, CEL uses proto versions of timestamps and durations. This illustrates the close relationship between CEL and protocol buffers.
 
 ## Rules with timestamps and durations
 
@@ -923,19 +909,18 @@ message StudentSummary {
 
 ```
 
-
 > The code for this example is in [Example_protoTimestampAndDurationComparison()](cel/example_test.go#432)
 
 Our schema:
 
 ```go
-	education := indigo.Schema{
-		Elements: []indigo.DataElement{
-			{Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
-			{Name: "now", Type: indigo.Timestamp{}},
-			{Name: "ssum", Type: indigo.Proto{Message: &school.StudentSummary{}}},
-		},
-	}
+ education := indigo.Schema{
+  Elements: []indigo.DataElement{
+   {Name: "s", Type: indigo.Proto{Message: &school.Student{}}},
+   {Name: "now", Type: indigo.Timestamp{}},
+   {Name: "ssum", Type: indigo.Proto{Message: &school.StudentSummary{}}},
+  },
+ }
 ```
 
 Here we have references to the two student protocol buffer types as well as "now", which is a timestamp type. In CEL, the ``indigo.Timestamp`` type will be converted to a ``google.protobuf.Timestamp``.
@@ -952,31 +937,29 @@ ssum.tenure > duration("12000h")
 A couple of things to point out:
 
 1. You can add comments in rules with ``//``
-1. CEL includes a function ``duration`` which is equivalent to the ``time.ParseDuration`` function. There's also a ``timestamp`` function. 
+1. CEL includes a function ``duration`` which is equivalent to the ``time.ParseDuration`` function. There's also a ``timestamp`` function.
 
 The data we will pass to the rule:
 
 ```go
 data := map[string]interface{}{
-	"s": &school.Student{
-		EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
-	},
-	"ssum": &school.StudentSummary{
-		Tenure: durationpb.New(time.Duration(time.Hour * 24 * 451)),
-	},
-	"now": timestamppb.Now(),
+ "s": &school.Student{
+  EnrollmentDate: timestamppb.New(time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)),
+ },
+ "ssum": &school.StudentSummary{
+  Tenure: durationpb.New(time.Duration(time.Hour * 24 * 451)),
+ },
+ "now": timestamppb.Now(),
 }
 ```
 
+In the ``Student`` and ``StudentSummary`` Go structs, we initialize the timestamp and duration fields with functions from the [``timestamppb``](https://pkg.go.dev/google.golang.org/protobuf/types/known/timestamppb) and [``durationpb``](https://pkg.go.dev/google.golang.org/protobuf/types/known/durationpb) packages.
 
-In the ``Student`` and ``StudentSummary`` Go structs, we initialize the timestamp and duration fields with functions from the [``timestamppb``](https://pkg.go.dev/google.golang.org/protobuf/types/known/timestamppb) and [``durationpb``](https://pkg.go.dev/google.golang.org/protobuf/types/known/durationpb) packages. 
+Evaluating the rule returns ``false``.
 
-Evaluating the rule returns ``false``. 
+## Calculations on timestamps and durations
 
-
-## Calculations on timestamps and durations 
-
-In CEL rules we can do calculations on timestamps and durations. See [the CEL spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) for the operations allowed. 
+In CEL rules we can do calculations on timestamps and durations. See [the CEL spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) for the operations allowed.
 
 We can write the following rule to determine if the student has been enrolled more than 100 days:
 
@@ -985,10 +968,9 @@ We can write the following rule to determine if the student has been enrolled mo
 now - s.enrollment_date > duration("2400h")
 ```
 
-The calculation ``timestamp - timestamp`` produces a duration, which is then compared with another duration. 
+The calculation ``timestamp - timestamp`` produces a duration, which is then compared with another duration.
 
 Similarly, we could add a duration to a timestamp or add two durations.
-
 
 ## Summary of timestamp operations in Go
 
@@ -1026,11 +1008,10 @@ timestamp("1972-01-01T10:00:20.021-05:00")
 
 ## Summary of duration operations in Go
 
-
 This package has generated types for google/protobuf/duration.proto:
 
 ```go
-import	"google.golang.org/protobuf/types/known/durationpb"
+import "google.golang.org/protobuf/types/known/durationpb"
 ```
 
 To convert a Go duration to a proto duration:
@@ -1045,7 +1026,7 @@ To convert back from a protocol buffer duration to a Go duration:
 goDur := protodur.AsDuration()
 ```
 
-## Duration conversion in a CEL rule 
+## Duration conversion in a CEL rule
 
 ``proto
 duration("2400h")
@@ -1053,17 +1034,16 @@ duration("2400h")
 
 ## Parts of time
 
-CEL provides [functions](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) to access parts of a timestamp. 
+CEL provides [functions](https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions) to access parts of a timestamp.
 
-
-> The code for this example is in [Example_protoTimestampPart()](cel/example_test.go) 
+> The code for this example is in [Example_protoTimestampPart()](cel/example_test.go)
 
 The data we want to test:
 
 ```go
 data := map[string]interface{}{
   "s": &school.Student{
-	  EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
+   EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
   },
 }
 ```
@@ -1075,20 +1055,18 @@ s.enrollment_date.getDayOfWeek() == 5 // Friday
 // Output: true 
 ```
 
-``getDayOfWeek`` is zero-based (Sunday == 0). 
-
+``getDayOfWeek`` is zero-based (Sunday == 0).
 
 CEL also lets us check the day of the week in whatever timezone we want:
 
-
-> The code for this example is in [Example_protoTimestampPartTZ()](cel/example_test.go) 
+> The code for this example is in [Example_protoTimestampPartTZ()](cel/example_test.go)
 
 With the same input time ...
 
 ```go
 data := map[string]interface{}{
   "s": &school.Student{
-	  EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
+   EnrollmentDate: timestamppb.New(time.Date(2022, time.April, 8, 23, 0, 0, 0, time.UTC)),
   },
 }
 ```
@@ -1100,12 +1078,9 @@ s.enrollment_date.getDayOfWeek("Asia/Kolkata") == 6 // Saturday
 // Output: true
 ```
 
-See the [reference](https://github.com/google/cel-spec/blob/master/doc/langdef.md#timezones). 
+See the [reference](https://github.com/google/cel-spec/blob/master/doc/langdef.md#timezones).
 
-We can also get parts of durations with the ``getHours()``, ``getMinutes()``, ``getSeconds()``, etc. functions. 
-
-
-
+We can also get parts of durations with the ``getHours()``, ``getMinutes()``, ``getSeconds()``, etc. functions.
 
 </br>
 </br>
@@ -1113,10 +1088,9 @@ We can also get parts of durations with the ``getHours()``, ``getMinutes()``, ``
 ***
 </br>
 
+# 8. Object Construction
 
-# 8. Object Construction 
-
-Rather than return ``true`` or ``false`` from a rule, we can use Indigo to return any valid value, including creating a new protocol buffer object. 
+Rather than return ``true`` or ``false`` from a rule, we can use Indigo to return any valid value, including creating a new protocol buffer object.
 
 > The sample code for this section is in [Example_protoConstruction()](cel/example_test.go)
 
@@ -1124,19 +1098,19 @@ With our familiar education schema, our rule can now return a new object:
 
 ```go
 rule := indigo.Rule{
-	ID:         "create_summary",
-	Schema:     education,
-	ResultType: indigo.Proto{Message: &school.StudentSummary{}},
-	Expr: `
-		testdata.school.StudentSummary {
-			gpa: s.gpa,
-			risk_factor: 2.0 + 3.0,
-			tenure: duration("12h")
-		}`,
+ ID:         "create_summary",
+ Schema:     education,
+ ResultType: indigo.Proto{Message: &school.StudentSummary{}},
+ Expr: `
+  testdata.school.StudentSummary {
+   gpa: s.gpa,
+   risk_factor: 2.0 + 3.0,
+   tenure: duration("12h")
+  }`,
 }
 ```
 
-Here, the result of the expression is **not** a boolean, but rather a Go protocol buffer struct of with the type ``StudentSummary``. 
+Here, the result of the expression is **not** a boolean, but rather a Go protocol buffer struct of with the type ``StudentSummary``.
 
 Two important things to point out:
 
@@ -1144,7 +1118,6 @@ Two important things to point out:
 1. To refer to the protocol buffer type in the rule expression we are using the full name, including the package name (``testdata.school.StudentSummary``)
 
 We compile and evaluate the rule as usual, but to inspect the output we need to access the **``Value``** field of the result, not the **``ExpressionPass``** field we normally check. In the section on using the ``Result`` type we'll go into more detail, but ``Value`` holds the raw output of the rule, and ``ExpressionPass`` is always ``true``, unless the rule explicitly returns ``false``.
-
 
 ``Value`` is an empty interface, so we get the struct we want from it:
 
@@ -1164,30 +1137,27 @@ fmt.Printf("%0.0f\n", summary.RiskFactor)
 // 5
 ```
 >
-This example illustrates that we can get just about anything out of a rule expression. We could use it to perform a calculation (``2 + 2``), filter a list (``mylist.filter(e, e > 10)``) or get today's day in the year (``timestamp(now).getDayOfYear())``). 
+This example illustrates that we can get just about anything out of a rule expression. We could use it to perform a calculation (``2 + 2``), filter a list (``mylist.filter(e, e > 10)``) or get today's day in the year (``timestamp(now).getDayOfYear())``).
 
-
-## Conditional object construction 
+## Conditional object construction
 
 Rather than simply returning an object, we could apply some condition to determine how to construct the object:
 
-
 ```proto
 student.gpa > 3.0 ?
-	testdata.school.StudentSummary {
-		gpa: student.gpa,
-		risk_factor: 0.0
-	}
+ testdata.school.StudentSummary {
+  gpa: student.gpa,
+  risk_factor: 0.0
+ }
 :
    testdata.school.StudentSummary {
-		gpa: student.gpa,
-		risk_factor: 2.0 + 3.0,
-		tenure: duration("12h")
-	}
+  gpa: student.gpa,
+  risk_factor: 2.0 + 3.0,
+  tenure: duration("12h")
+ }
 ```
 
-In this rule, we use the ``? : `` [operators](https://github.com/google/cel-spec/blob/master/doc/langdef.md#logical-operators).
-
+In this rule, we use the ``? :`` [operators](https://github.com/google/cel-spec/blob/master/doc/langdef.md#logical-operators).
 
 </br>
 </br>
@@ -1195,13 +1165,13 @@ In this rule, we use the ``? : `` [operators](https://github.com/google/cel-spec
 ***
 </br>
 
-# 9. Processing Multiple Rules with Indigo 
+# 9. Processing Multiple Rules with Indigo
 
-The CEL package is a fantastic open-source project supported by Google. It is used extensively in their own products, which means we get performance, quality and security for free. The language offers rich features to express most evaluation needs, and it can be extended to handle cases that aren't covered (see upcoming section on custom functions). CEL does one thing, and it does it extremely well: evaluate an expression. 
+The CEL package is a fantastic open-source project supported by Google. It is used extensively in their own products, which means we get performance, quality and security for free. The language offers rich features to express most evaluation needs, and it can be extended to handle cases that aren't covered (see upcoming section on custom functions). CEL does one thing, and it does it extremely well: evaluate an expression.
 
-However, evaluating a single expression is rarely the goal. When we use rules in an application, we want to answer questions that require us to evaluate more than 1 rule. That's where Indigo comes in. 
+However, evaluating a single expression is rarely the goal. When we use rules in an application, we want to answer questions that require us to evaluate more than 1 rule. That's where Indigo comes in.
 
-We'll start this section by looking at what it would be like to evaluate multiple CEL expressions and handling the result manually. Then we'll use Indigo to do the same operation. 
+We'll start this section by looking at what it would be like to evaluate multiple CEL expressions and handling the result manually. Then we'll use Indigo to do the same operation.
 
 ## Manually processing multiple rules
 
@@ -1209,32 +1179,31 @@ Obviously, you can manually process multiple rules and interpret the results one
 
 > The sample code for this section is in [Example_manual()](cel/example_organization_test.go)
 
-
 In the example, we want to determine which communications to send to a student:
 
-* "Congratulations, you're an accounting honors student"
-* "Congratulations, you're an arts honors student"
-* "Congratulations, your last three grades were 3 or above" 
+- "Congratulations, you're an accounting honors student"
+- "Congratulations, you're an arts honors student"
+- "Congratulations, your last three grades were 3 or above"
 
 We'll use the same education schema as before, and create one rule for each of the possible communications:
 
 ```go
 accounting_honors := indigo.Rule{
-	Schema: education,
-	Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") && s.gpa > 3`,
+ Schema: education,
+ Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") && s.gpa > 3`,
 }
 
 arts_honors := indigo.Rule{
-	Schema: education,
-	Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") && s.gpa > 3`,
+ Schema: education,
+ Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") && s.gpa > 3`,
 }
 
 last_3_grades_3_or_above := indigo.Rule{
-	Schema: education,
-	Expr: `size(s.grades) >=3 
-			 && s.grades[size(s.grades)-1] >= 3.0 
-			 && s.grades[size(s.grades)-2] >= 3.0 
-			 && s.grades[size(s.grades)-3] >= 3.0 `,
+ Schema: education,
+ Expr: `size(s.grades) >=3 
+    && s.grades[size(s.grades)-1] >= 3.0 
+    && s.grades[size(s.grades)-2] >= 3.0 
+    && s.grades[size(s.grades)-3] >= 3.0 `,
 }
 ```
 
@@ -1243,40 +1212,40 @@ Then, we'll compile, evaluate and inspect the results of each rule:
 ```go
 err := engine.Compile(&accounting_honors)
 if err != nil {
-	fmt.Printf("Error adding rule %v", err)
-	return
+ fmt.Printf("Error adding rule %v", err)
+ return
 }
 
 results, err := engine.Eval(context.Background(), &accounting_honors, data)
 if err != nil {
-	fmt.Printf("Error evaluating: %v", err)
-	return
+ fmt.Printf("Error evaluating: %v", err)
+ return
 }
 fmt.Println("accounting_honors?", results.ExpressionPass)
 
 err = engine.Compile(&arts_honors)
 if err != nil {
-	fmt.Printf("Error adding rule %v", err)
-	return
+ fmt.Printf("Error adding rule %v", err)
+ return
 }
 
 results, err = engine.Eval(context.Background(), &arts_honors, data)
 if err != nil {
-	fmt.Printf("Error evaluating: %v", err)
-	return
+ fmt.Printf("Error evaluating: %v", err)
+ return
 }
 fmt.Println("arts_honors?", results.ExpressionPass)
 
 err = engine.Compile(&last_3_grades_3_or_above)
 if err != nil {
-	fmt.Printf("Error adding rule %v", err)
-	return
+ fmt.Printf("Error adding rule %v", err)
+ return
 }
 
 results, err = engine.Eval(context.Background(), &last_3_grades_3_or_above, data)
 if err != nil {
-	fmt.Printf("Error evaluating: %v", err)
-	return
+ fmt.Printf("Error evaluating: %v", err)
+ return
 }
 fmt.Println("last_3_grades_above_3?", results.ExpressionPass)
 
@@ -1287,8 +1256,7 @@ fmt.Println("last_3_grades_above_3?", results.ExpressionPass)
 
 The manual processing of individual rules works fine, but imagine that each academic department wants to set their own rules for awarding honors. We'll have 20 or 30 rules (``math_honors``, ``history_honors``, etc.), which will become difficult to manage. And if you're managing individual rules in code, you may be better off just writing the rules as Go code to begin with...
 
-
-## The Indigo way 
+## The Indigo way
 
 Now, let's use Indigo to organize the rules in a list:
 
@@ -1299,42 +1267,42 @@ root := indigo.NewRule("root", "")
 root.Schema = education
 
 root.Rules["accounting_honors"] = &indigo.Rule{
-	ID:     "accounting_honors",
-	Schema: education,
-	Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") && s.gpa > 3`,
+ ID:     "accounting_honors",
+ Schema: education,
+ Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting") && s.gpa > 3`,
 }
 
 root.Rules["arts_honors"] = &indigo.Rule{
-	ID:     "arts_honors",
-	Schema: education,
-	Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") && s.gpa > 3`,
+ ID:     "arts_honors",
+ Schema: education,
+ Expr:   `s.attrs.exists(k, k == "major" && s.attrs[k] == "Arts") && s.gpa > 3`,
 }
 
 root.Rules["last_3_grades_above_3"] = &indigo.Rule{
-	ID:     "last_3_grades_above_3",
-	Schema: education,
-	Expr: `size(s.grades) >=3 
-	 && s.grades[size(s.grades)-1] >= 3.0 
-	 && s.grades[size(s.grades)-2] >= 3.0 
-	 && s.grades[size(s.grades)-3] >= 3.0 `,
+ ID:     "last_3_grades_above_3",
+ Schema: education,
+ Expr: `size(s.grades) >=3 
+  && s.grades[size(s.grades)-1] >= 3.0 
+  && s.grades[size(s.grades)-2] >= 3.0 
+  && s.grades[size(s.grades)-3] >= 3.0 `,
 }
 
 engine := indigo.NewEngine(cel.NewEvaluator())
 
 err := engine.Compile(root)
 if err != nil {
-	fmt.Printf("Error adding rule %v", err)
-	return
+ fmt.Printf("Error adding rule %v", err)
+ return
 }
 
 results, err := engine.Eval(context.Background(), root, data)
 if err != nil {
-	fmt.Printf("Error evaluating: %v", err)
-	return
+ fmt.Printf("Error evaluating: %v", err)
+ return
 }
 
 for k, v := range results.Results {
-	fmt.Printf("%s? %t\n", k, v.ExpressionPass)
+ fmt.Printf("%s? %t\n", k, v.ExpressionPass)
 }
 
 // Unordered output: accounting_honors? true
@@ -1342,34 +1310,32 @@ for k, v := range results.Results {
 // last_3_grades_above_3? true
 ```
 
-With Indigo, we create a "root" rule, with a schema but no rule expression. Then we added each child rule to the root rule's list of child rules. 
+With Indigo, we create a "root" rule, with a schema but no rule expression. Then we added each child rule to the root rule's list of child rules.
 
-We then evaluated the *root* rule, not each individual rule. ``Eval`` automatically evaluates the child rules for us. 
+We then evaluated the *root* rule, not each individual rule. ``Eval`` automatically evaluates the child rules for us.
 
-Finally, we iterated through the list of results to determine the action for each type of communications. 
+Finally, we iterated through the list of results to determine the action for each type of communications.
 
-With Indigo, if each department wants to have their own honors rule, it's easy: read a list of rules from a database, add them to the root rule and evaluate. 
+With Indigo, if each department wants to have their own honors rule, it's easy: read a list of rules from a database, add them to the root rule and evaluate.
 
-In the next few sections we'll dig deeper into the ``Rule`` and ``Results`` structs and how to visualize parent/child relationships. 
+In the next few sections we'll dig deeper into the ``Rule`` and ``Results`` structs and how to visualize parent/child relationships.
 
-
-## Parent and child rules 
+## Parent and child rules
 
 To create common ground for discussing rule structure, here are some facts about parent and child rules:
 
-   1. A parent rule is any rule that has 1 or more children. 
-   1. A child rule is a rule that has a parent. 
+   1. A parent rule is any rule that has 1 or more children.
+   1. A child rule is a rule that has a parent.
    1. A parent can be both a parent and a child.
-   1. Rules can be nested to any level. 
+   1. Rules can be nested to any level.
    1. Child rules are by default unsorted (but see [SortFunc](#sortfunc)).
-   1. All child rules are created equal. 
-   1. A rule may or may not have a rule expression. 
+   1. All child rules are created equal.
+   1. A rule may or may not have a rule expression.
    1. Rules at any level may have options set (see [evaluation options](#10-evaluation-options)).
-
 
 ## Modifying rules
 
-The calling application is responsible for managing the lifecycle of rules, including ensuring concurrency safety. 
+The calling application is responsible for managing the lifecycle of rules, including ensuring concurrency safety.
 
 To add or remove rules, you do so by modifying the parent rule's map of Rules:
 
@@ -1392,7 +1358,6 @@ You must **not** modify a rule:
 1. After evaluation and before results have been consumed
 
 "Modification" includes updates to any field on a rule struct, including the map of child rules.
-
 
 ## Structuring rule hierarchies for updates
 
@@ -1430,7 +1395,6 @@ If Firewall Rules is itself a child of a larger set of parent rules, it's recomm
 Firewall Rules parent and children BEFORE adding it to its eventual parent. That way you ensure that
 if compilation of Firewall Rules fails, the "production" firewall rules are still intact.
 
-
 ## Visualizing rules
 
 As you build more complex rules with child rules, it can be difficult to visualize how rules are organized. We can print the rule with ``fmt`` to see it:
@@ -1466,10 +1430,9 @@ fmt.Println(root)
 └─────────────────────────┴───────────┴──────────────────────────────────────────┴────────┴───────┘
 ```
 
-This view is very useful for visualizing small numbers of rules. 
+This view is very useful for visualizing small numbers of rules.
 
 The above is equivalent to this diagram:
-
 
 ```mermaid
 graph TD;
@@ -1479,56 +1442,56 @@ root --> arts_honors;
 root --> last_3_grades_above_3;
 ```
 
-## The Rule struct 
+## The Rule struct
 
 Let's look at the actual ``indigo.Rule`` struct:
 
 ```go
 type Rule struct {
-	// A rule identifer. (required)
-	ID string `json:"id"`
+ // A rule identifer. (required)
+ ID string `json:"id"`
 
-	// The expression to evaluate (optional)
-	// The expression can return a boolean (true or false), or any
-	// other value the underlying expression engine can produce.
-	// All values are returned in the Results.Value field.
-	// Boolean values are also returned in the results as Pass = true  / false
-	// If the expression is blank, the result will be true.
-	Expr string 
+ // The expression to evaluate (optional)
+ // The expression can return a boolean (true or false), or any
+ // other value the underlying expression engine can produce.
+ // All values are returned in the Results.Value field.
+ // Boolean values are also returned in the results as Pass = true  / false
+ // If the expression is blank, the result will be true.
+ Expr string 
 
-	// The output type of the expression. Evaluators with the ability to check
-	// whether an expression produces the desired output should return an error
-	// if the expression does not.
-	// If no type is provided, evaluation and compilation will default to Bool
-	ResultType Type 
+ // The output type of the expression. Evaluators with the ability to check
+ // whether an expression produces the desired output should return an error
+ // if the expression does not.
+ // If no type is provided, evaluation and compilation will default to Bool
+ ResultType Type 
 
-	// The schema describing the data provided in the Evaluate input. (optional)
-	// Some implementations of Evaluator require a schema.
-	Schema Schema 
+ // The schema describing the data provided in the Evaluate input. (optional)
+ // Some implementations of Evaluator require a schema.
+ Schema Schema 
 
-	// A reference to an object whose values can be used in the rule expression.
-	// Add the corresponding object in the data with the reserved key name selfKey
-	// (see constants).
-	// Child rules do not inherit the self value.
-	// See example for usage. TODO: example
-	Self interface{} 
+ // A reference to an object whose values can be used in the rule expression.
+ // Add the corresponding object in the data with the reserved key name selfKey
+ // (see constants).
+ // Child rules do not inherit the self value.
+ // See example for usage. TODO: example
+ Self interface{} 
 
-	// A set of child rules.
-	Rules map[string]*Rule 
+ // A set of child rules.
+ Rules map[string]*Rule 
 
-	// Reference to intermediate compilation / evaluation data.
-	Program interface{} 
+ // Reference to intermediate compilation / evaluation data.
+ Program interface{} 
 
-	// A reference to any object.
-	// Not used by the rules engine.
-	Meta interface{} 
+ // A reference to any object.
+ // Not used by the rules engine.
+ Meta interface{} 
 
-	// Options determining how the child rules should be handled.
-	EvalOptions EvalOptions 
+ // Options determining how the child rules should be handled.
+ EvalOptions EvalOptions 
 }
 ```
 
-## The Results struct 
+## The Results struct
 
 Just like we can print a rule to see its structure, we can also print ``results``:
 
@@ -1552,82 +1515,77 @@ fmt.Println(results)
 └─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 ```
 
-As we can see, the structure of results mirrors the structure of the rules that were evaluated: there's a root rule with 3 child values. 
-
+As we can see, the structure of results mirrors the structure of the rules that were evaluated: there's a root rule with 3 child values.
 
 The ``indigo.Results`` struct looks like this:
 
 ```go
 // Result of evaluating a rule.
 type Result struct {
-	// The Rule that was evaluated
-	Rule *Rule
+ // The Rule that was evaluated
+ Rule *Rule
 
-	// Whether the rule is true.
-	// The default is TRUE.
-	// Pass is the result of rolling up all child rules and evaluating the
-	// rule's own expression. All child rules and the rule's expression must be
-	// true for Pass to be true.
-	Pass bool
+ // Whether the rule is true.
+ // The default is TRUE.
+ // Pass is the result of rolling up all child rules and evaluating the
+ // rule's own expression. All child rules and the rule's expression must be
+ // true for Pass to be true.
+ Pass bool
 
-	// Whether evaluating the rule expression yielded a TRUE logical value.
-	// The default is TRUE.
-	// The result will not be affected by the results of the child rules.
-	// If no rule expression is supplied for a rule, the result will be TRUE.
-	ExpressionPass bool
+ // Whether evaluating the rule expression yielded a TRUE logical value.
+ // The default is TRUE.
+ // The result will not be affected by the results of the child rules.
+ // If no rule expression is supplied for a rule, the result will be TRUE.
+ ExpressionPass bool
 
-	// The raw result of evaluating the expression. Boolean for logical expressions.
-	// Calculations, object constructions or string manipulations will return the appropriate Go type.
-	// This value is never affected by child rules.
-	Value interface{}
+ // The raw result of evaluating the expression. Boolean for logical expressions.
+ // Calculations, object constructions or string manipulations will return the appropriate Go type.
+ // This value is never affected by child rules.
+ Value interface{}
 
-	// Results of evaluating the child rules.
-	Results map[string]*Result
+ // Results of evaluating the child rules.
+ Results map[string]*Result
 
-	// Diagnostic data; only available if you turn on diagnostics for the evaluation
-	Diagnostics *Diagnostics
+ // Diagnostic data; only available if you turn on diagnostics for the evaluation
+ Diagnostics *Diagnostics
 
-	// The evaluation options used
-	EvalOptions EvalOptions
+ // The evaluation options used
+ EvalOptions EvalOptions
 
-	// A list of the rules evaluated, in the order they were evaluated
-	// Only available if you turn on diagnostics for the evaluation
-	// This may be different from the rules represented in Results, if
-	// If we're discarding failed/passed rules, they will not be in the results,
-	// and will not show up in diagnostics, but they will be in this list.
-	RulesEvaluated []*Rule
+ // A list of the rules evaluated, in the order they were evaluated
+ // Only available if you turn on diagnostics for the evaluation
+ // This may be different from the rules represented in Results, if
+ // If we're discarding failed/passed rules, they will not be in the results,
+ // and will not show up in diagnostics, but they will be in this list.
+ RulesEvaluated []*Rule
 }
 ```
 
-Three fields warrant more discussion at this point: ``Pass``, ``ExpressionPass`` and ``Value``. 
+Three fields warrant more discussion at this point: ``Pass``, ``ExpressionPass`` and ``Value``.
 
-The simplest is ``Value``: it is always the raw output of the expression, regardless of any [evaluation options](#10-evaluation-options). 
+The simplest is ``Value``: it is always the raw output of the expression, regardless of any [evaluation options](#10-evaluation-options).
 
-From the ``Value`` we derive ``ExpressionPass``. The value is ``true``, unless the rule explicitly returns a boolean ``false``. Again, this value is never affected by any [evaluation options](#10-evaluation-options). 
+From the ``Value`` we derive ``ExpressionPass``. The value is ``true``, unless the rule explicitly returns a boolean ``false``. Again, this value is never affected by any [evaluation options](#10-evaluation-options).
 
-The last value, ``Pass`` is more complex, because it is the result of all of the child rules *and* the parent rule's own ``ExpressionPass``, *and* it is affected by setting the [``TrueIfAny``](#true-if-any) option. It is also most valuable, because it allows you to take advantage of all of the flexibility of Indigo rules. Generally, (for boolean outcomes) you should not need to inspect ``Value`` or ``ExpressionPass`` directly, but instead use ``Pass``. 
+The last value, ``Pass`` is more complex, because it is the result of all of the child rules *and* the parent rule's own ``ExpressionPass``, *and* it is affected by setting the [``TrueIfAny``](#true-if-any) option. It is also most valuable, because it allows you to take advantage of all of the flexibility of Indigo rules. Generally, (for boolean outcomes) you should not need to inspect ``Value`` or ``ExpressionPass`` directly, but instead use ``Pass``.
 
+# 10. Evaluation Options
 
+In the ``indigo.Rule`` struct, the ``indigo.EvalOptions`` field allows us to specify how to interpret the result of the root rule and child rules.
 
-# 10. Evaluation Options 
-
-In the ``indigo.Rule`` struct, the ``indigo.EvalOptions`` field allows us to specify how to interpret the result of the root rule and child rules. 
-
-In this section we'll explain what the options are, their usage, and provide an example. 
+In this section we'll explain what the options are, their usage, and provide an example.
 
 ## Setting Options
 
-Options are turned off by default. To turn them on, set them in the ``EvalOptions`` field on the rule, for example: 
+Options are turned off by default. To turn them on, set them in the ``EvalOptions`` field on the rule, for example:
 
 ```go
 r.EvalOptions.TrueIfAny = true 
 ```
 
-
-
 ## TrueIfAny
 
-From the ``indigo.EvalOptions`` struct documentation: 
+From the ``indigo.EvalOptions`` struct documentation:
 
 ```go
 // TrueIfAny makes a parent rule Pass = true if any of its child rules are true.
@@ -1637,10 +1595,10 @@ From the ``indigo.EvalOptions`` struct documentation:
 // are true, and the parent rule itself is true.
 TrueIfAny bool `json:"true_if_any"`
 ```
-The effect of setting this on a parent rule is to turn it into an "OR" rule. If we look back at our example with the 3 communications options (honors accounting, honors arts, etc.), we'll see that the root rule is marked as ``FAIL``. That's because although its ``ExpressionPass`` is ``PASS``, one of the child rules (``arts_honors``) is ``FAIL``. This failed rule also makes the parent (root) rule ``FAIL``. 
 
-When using the ``TrueIfAny`` option you may want to set the [``StopFirstPositiveChild``](#stopfirstnegativechild-stopfirstpositivechild) option as well. 
+The effect of setting this on a parent rule is to turn it into an "OR" rule. If we look back at our example with the 3 communications options (honors accounting, honors arts, etc.), we'll see that the root rule is marked as ``FAIL``. That's because although its ``ExpressionPass`` is ``PASS``, one of the child rules (``arts_honors``) is ``FAIL``. This failed rule also makes the parent (root) rule ``FAIL``.
 
+When using the ``TrueIfAny`` option you may want to set the [``StopFirstPositiveChild``](#stopfirstnegativechild-stopfirstpositivechild) option as well.
 
 ```go
    ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -1659,18 +1617,17 @@ When using the ``TrueIfAny`` option you may want to set the [``StopFirstPositive
    └─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 ```
 
-
 Let's change the root rule to ``TrueIfAny``:
 
 ```go
 
 root.EvalOptions.TrueIfAny = true
 
-``` 
+```
 
 The root now passes:
 
-```go 
+```go
    ┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
    │                                                                                                                                              │
    │ INDIGO RESULT SUMMARY                                                                                                                        │
@@ -1687,54 +1644,53 @@ The root now passes:
    └─────────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 ```
 
-This is useful because we now have a simple way of determining if we have to send out any communications: check the root rule's ``Pass`` field. 
+This is useful because we now have a simple way of determining if we have to send out any communications: check the root rule's ``Pass`` field.
 
-There are many other uses for this, such as in security rules, put a list of reasons to **allow** a user action in the child rules; allow the action if root passes. 
+There are many other uses for this, such as in security rules, put a list of reasons to **allow** a user action in the child rules; allow the action if root passes.
 
+## StopIfParentNegative
 
-## StopIfParentNegative 
-
-This option prevents the evaluation of child rules if the parent's expression is false. This is used to save evaluation time by "lifting" common exclusionary rules up to a parent level, so that we can skip evaluating the child rules if there is zero chance they will pass. This is particularly useful if the common rule clause is expensive to evaluate. 
+This option prevents the evaluation of child rules if the parent's expression is false. This is used to save evaluation time by "lifting" common exclusionary rules up to a parent level, so that we can skip evaluating the child rules if there is zero chance they will pass. This is particularly useful if the common rule clause is expensive to evaluate.
 
 > The sample code for this section is in [Example_stopIfParentNegative()](cel/example_organization_test.go)
 
-In this example, we're going to evaluate 3 rules, (honors, at_risk and rookie), but we only want to do that for Accounting majors. Imagine that the university as 30,000 students and 10 of them are accounting majors. Obviously, evaluating all 3 rules for every student would be silly. 
+In this example, we're going to evaluate 3 rules, (honors, at_risk and rookie), but we only want to do that for Accounting majors. Imagine that the university as 30,000 students and 10 of them are accounting majors. Obviously, evaluating all 3 rules for every student would be silly.
 
-Instead we make a parent rule, called ``accounting``, where we put the major requirement. We then put the 3 rules as child rules of the accounting rule. 
+Instead we make a parent rule, called ``accounting``, where we put the major requirement. We then put the 3 rules as child rules of the accounting rule.
 
-Finally, we set the ``StopIfParentNegative`` flag on the accounting parent rule: 
+Finally, we set the ``StopIfParentNegative`` flag on the accounting parent rule:
 
 ```go
 
 
-	root := indigo.NewRule("root", "")
-	root.Schema = education
-	accounting := indigo.NewRule("accounting_majors_only", `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting")`)
-	accounting.Schema = education
-	accounting.EvalOptions.StopIfParentNegative = true
+ root := indigo.NewRule("root", "")
+ root.Schema = education
+ accounting := indigo.NewRule("accounting_majors_only", `s.attrs.exists(k, k == "major" && s.attrs[k] == "Accounting")`)
+ accounting.Schema = education
+ accounting.EvalOptions.StopIfParentNegative = true
 
-	root.Rules[accounting.ID] = accounting
+ root.Rules[accounting.ID] = accounting
 
-	accounting.Rules["honors"] = &indigo.Rule{
-		ID:     "honors",
-		Schema: education,
-		Expr:   "s.gpa > 3.0",
-	}
+ accounting.Rules["honors"] = &indigo.Rule{
+  ID:     "honors",
+  Schema: education,
+  Expr:   "s.gpa > 3.0",
+ }
 
-	accounting.Rules["at_risk"] = &indigo.Rule{
-		ID:     "at_risk",
-		Schema: education,
-		Expr:   "s.gpa < 2.0",
-	}
+ accounting.Rules["at_risk"] = &indigo.Rule{
+  ID:     "at_risk",
+  Schema: education,
+  Expr:   "s.gpa < 2.0",
+ }
 
-	accounting.Rules["rookie"] = &indigo.Rule{
-		ID:     "rookie",
-		Schema: education,
-		Expr:   "s.credits < 5",
-	}
+ accounting.Rules["rookie"] = &indigo.Rule{
+  ID:     "rookie",
+  Schema: education,
+  Expr:   "s.credits < 5",
+ }
 ```
 
-The ``accounting_majors_only`` rule is expensive to evaluate: it needs to iterate over all keys in the ``attrs`` map. By only evaluating it once, we'll save some time. It also makes the child rules simpler: they do not need to incorporate a major check, instead they focus on their specific rule expression. 
+The ``accounting_majors_only`` rule is expensive to evaluate: it needs to iterate over all keys in the ``attrs`` map. By only evaluating it once, we'll save some time. It also makes the child rules simpler: they do not need to incorporate a major check, instead they focus on their specific rule expression.
 
 The rule structure is like this:
 
@@ -1762,7 +1718,6 @@ The rule structure is like this:
 
 ```
 
-
 ```mermaid
 graph TD;
 
@@ -1772,8 +1727,6 @@ accounting_majors_only --> honors;
 accounting_majors_only --> rookie;
 
 ```
-
-
 
 When we evaluate it for an Accounting major, we get this result:
 
@@ -1797,7 +1750,7 @@ When we evaluate it for an Accounting major, we get this result:
 
 ```
 
-The ``accounting_majors_only`` expression is true, and so the three child rules are also evaluated. 
+The ``accounting_majors_only`` expression is true, and so the three child rules are also evaluated.
 
 If we evaluate the rules for a Computer Science major, we get this:
 
@@ -1819,36 +1772,36 @@ If we evaluate the rules for a Computer Science major, we get this:
 
 ```
 
-``ExpressionPass`` is false for the ``accounting_majors_only`` rule, hence none of the child rules were evaluated (they do not appear in the list of rules in the results). 
+``ExpressionPass`` is false for the ``accounting_majors_only`` rule, hence none of the child rules were evaluated (they do not appear in the list of rules in the results).
 
+## StopFirstNegativeChild, StopFirstPositiveChild
 
-## StopFirstNegativeChild, StopFirstPositiveChild 
+The ``StopFirstNegativeChild`` option stops evaluating child rules when we encounter the first rule that evaluates to false. The option considers the ``indigo.Result.Pass`` field, not the ``indigo.Result.ExpressionPass`` field, so child results are used recursively.  Recall that the ``Pass`` field takes into account the results of a rule's children, whereas ``ExpressionPass`` does not.
 
-The ``StopFirstNegativeChild`` option stops evaluating child rules when we encounter the first rule that evaluates to false. The option considers the ``indigo.Result.Pass`` field, not the ``indigo.Result.ExpressionPass`` field, so child results are used recursively.  Recall that the ``Pass`` field takes into account the results of a rule's children, whereas ``ExpressionPass`` does not. 
+The ``StopFirstPositiveChild`` works the same way, except for stopping when a true result is found.
 
-The ``StopFirstPositiveChild`` works the same way, except for stopping when a true result is found. 
+We haven't discussed *evaluation order* until now, because it hasn't yet mattered. In all of our evaluation examples so far we have evaluated all child rules. By default the order in which child rules are evaluated is undefined and will vary from execution to execution. (Remember that child rules are stored in a map, and map keys in Go are unordered.) To determine the order in which rules are evaluated, you specify the [SortFunc](#sortfunc) option on the parent rule. More on that option later.
 
-We haven't discussed *evaluation order* until now, because it hasn't yet mattered. In all of our evaluation examples so far we have evaluated all child rules. By default the order in which child rules are evaluated is undefined and will vary from execution to execution. (Remember that child rules are stored in a map, and map keys in Go are unordered.) To determine the order in which rules are evaluated, you specify the [SortFunc](#sortfunc) option on the parent rule. More on that option later. 
+If you require all child rules to be true, it may be a good idea to use the ``StopFirstNegativeChild`` option, since the moment you find a false there's no reason to continue evaluating rules. This is efficient for making a decision.
 
-If you require all child rules to be true, it may be a good idea to use the ``StopFirstNegativeChild`` option, since the moment you find a false there's no reason to continue evaluating rules. This is efficient for making a decision. 
-
-However, since the rest of the rules are not evaluated after the first false, you won't know how many of them were true or false. If the users need to know which rules passed and failed, it's not a good idea to stop evaluation. 
+However, since the rest of the rules are not evaluated after the first false, you won't know how many of them were true or false. If the users need to know which rules passed and failed, it's not a good idea to stop evaluation.
 
 Example uses of the ``StopFirstNegativeChild`` option:
 
-* An API server needs to quickly decide to allow or disallow an action (child rules with all required conditions)
-* A self-driving car should apply emergency braking immediately if one of the emergency braking conditions is met 
+- An API server needs to quickly decide to allow or disallow an action (child rules with all required conditions)
+- A self-driving car should apply emergency braking immediately if one of the emergency braking conditions is met
 
-Any negative rule can be turned into a positive rule, so the ``StopFirstPositiveChild`` optiob has similar use case examples. 
+Any negative rule can be turned into a positive rule, so the ``StopFirstPositiveChild`` optiob has similar use case examples.
 
 ## SortFunc
-When the ``StopFirstNegativeChild`` or ``StopFirstPositiveChild`` options are set, the order in which rules are evaluated **may** be important. If you only care that a rule passed or failed, and so you take an action because of that, the order may not matter. 
 
-Let's say we have 1,000 child rules, each rule has a different probability of being false. For example, rule X is false for 1 in 20 records, but rule Y is false for only 1 in 1,000 records. If we require all 1,000 rules to be true for an action to take place, finding the first false rule as quickly as possible could give us a good performance boost. 
+When the ``StopFirstNegativeChild`` or ``StopFirstPositiveChild`` options are set, the order in which rules are evaluated **may** be important. If you only care that a rule passed or failed, and so you take an action because of that, the order may not matter.
 
-We can do this by sorting rules by probability of failing, high to low. You could further imagine that the probabilities of failing are constantly adjusted as new data becomes available. In this way, we can dynamically adjust the evaluation of rules. 
+Let's say we have 1,000 child rules, each rule has a different probability of being false. For example, rule X is false for 1 in 20 records, but rule Y is false for only 1 in 1,000 records. If we require all 1,000 rules to be true for an action to take place, finding the first false rule as quickly as possible could give us a good performance boost.
 
-Instead of implementing a machine learning algorithm, we'll look at a simpler example to illustrate the use of ``SortFunc``: evaluating rules in alphabetical order. 
+We can do this by sorting rules by probability of failing, high to low. You could further imagine that the probabilities of failing are constantly adjusted as new data becomes available. In this way, we can dynamically adjust the evaluation of rules.
+
+Instead of implementing a machine learning algorithm, we'll look at a simpler example to illustrate the use of ``SortFunc``: evaluating rules in alphabetical order.
 
 > The sample code for this section is in [ExampleSortFunc()](example_test.go)
 
@@ -1862,41 +1815,36 @@ r.EvalOptions.SortFunc = func(rules []*indigo.Rule, i, j int) bool {
 
 ```
 
-Indigo will use this function to sort the rules during the ``Eval`` function. Child rules are sorted every time a a rule is evaluated. (This is an area where improvements can be made.) 
-
-
+Indigo will use this function to sort the rules during the ``Eval`` function. Child rules are sorted every time a a rule is evaluated. (This is an area where improvements can be made.)
 
 ## DiscardPass, FailAction
 
-By default, results are returned for all rules, whether they pass or not. In our toy examples, this doesn't matter so much, but if you have thousands of rules, and you only care about the true ones, there's no reason to return the false rules, and vice versa. 
+By default, results are returned for all rules, whether they pass or not. In our toy examples, this doesn't matter so much, but if you have thousands of rules, and you only care about the true ones, there's no reason to return the false rules, and vice versa.
 
-You set this option on the parent rule in ``indigo.Rule.EvalOptions``. 
+You set this option on the parent rule in ``indigo.Rule.EvalOptions``.
 
-Setting these options has **no effect** on the parent rule's ``Pass`` value. Recall that the ``Pass`` field takes into account the results of a rule's children. So if a rule has 3 children, 1 of them (A) is false and 2 are true (B,C), the parent (X) will be false as well. 
+Setting these options has **no effect** on the parent rule's ``Pass`` value. Recall that the ``Pass`` field takes into account the results of a rule's children. So if a rule has 3 children, 1 of them (A) is false and 2 are true (B,C), the parent (X) will be false as well.
 
-If we set the ``DiscardFailures`` on X, we will only get B and C (both positive) in the results, but not A. X.Pass will be false, even if there are no false results returned. 
-
-
+If we set the ``DiscardFailures`` on X, we will only get B and C (both positive) in the results, but not A. X.Pass will be false, even if there are no false results returned.
 
 # 11. Rule Structure and Use Cases
 
-In this section we'll use our understanding of rule organization and evaluation options to accomplish various use cases. 
+In this section we'll use our understanding of rule organization and evaluation options to accomplish various use cases.
 
-## Which of these rules are true? 
+## Which of these rules are true?
 
-In this example, we are going to monitor system metrics such as CPU and memory and issue alerts when metrics exceed certain thresholds. 
+In this example, we are going to monitor system metrics such as CPU and memory and issue alerts when metrics exceed certain thresholds.
 
-The best way to do this is to have a rule for each alarm, and to set the evaluation option ```FailAction = DiscardFailures``, so that only ``true`` rules are returned. 
-
+The best way to do this is to have a rule for each alarm, and to set the evaluation option ```FailAction = DiscardFailures``, so that only``true`` rules are returned.
 
 > The sample code for this section is in [Example_alarms()](cel/example_test.go)
 
 ```go
 sysmetrics := indigo.Schema{
    Elements: []indigo.DataElement{
-	   {Name: "cpu_utilization", Type: indigo.Int{}},
-	   {Name: "disk_free_space", Type: indigo.Int{}},
-	   {Name: "memory_utilization", Type: indigo.Int{}},
+    {Name: "cpu_utilization", Type: indigo.Int{}},
+    {Name: "disk_free_space", Type: indigo.Int{}},
+    {Name: "memory_utilization", Type: indigo.Int{}},
    },
 }
 
@@ -1950,35 +1898,31 @@ alarm_check --> disk_alarm;
 alarm_check --> memory_alarm;
 ```
 
-
-Rather than setting the ``DiscardFailures`` option, we could have iterated through all the results and checked the ``Pass`` flag, but here we don't have to. 
-
+Rather than setting the ``DiscardFailures`` option, we could have iterated through all the results and checked the ``Pass`` flag, but here we don't have to.
 
 Now, let's modify the example so that there are multiple conditions that can trigger a memory alert: high utilization (>90%) or low remaining megabytes (<16). To do that we create a new "parent" memory alert rule and add the two conditions as child rules:
-
-
 
 ```go
 
 memory_alarm := &indigo.Rule{
-	ID:    "memory_alarm",
-	Rules: map[string]*indigo.Rule{},
-	EvalOptions: indigo.EvalOptions{
-		FailAction: indigo.KeepFailures,
-		TrueIfAny:   true,
-	},
+ ID:    "memory_alarm",
+ Rules: map[string]*indigo.Rule{},
+ EvalOptions: indigo.EvalOptions{
+  FailAction: indigo.KeepFailures,
+  TrueIfAny:   true,
+ },
 }
 
 memory_alarm.Rules["memory_utilization_alarm"] = &indigo.Rule{
-	ID:     "memory_utilization_alarm",
-	Schema: sysmetrics,
-	Expr:   "memory_utilization > 90",
+ ID:     "memory_utilization_alarm",
+ Schema: sysmetrics,
+ Expr:   "memory_utilization > 90",
 }
 
 memory_alarm.Rules["memory_remaining_alarm"] = &indigo.Rule{
-	ID:     "memory_remaining_alarm",
-	Schema: sysmetrics,
-	Expr:   "memory_mb_remaining < 16",
+ ID:     "memory_remaining_alarm",
+ Schema: sysmetrics,
+ Expr:   "memory_mb_remaining < 16",
 }
 
 rule.Rules["memory_alarm"] = memory_alarm
@@ -1986,11 +1930,9 @@ rule.Rules["memory_alarm"] = memory_alarm
 
 ```
 
-We want the memory alarm to trigger when either of the two conditions is true, so we set the ``TrueIfAny`` option as well as the ``KeepFailures`` option. 
+We want the memory alarm to trigger when either of the two conditions is true, so we set the ``TrueIfAny`` option as well as the ``KeepFailures`` option.
 
-
-This is now the rule structure: 
-
+This is now the rule structure:
 
 ```mermaid
 graph TD;
@@ -2001,7 +1943,6 @@ alarm_check --> memory_alarm[memory_alarm<br>DiscardFailures<br>TrueIfAny];
 memory_alarm --> memory_utilization_alarm;
 memory_alarm --> memory_remaining_alarm;
 ```
-
 
 </br>
 </br>
@@ -2021,10 +1962,9 @@ The key insight is that most child rules are independent of each other - they re
 
 ## Caveat
 
-Parallel evaluation may not be the best solution for you. It works best with a large number of rules (thousands) with complex expressions, and will reduce latency. However, no matter how you slice it, the same amount of work has to be performed whether in parallel or sequentially.  Evaluating rules in parallel will increase CPU pressure since the work is compressed in a smaller time window. 
+Parallel evaluation may not be the best solution for you. It works best with a large number of rules (thousands) with complex expressions, and will reduce latency. However, no matter how you slice it, the same amount of work has to be performed whether in parallel or sequentially.  Evaluating rules in parallel will increase CPU pressure since the work is compressed in a smaller time window.
 
-A better approach to try first is always to try to limit the number of rules that are evaluated. You can do this by using Indigo's ability to organize rules in a hierarchy, as described in the [StopIfParentNegative](#stopifparentnegative) section. You can use multiple levels of a hierarchy to tune the performance to your rules and data. 
-
+A better approach to try first is always to try to limit the number of rules that are evaluated. You can do this by using Indigo's ability to organize rules in a hierarchy, as described in the [StopIfParentNegative](#stopifparentnegative) section. You can use multiple levels of a hierarchy to tune the performance to your rules and data.
 
 ## Configuration Methods
 
@@ -2066,10 +2006,9 @@ result, err := engine.Eval(
 
 **Configuration Priority**: Eval-level settings override rule-level settings, allowing you to adapt to runtime conditions or different execution environments.
 
-
 ### Self-Reference Behavior
 
-When using the `self` reference in rules, parallel execution incurs a performance penalty because the input data has to be copied for every rule to avoid data access contention. It is not recommended to use parallel processing and `self` references together. 
+When using the `self` reference in rules, parallel execution incurs a performance penalty because the input data has to be copied for every rule to avoid data access contention. It is not recommended to use parallel processing and `self` references together.
 
 ## Limitations and Restrictions
 
@@ -2108,10 +2047,12 @@ Monitor resource consumption when using parallel evaluation:
 ### When to Use Parallel Evaluation
 
 **Good candidates:**
+
 - Large numbers of independent child rules (exact number depends on rule complexity)
 - Rules with significant computational complexity
 
 **Poor candidates:**
+
 - Small rule sets (<10 rules)
 - Rules requiring specific evaluation order
 - Memory-constrained environments with complex rules
@@ -2166,8 +2107,6 @@ Start with conservative settings and increase parallelism based on measured perf
 ***
 </br>
 
-
-
 # Appendix: More CEL Resources
 
 Here are more resources with examples of using CEL:
@@ -2181,5 +2120,3 @@ Here are more resources with examples of using CEL:
 1. [Google CEL-Go Codelab](https://codelabs.developers.google.com/codelabs/cel-go#0)
 
 1. [KrakenD Conditional Requests and Responses with CEL](https://www.krakend.io/docs/endpoints/common-expression-language-cel/)
-
-
