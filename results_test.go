@@ -54,6 +54,16 @@ func flattenResultsEvaluated(result *indigo.Result) []string {
 		mc := flattenResultsEvaluated(u)
 		m = append(m, mc...)
 	}
+
+	return m
+}
+
+func evaluated(res *indigo.Result) map[string]any {
+	l := flattenResultsEvaluated(res)
+	m := map[string]any{}
+	for _, s := range l {
+		m[s] = nil
+	}
 	return m
 }
 
@@ -120,7 +130,6 @@ func match(result map[string]bool, expected map[string]bool) error {
 
 // copyMap duplicates an expected results map (rule ID to rule output)
 func copyMap(m map[string]bool) map[string]bool {
-
 	n := make(map[string]bool, len(m))
 
 	for k, v := range m {
@@ -131,7 +140,6 @@ func copyMap(m map[string]bool) map[string]bool {
 
 // deleteKeys removes entries from an expected results map
 func deleteKeys(m map[string]bool, keys ...string) map[string]bool {
-
 	for _, k := range keys {
 		delete(m, k)
 	}

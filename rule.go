@@ -2,6 +2,7 @@ package indigo
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -77,12 +78,17 @@ type Rule struct {
 	// Options determining how the child rules should be handled.
 	EvalOptions EvalOptions `json:"eval_options"`
 
+	// Shards is a list of rules
+	Shards []*Rule
+
 	// sortedRules contains a list of child rules, sorted by the
 	// EvalOptions.SortFunc. During rule evaluation, the rules are evaluated in
 	// the order they appear in this list. The sorted list is calculated at
 	// compile time. If SortFunc is not specified, the evaluation order is
 	// unspecified.
 	sortedRules []*Rule
+
+	shard bool
 }
 
 const (
@@ -99,6 +105,104 @@ func NewRule(id string, expr string) *Rule {
 		Rules: map[string]*Rule{},
 		Expr:  expr,
 	}
+}
+
+func (r *Rule) Add(rr *Rule) error {
+	if rr == nil {
+		return fmt.Errorf("attempt to add nil rule")
+	}
+	if r.Rules == nil {
+		r.Rules = map[string]*Rule{}
+	}
+	parent := r
+	// parent := r.TargetParent(rr)
+	// if parent == nil {
+	// 	return fmt.Errorf("no target parent found for %s", rr.ID)
+	// }
+	// if parent.Rules == nil {
+	// 	parent.Rules = map[string]*Rule{}
+	// }
+	parent.Rules[rr.ID] = rr
+	return nil
+}
+
+func (r *Rule) targetParent(rr *Rule) (*Rule, error) {
+	shardCount := 0
+	for _, shard := range r.sortedRules {
+		if !shard.shard {
+			continue
+		}
+		shardCount++
+		switch f := shard.Meta.(type) {
+		case func(*Rule) bool:
+			if f(rr) {
+				return shard, nil
+			}
+		default:
+			if shard.ID != defaultRuleID {
+				return nil, fmt.Errorf("unsupported meta type for shard %s: %t", shard.ID, shard.Meta)
+			}
+			return shard, nil
+		}
+	}
+	// If we're in a sharding situation, and no shard matched rr, we must
+	// be able to place rr in the default shard
+	if shardCount > 0 {
+		def, ok := r.Rules[defaultRuleID]
+		if !ok {
+			return nil, fmt.Errorf("rule %s does not match the a shard definition for %s and no default shard found", rr.ID, r.ID)
+		}
+		def.Rules[rr.ID] = rr
+	}
+	return r, nil
+}
+
+const defaultRuleID = "default"
+
+func (r *Rule) BuildShards() error {
+	detached := maps.Clone(r.Rules)
+	r.Rules = map[string]*Rule{}
+	for _, sh := range r.Shards {
+		if sh == nil {
+			return fmt.Errorf("nil shard in shard set")
+		}
+		if sh.ID == defaultRuleID {
+			return fmt.Errorf("reserved shard ID %s used (indigo will automatically add a default shard)", defaultRuleID)
+		}
+		sh.shard = true
+		r.Rules[sh.ID] = sh
+	}
+	if len(r.Shards) > 0 {
+		def := NewRule(defaultRuleID, "")
+		def.shard = true
+		r.Rules[def.ID] = def
+		r.EvalOptions.SortFunc = func(rules []*Rule, i, j int) bool {
+			if rules[i].ID == defaultRuleID {
+				return false
+			}
+			if rules[j].ID == defaultRuleID {
+				return true
+			}
+			return rules[i].ID < rules[j].ID
+		}
+		r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
+	}
+	for _, child := range detached {
+		target, err := r.targetParent(child)
+		if err != nil {
+			return fmt.Errorf("finding shard for %s: %w", r.ID, err)
+		}
+		target.Rules[child.ID] = child
+	}
+
+	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
+	for _, newChild := range r.Rules {
+		err := newChild.BuildShards()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // FindRule returns the rule with the id in the rule or any of its
