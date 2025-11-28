@@ -98,9 +98,9 @@ Useful links
    1. Enabling Parallel Evaluation
    1. Limitations
 
-   13. Vaults
+[13. Sharding](#13-sharding)
 
-   14. Sharding
+[14. Vaults](#14-vaults)
 
 [Appendix: More CEL Resources](#appendix-more-cel-resources)
 
@@ -1962,9 +1962,9 @@ The key insight is that most child rules are independent of each other - they re
 
 ## Caveat
 
-Parallel evaluation may not be the best solution for you. It works best with a large number of rules (thousands) with complex expressions, and will reduce latency. However, no matter how you slice it, the same amount of work has to be performed whether in parallel or sequentially.  Evaluating rules in parallel will increase CPU pressure since the work is compressed in a smaller time window.
+Parallel evaluation may not be the best solution for you. It works best with a large number of rules (thousands) with complex expressions, and will reduce latency. However, no matter how you slice it, the same amount of work has to be performed whether in parallel or sequentially. Evaluating rules in parallel will increase CPU pressure since the work is compressed in a smaller time window.
 
-A better approach to try first is always to try to limit the number of rules that are evaluated. You can do this by using Indigo's ability to organize rules in a hierarchy, as described in the [StopIfParentNegative](#stopifparentnegative) section. You can use multiple levels of a hierarchy to tune the performance to your rules and data.
+A better approach to try first is always to try to limit the number of rules that are evaluated. You can do this by using Indigo's ability to organize rules in a hierarchy, as described in the [StopIfParentNegative](#stopifparentnegative) section. You can use multiple levels of a hierarchy to tune the performance to your rules and data. See [Sharding](#13-sharding) for how to automatically arrange rules to reduce the number of rules evaluated
 
 ## Configuration Methods
 
@@ -2103,6 +2103,48 @@ func BenchmarkParallelEval(b *testing.B) {
 ```
 
 Start with conservative settings and increase parallelism based on measured performance improvements in your specific environment.
+
+# 12. Sharding
+
+Parallel execution may improve the time it takes to process a set of rules, but doesn't change the amount of work the engine has to do. If your rule structure allows it, we can use sharding to reduce the number of rules that need to be evaluated.
+
+## What is sharding?
+
+Sharding takes a list of, let's say 1000 rules, and groups them into smaller shards of, maybe 100, 400, 300 and 200 rules. All rules in a shard must share common criteria that MUST be true for all of them. We place the child rules under a new "shard rule" that contains the common criteria, ensuring that the child rules are only evaluated if the common criteria are met.
+
+For example, imagine 5,200 vehicle inspection rules, 100 for each state, that determine a vehicle's requirement for emissions testing. Without sharding, any vehicle would need to be evaluated against all 5,200 rules, even though only the 100 rules for the vehicle's state have any chance of qualifying. As shown in [11. Rule Structure and Use Cases](#11-rule-structure-and-use-cases) you can manually organize rules as you see fit, maybe one parent rule for each state, then add the rules under that parent rule.
+
+Indigo provides a simpler way of creating a shard structure.
+
+## Support for sharding
+
+Indigo allows you to define special rules that establish a shard under a parent. Here is an example:
+
+```go
+root := indigo.NewRule("root", "")
+... add all the child rules here ... 
+myShard := indigo.NewRule("shard1", "vehicle_type='EV'")
+myShard.Meta = func(r *indigo.Rule) bool {
+  return strings.Contains(r.Expr, "vehicle_type='EV'")
+}
+root.Shards = []*indigo.Rule{myShard}
+root.BuildShards()
+... compile root ... 
+... evaluate root ... 
+
+```
+
+In this example we're deciding that all electric vehicle rules should only be evaluated for electric vehicles. When BuildShards is called, Indigo recursively restructures root's child rules, so that the EV rules are grouped under  the "shard1" rule. Indigo also adds a "default" shard for all other rules. Indigo knows how to determine if a rule should be included in the shard by executing the Meta function on the rule. The function could perform any operation you like, such as looking up data outside the rule set.
+
+BuildShards is only executed once, when the rule set is first built.
+
+### Inspecting results
+
+After evaluation, the results will be organized under root by shard ("shard1" and "default"). This may not be very convenient, because the reason we put rules into shards was for performance reasons, not for any user-side logic reasons. The Result type provides two ways of omitting shards from the results: ``Unshard()`` and ``Flat()``,  both methods on the ``Result`` struct returned from ``Eval``.
+
+``Unshard()`` modifies the Result, removing the shard layer(s), but leaving the rule hierarchy otherwise untouched. If you care about the structure of the rules (parent/child relationships), this is a good way of looking at the results.
+
+``Flat()`` gives you an iterator that returns all rule results (except for the shard rules), but without the parent/child hierarchy; in other words, a flat list of results. This is good when you only care about the rules that passed, and not the structure of the rules.
 
 ***
 </br>
