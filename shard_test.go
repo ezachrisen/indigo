@@ -9,68 +9,6 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 )
 
-// func TestShard(t *testing.T) {
-// 	schema := &indigo.Schema{
-// 		ID: "x",
-// 		Elements: []indigo.DataElement{
-// 			{Name: "school", Type: indigo.String{}},
-// 			{Name: "nationality", Type: indigo.String{}},
-// 			{Name: "class", Type: indigo.Int{}},
-// 			{Name: "gpa", Type: indigo.Float{}},
-// 		},
-// 	}
-//
-// 	root := indigo.NewRule("root", "")
-//
-// 	centralHSHonors := indigo.NewRule("centralHonors", `school =="Central" && class == 2026 && gpa > 3.5`)
-// 	centralAtRisk := indigo.NewRule("centralAtRisk", `school =="Central" && class == 2026 && gpa < 2.5`)
-// 	root.Add(centralHSHonors)
-// 	root.Add(centralAtRisk)
-//
-// 	woodlawnHSHonors := indigo.NewRule("woodlawnHonors", `school =="woodlawn" && class == 2026 && gpa > 3.7`)
-// 	woodlawnAtRisk := indigo.NewRule("woodlawnAtRisk", `school =="woodlawn" && class == 2026 && gpa < 2.0`)
-// 	woodlawnForeignHonors := indigo.NewRule("woodlawnForeignHonors", `school =="woodlawn" && class == 2026 && gpa > 3.7 && nationality != "US"`)
-// 	woodlawnForeignAtRisk := indigo.NewRule("woodlawnHonors", `school =="woodlawn" && class == 2026 && gpa < 2.0 && nationality != "US"`)
-//
-// 	root.Add(woodlawnHSHonors)
-// 	root.Add(woodlawnAtRisk)
-// 	root.Add(woodlawnForeignHonors)
-// 	root.Add(woodlawnForeignAtRisk)
-//
-// 	eastHSHonors := indigo.NewRule("eastHonors", `school =="east" && class == 2026 && gpa > 3.3`)
-// 	eastAtRisk := indigo.NewRule("eastAtRisk", `school =="east" && class == 2026 && gpa < 2.2`)
-// 	root.Add(eastHSHonors)
-// 	root.Add(eastAtRisk)
-//
-// 	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-// 	err := e.Compile(root, indigo.CollectDiagnostics(true))
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	d := map[string]any{
-// 		"school":      "Central",
-// 		"class":       2026,
-// 		"gpa":         3.7,
-// 		"nationality": "US",
-// 	}
-//
-// 	res, err := e.Eval(context.Background(), root, d, indigo.ReturnDiagnostics(true))
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	for _, rr := range res.Results {
-// 		fmt.Println(rr.Rule.ID)
-// 	}
-// 	if _, ok := res.Results["centralHonors"]; !ok {
-// 		t.Error("expected centralHonors")
-// 	}
-//
-// 	ev := evaluated(res)
-// 	if _, ok := ev["woodlawnHonors"]; ok {
-// 		t.Error("woodlawn honors should not have been evaluated for a central student")
-// 	}
-// }
-
 func TestShards(t *testing.T) {
 	schema := &indigo.Schema{
 		ID: "x",
@@ -84,7 +22,7 @@ func TestShards(t *testing.T) {
 	// We run this test many times because it is very important
 	// that the shard rules are sorted correctly for shard creation to work.
 	// This loop will catch any errors where the sort works most of the time, but fails sometimes.
-	for range 1 {
+	for range 100 {
 
 		//--------------------------------------------------------------------------------
 		// SETUP
@@ -270,10 +208,10 @@ root
 		// We can also view the results in in a "flat" way, where all returned rules are available via an iterator, but shard rules are omitted from the results
 		wantFlat := `
 root
-anyAtRisk
-anyAtRiskChild
 centralHonors
 centralAtRisk
+anyAtRisk
+anyAtRiskChild
 		`
 		flat := []string{}
 		for r := range res.Flat() {
