@@ -136,14 +136,20 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 	r.results = make(map[string]*Result, len(rules))
 
-	chunkCh := make(chan chunk)
-	// Results will be sent back to the main goroutine via this channel.
-	resultsCh := make(chan evalResult)
-	// Errors will be sent back to the main goroutine via this channel.
-	errCh := make(chan error)
-
 	// A chunk is a range of rules (a batch) to evaluate together
 	chunks := makeChunks(0, len(rules), o.Parallel.BatchSize)
+
+	chunkCh := make(chan chunk)
+	// Results will be sent back to the main goroutine via this channel.
+	// We buffer this channel with capacity equal to the number of chunks.
+	// This prevents worker goroutines from blocking on sends when the main goroutine
+	// exits early (e.g., due to an error from another worker), even if it stops
+	// reading from the channel before all workers have sent their results.
+	resultsCh := make(chan evalResult, len(chunks))
+	// Errors will be sent back to the main goroutine via this channel.
+	// We buffer this with capacity 1 to ensure the first error is never blocked.
+	// Additional errors may be dropped, but we only need one error to propagate.
+	errCh := make(chan error, 1)
 
 	// Create internal context for coordinating goroutine cleanup
 	// This allows us to signal all goroutines to stop when we're done,
@@ -307,14 +313,16 @@ func (e *DefaultEngine) processChunks(ctx context.Context, chunkCh <-chan chunk,
 	// This prevents a panic in one worker goroutine from crashing the entire evaluation
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			// Convert the panic to an error and send it back to the main goroutine
+			// Convert the panic to an error and send it back to the main goroutine.
+			// Because errCh is buffered, this send will never block, so we don't need
+			// a select with context cancellation here.
 			panicErr := fmt.Errorf("panic during parallel rule evaluation: %v", recovered)
 			select {
 			case errCh <- panicErr:
-				// Successfully sent the panic error
-			case <-ctx.Done():
-				// Context cancelled while sending panic error - just exit
-				// The main goroutine will see the cancellation
+				// Successfully sent the panic error to the buffered channel
+			default:
+				// Buffer is full (another error already sent), drop this one
+				// We only need one error to propagate, so this is fine
 			}
 		}
 	}()
@@ -324,28 +332,22 @@ func (e *DefaultEngine) processChunks(ctx context.Context, chunkCh <-chan chunk,
 		r, err := e.evalRuleSlice(ctx, rules[chunk.start:chunk.end], d, o, opts...)
 		if err != nil {
 			// An error occurred during evaluation
-			// We need to send it back to the main goroutine, but we also
-			// need to handle the case where the context gets cancelled
-			// while we're trying to send the error
+			// Send it back to the main goroutine. Because errCh is buffered with capacity 1,
+			// this will only block if another error has already been sent and the main goroutine
+			// hasn't read it yet. In that case, we simply drop this error since we only need
+			// one error to signal failure to the main goroutine.
 			select {
 			case errCh <- err:
-				// Successfully sent the error
-			case <-ctx.Done():
-				// Context cancelled while sending error - just exit
-				// The main goroutine will see the cancellation
+				// Successfully sent the error to the buffered channel
+			default:
+				// Buffer is full, another error was already sent - that's fine
 			}
 			return // Exit after sending error (fail-fast behavior)
 		}
 		// Successfully processed the chunk - send results back
-		// Again, we need to handle potential cancellation during the send
-		select {
-		case resultsCh <- r:
-		// Successfully sent results - continue to next chunk
-		case <-ctx.Done():
-			// Context cancelled while sending results - exit
-			return
-		}
-
+		// resultsCh is buffered with capacity equal to the number of chunks,
+		// so this send will never block. We don't need to check context cancellation.
+		resultsCh <- r
 	}
 }
 
