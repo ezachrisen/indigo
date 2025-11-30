@@ -1349,15 +1349,12 @@ func TestParallelEvalLeakOnEarlyError(t *testing.T) {
 	if maxActiveEvals > int32(parallel) {
 		t.Errorf("Expected max active evals to be %d, got %d", parallel, maxActiveEvals)
 	}
-
-	// fmt.Println("Num goroutines: ", runtime.NumGoroutine())
-	// fmt.Println("Max active evals: ", maxActiveEvals)
 }
 
 func TestParallelEvalLeakOnContextCancel(t *testing.T) {
 	atomic.StoreInt32(&activeEvals, 0)
 	mockEval := &trackingMockEvaluator{
-		evalDelay: 200 * time.Millisecond, // Make it longer so cancellation is more likely to interrupt
+		evalDelay: 500 * time.Millisecond, // Make it longer so cancellation is more likely to interrupt
 	}
 	engine := indigo.NewEngine(mockEval)
 
@@ -1492,5 +1489,116 @@ func TestParallelEvalOptionOverride(t *testing.T) {
 	// In sequential mode, we should never have more than 1 active evaluation at a time
 	if maxActiveEvals > 1 {
 		t.Errorf("Expected max 1 active evaluation in sequential mode, got %d", maxActiveEvals)
+	}
+}
+
+func TestParallelEvalWorkerChannelBlocking(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
+	atomic.StoreInt32(&activeEvals, 0)
+
+	mockEval := &trackingMockEvaluator{
+		evalDelay:   50 * time.Millisecond,
+		errorRuleID: "error1", // This will error quickly
+	}
+	engine := indigo.NewEngine(mockEval)
+
+	// Create many rules to ensure multiple chunks and workers
+	rulesMap := make(map[string]*indigo.Rule)
+	for i := range 1000 {
+		id := fmt.Sprintf("rule%d", i)
+		rulesMap[id] = &indigo.Rule{ID: id, Expr: id}
+	}
+	// Place the error rule somewhere in the middle
+	rulesMap["error1"] = &indigo.Rule{ID: "error1", Expr: "error1"}
+
+	rootRule := &indigo.Rule{
+		ID:    "root",
+		Expr:  "root",
+		Rules: rulesMap,
+	}
+
+	err := engine.Compile(rootRule)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Use small batch size and multiple workers to create more goroutines
+	// This increases the chance of workers being blocked on channel sends
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(100, 10))
+	if evalErr == nil {
+		t.Fatal("expected an error but got none")
+	} else {
+		t.Logf("Got error as expected: %v, eval terminated", evalErr)
+	}
+
+	// Wait for goroutines to finish - this should be quick if they're not blocked
+	time.Sleep(200 * time.Millisecond)
+
+	// Check that all active evaluations have completed
+	if active := atomic.LoadInt32(&activeEvals); active != 0 {
+		t.Errorf("Expected no active evaluations, got %d (goroutines blocked on channel send)", active)
+	}
+
+	// Check goroutine count - should not increase significantly
+	if runtime.NumGoroutine() > startGoroutines+2 {
+		t.Errorf("Expected goroutines to clean up, started with %d, now have %d", startGoroutines, runtime.NumGoroutine())
+	}
+}
+
+// TestParallelEvalHurlChunksBlocking tests that the hurlChunks/sendChunks goroutine
+// doesn't block indefinitely when unable to send to chunkCh because the main
+// goroutine has stopped reading (exited early due to an error).
+func TestParallelEvalHurlChunksBlocking(t *testing.T) {
+	startGoroutines := runtime.NumGoroutine()
+	atomic.StoreInt32(&activeEvals, 0)
+
+	mockEval := &trackingMockEvaluator{
+		evalDelay:   200 * time.Millisecond,
+		errorRuleID: "error1",
+	}
+	engine := indigo.NewEngine(mockEval)
+
+	// Create many rules to generate many chunks
+	rulesMap := make(map[string]*indigo.Rule)
+	for i := range 1000 {
+		id := fmt.Sprintf("rule%d", i)
+		rulesMap[id] = &indigo.Rule{ID: id, Expr: id}
+	}
+	rulesMap["error1"] = &indigo.Rule{ID: "error1", Expr: "error1"}
+
+	rootRule := &indigo.Rule{
+		ID:    "root",
+		Expr:  "root",
+		Rules: rulesMap,
+	}
+
+	err := engine.Compile(rootRule)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Use small batch and worker counts to stress the channel
+	// This creates many chunks but few workers, increasing chance of
+	// sendChunks blocking on a full chunkCh
+	_, evalErr := engine.Eval(ctx, rootRule, map[string]any{}, indigo.Parallel(500, 2))
+	if evalErr == nil {
+		t.Fatal("expected an error but got none")
+	}
+
+	// Wait for any potential hangs
+	time.Sleep(200 * time.Millisecond)
+
+	if active := atomic.LoadInt32(&activeEvals); active != 0 {
+		t.Errorf("Expected no active evaluations, got %d (sendChunks might be blocked)", active)
+	}
+
+	if runtime.NumGoroutine() > startGoroutines+2 {
+		t.Errorf("Expected goroutines to clean up, started with %d, now have %d", startGoroutines, runtime.NumGoroutine())
 	}
 }
