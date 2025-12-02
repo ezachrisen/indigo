@@ -137,9 +137,15 @@ const defaultRuleID = "default"
 // subdivided into X1 and X2.
 //
 // Recursively applies shard rules on r's children.
+//
+// Since rules stored in a Vault should not be modified outside the vault, DO NOT call BuildShards on
+// a rule inside the vault. You may of course call BuildShards before adding a rule to the vault, but
+// the Vault will automatically call BuildShards on the rule you pass to NewVault.
+//
+// When you apply mutations to the rule in the vault, the vault will automatically apply sharding
+// specifications and place rules in the right shard.
 func (r *Rule) BuildShards() error {
-	detached := maps.Clone(r.Rules)
-	r.Rules = map[string]*Rule{}
+	var detached map[string]*Rule
 	for _, sh := range r.Shards {
 		if sh == nil {
 			return fmt.Errorf("nil shard in shard set")
@@ -150,6 +156,11 @@ func (r *Rule) BuildShards() error {
 		sh.shard = true
 		// this will ensure that rules in the shard are only evaluated if the shard rule itself is true
 		sh.EvalOptions.StopIfParentNegative = true
+		if detached == nil {
+			// We only want to do this if there are shards in r.
+			detached = maps.Clone(r.Rules)
+			r.Rules = map[string]*Rule{}
+		}
 		r.Rules[sh.ID] = sh
 	}
 	if len(r.Shards) > 0 {
@@ -207,16 +218,91 @@ func (r *Rule) targetParent(rr *Rule) (*Rule, error) {
 			return shard, nil
 		}
 	}
-	// If we're in a sharding situation, and no shard matched rr, we must
-	// be able to place rr in the default shard
+	// We're in a sharding situation, and no shard matched rr (including the default shard)
 	if shardCount > 0 {
-		def, ok := r.Rules[defaultRuleID]
-		if !ok {
-			return nil, fmt.Errorf("rule %s does not match the a shard definition for %s and no default shard found", rr.ID, r.ID)
-		}
-		def.Rules[rr.ID] = rr
+		return nil, fmt.Errorf("no shard matched %s, not even default", rr.ID)
 	}
 	return r, nil
+}
+
+func matchMeta(shard, r *Rule) (bool, error) {
+	switch f := shard.Meta.(type) {
+	case func(*Rule) bool:
+		if f(r) {
+			fmt.Println("   found match: ", shard.ID)
+			return true, nil
+		}
+	default:
+		if shard.ID != defaultRuleID {
+			return false, fmt.Errorf("unsupported meta type for shard %s: %t", shard.ID, shard.Meta)
+		}
+	}
+	return false, nil
+}
+
+func (r *Rule) destinationShard(rr *Rule) (*Rule, error) {
+	var toReturn *Rule
+	fmt.Println("Checking ", rr.ID)
+	shardCount := 0
+	if r.shard {
+		shardCount++
+		ok, err := matchMeta(r, rr)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			fmt.Println("  It's r", r.ID)
+			toReturn = r
+		}
+	}
+
+shardLoop:
+	for _, shard := range r.sortedRules {
+		fmt.Println("   rule = ", shard.ID, shard.shard)
+		if !shard.shard {
+			continue
+		}
+		shardCount++
+		ok, err := matchMeta(shard, rr)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			toReturn = shard
+			break shardLoop
+		}
+		fmt.Println("   After count")
+	}
+
+	if shardCount == 0 {
+		toReturn = r
+	}
+
+	if toReturn != nil {
+		fmt.Println("         After loop, toReturn = ", toReturn.ID, shardCount)
+	} else {
+		fmt.Println("       not found")
+	}
+	// We're in a sharding situation, and no shard matched rr (including the default shard)
+	if shardCount > 0 && toReturn != nil {
+		fmt.Println("In shard sitchj")
+		for _, c := range toReturn.Rules {
+			fmt.Println("In loop", c.ID)
+			sh, err := c.destinationShard(rr)
+			if err != nil {
+				return nil, err
+			}
+			if sh != nil {
+				return sh, nil
+			}
+		}
+	}
+	if toReturn != nil {
+		fmt.Println("   returning ", toReturn.ID)
+	} else {
+		fmt.Println("    returning nil ")
+	}
+	return toReturn, nil
 }
 
 // FindRule returns the rule with the id in the rule or any of its
@@ -387,6 +473,9 @@ func (r *Rule) Tree() string {
 	}
 	var sb strings.Builder
 	sb.WriteString(r.ID)
+	if r.shard {
+		sb.WriteString(" (*)")
+	}
 	sb.WriteString("\n")
 	r.buildTree(&sb, "", 0)
 	return sb.String()
@@ -418,6 +507,9 @@ func (r *Rule) buildTree(sb *strings.Builder, prefix string, depth int) {
 		sb.WriteString(prefix)
 		sb.WriteString(connector)
 		sb.WriteString(child.ID)
+		if child.shard {
+			sb.WriteString(" (*)")
+		}
 		sb.WriteString("\n")
 		// Recursively process this child's children
 		child.buildTree(sb, prefix+childPrefix, depth+1)
