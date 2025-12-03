@@ -350,7 +350,11 @@ func (v *Vault) delete(r *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, 
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule %s", id)
 	}
-	r, alreadyCopied = makeSafePath(r, alreadyCopied, parent.ID)
+	var err error
+	r, alreadyCopied, err = makeSafePath(r, alreadyCopied, parent.ID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("making safe path: %w", err)
+	}
 
 	parentInNew := r.FindParent(id)
 	if parentInNew == nil {
@@ -374,8 +378,12 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, ma
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule: %s", newRule.ID)
 	}
-	r, alreadyCopied = makeSafePath(r, alreadyCopied, parent.ID)
-	err := v.engine.Compile(newRule, v.compileOptions...)
+	var err error
+	r, alreadyCopied, err = makeSafePath(r, alreadyCopied, parent.ID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("making safe path: %w", err)
+	}
+	err = v.engine.Compile(newRule, v.compileOptions...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
 	}
@@ -404,7 +412,10 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID stri
 	if target != nil {
 		parentID = target.ID
 	}
-	r, alreadyCopied = makeSafePath(r, alreadyCopied, parentID)
+	r, alreadyCopied, err = makeSafePath(r, alreadyCopied, parentID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("making safe path: %w", err)
+	}
 	if newRule.ID == "" {
 		return nil, nil, fmt.Errorf("rule ID cannot be empty")
 	}
@@ -434,27 +445,36 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID stri
 // makeSafePath makes shallow copies of rules between the root and the rule with the id,
 // so that updates can be made to those rules. If a rule has already been copied, cloning
 // is skipped.
-func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, map[*Rule]any) {
-	fmt.Println("Making safe path between ", id, " and root ", root.ID)
-	fmt.Println("Already copied:", len(alreadyCopied))
-	for k := range alreadyCopied {
-		fmt.Println(k.ID)
-	}
+func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, map[*Rule]any, error) {
 	path := root.Path(id)
-	for _, p := range path {
-		if _, ok := alreadyCopied[p]; ok {
-			continue
+	for i := range path {
+		var parent, child, updated *Rule
+		parent = path[i]
+		if i < len(path)-1 {
+			child = path[i+1]
+		} else {
+			return root, alreadyCopied, nil
 		}
-		// p is the root, has no parents
-		if p == root {
-			fmt.Println("Shallow copied ", root.ID)
-			root = shallowCopy(root)
-			alreadyCopied[p] = nil
-			continue
+		updated, alreadyCopied = safeIt(parent, child, alreadyCopied)
+		if parent == root {
+			root = updated
 		}
-		fmt.Println("Adding shalow copy of ", p.ID, " to ", root.ID)
-		root.Rules[p.ID] = shallowCopy(p)
-		alreadyCopied[p] = nil
 	}
-	return root, alreadyCopied
+	return root, alreadyCopied, nil
+}
+
+func safeIt(parent, child *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any) {
+	if _, ok := alreadyCopied[parent]; ok {
+		return parent, alreadyCopied
+	}
+
+	if parent == nil {
+		parent = shallowCopy(parent)
+		alreadyCopied[parent] = nil
+		return parent, alreadyCopied
+	}
+	childCopy := shallowCopy(child)
+	parent.Add(childCopy)
+	alreadyCopied[child] = nil
+	return parent, alreadyCopied
 }

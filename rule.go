@@ -3,7 +3,6 @@ package indigo
 import (
 	"fmt"
 	"maps"
-	"slices"
 	"sort"
 	"strings"
 
@@ -260,15 +259,14 @@ func (r *Rule) FindRule(id string) (rule *Rule, ancestors []*Rule) {
 	return nil, nil
 }
 
-// Path returns rule with the id, and all its ancestors
+// Path returns all of the ancestors of the rule with the ID,
 // starting with the root of the rule tree.
 func (r *Rule) Path(id string) []*Rule {
 	me, ancestors := r.FindRule(id)
 	if me == nil {
 		return nil
 	}
-	slices.Reverse(ancestors)
-	return append(ancestors, me)
+	return ancestors
 }
 
 // FindParent returns the parent of the rule with the id
