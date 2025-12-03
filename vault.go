@@ -70,7 +70,6 @@ func NewVault(engine Engine, initialRoot *Rule, opts ...CompilationOption) (*Vau
 		if err != nil {
 			return nil, fmt.Errorf("building shards on initial root: %w", err)
 		}
-		fmt.Println("Starting point : ", initialRoot.Tree())
 	}
 
 	err := v.engine.Compile(initialRoot, opts...)
@@ -231,16 +230,13 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 		if m.newParent == m.id {
 			return nil, fmt.Errorf("cannot move rule %s to itself", m.id)
 		}
-		fmt.Println("prepc finding ", m.id)
 		rule, _ := root.FindRule(m.id)
 		if rule == nil {
 			return nil, fmt.Errorf("moving rule %s: not found", m.id)
 		}
-		fmt.Println("  prepc found", rule.ID)
 		if found, _ := rule.FindRule(m.newParent); found != nil {
 			return nil, fmt.Errorf("cannot move rule %s to its descendant %s", m.id, m.newParent)
 		}
-		fmt.Println("    deleting ", m.id, "  adding to ", m.newParent)
 		mut = append(mut, Delete(m.id))           // delete from current parent
 		mut = append(mut, Add(rule, m.newParent)) // add to new parent
 	}
@@ -249,7 +245,6 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 
 func destinationShard(r, rr *Rule) (*Rule, error) {
 	var toReturn *Rule
-	fmt.Println("Checking ", rr.ID)
 	shardCount := 0
 	if r.shard {
 		shardCount++
@@ -258,14 +253,12 @@ func destinationShard(r, rr *Rule) (*Rule, error) {
 			return nil, err
 		}
 		if ok {
-			fmt.Println("  It's r", r.ID)
 			toReturn = r
 		}
 	}
 
 shardLoop:
 	for _, shard := range r.sortedRules {
-		fmt.Println("   rule = ", shard.ID, shard.shard)
 		if !shard.shard {
 			continue
 		}
@@ -278,7 +271,6 @@ shardLoop:
 			toReturn = shard
 			break shardLoop
 		}
-		fmt.Println("   After count")
 	}
 
 	// if shardCount == 0 {
@@ -286,15 +278,11 @@ shardLoop:
 	// }
 
 	if toReturn != nil {
-		fmt.Println("         After loop, toReturn = ", toReturn.ID, shardCount)
 	} else {
-		fmt.Println("       not found")
 	}
 	// We're in a sharding situation, and no shard matched rr (including the default shard)
 	if shardCount > 0 && toReturn != nil {
-		fmt.Println("In shard sitchj")
 		for _, c := range toReturn.Rules {
-			fmt.Println("In loop", c.ID)
 			sh, err := destinationShard(c, rr)
 			if err != nil {
 				return nil, err
@@ -305,9 +293,7 @@ shardLoop:
 		}
 	}
 	if toReturn != nil {
-		fmt.Println("   returning ", toReturn.ID)
 	} else {
-		fmt.Println("    returning nil ")
 	}
 	return toReturn, nil
 }
@@ -347,7 +333,6 @@ func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
 			continue
 		}
 	}
-	fmt.Println("Before storing: ", root.Tree())
 	v.root.Store(root)
 	return nil
 }
@@ -417,10 +402,8 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID stri
 		return nil, nil, err
 	}
 	if target != nil {
-		fmt.Println("the destination is  ", target.ID, target.shard)
 		parentID = target.ID
 	}
-	fmt.Println("Before doing makesafepath: ", r.Tree())
 	r, alreadyCopied = makeSafePath(r, alreadyCopied, parentID)
 	if newRule.ID == "" {
 		return nil, nil, fmt.Errorf("rule ID cannot be empty")
@@ -440,14 +423,10 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID stri
 	if parent.Rules == nil {
 		parent.Rules = map[string]*Rule{}
 	}
-	fmt.Println(" Adding ", newRule.ID, " to ", parent.ID)
 	parent.Rules[newRule.ID] = newRule
 	// This step is handled automatically when we compile parent, but we do not want to
 	// recompile parent, so we do it manually here
 	parent.sortedRules = parent.sortChildRules(parent.EvalOptions.SortFunc, true)
-	for _, x := range parent.sortedRules {
-		fmt.Println(x.ID)
-	}
 	// r.Rules[parent.ID] = parent
 	return r, alreadyCopied, nil
 }

@@ -229,7 +229,6 @@ func matchMeta(shard, r *Rule) (bool, error) {
 	switch f := shard.Meta.(type) {
 	case func(*Rule) bool:
 		if f(r) {
-			fmt.Println("   found match: ", shard.ID)
 			return true, nil
 		}
 	default:
