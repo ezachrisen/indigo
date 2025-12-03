@@ -28,35 +28,6 @@ func debugLogf(t *testing.T, format string, args ...any) {
 	}
 }
 
-func TestVault_NestedAdd(t *testing.T) {
-	e, v := setup2(t)
-	r := &indigo.Rule{
-		ID:   "x1",
-		Expr: `11 > 10`,
-	}
-	debugLogf(t, "Before add\n%s\n", v.Rule().Tree())
-	t1 := time.Date(2020, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
-	if err := v.Mutate(indigo.LastUpdate(t1)); err != nil {
-		t.Fatal(err)
-	}
-	t2 := time.Date(2022, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
-	if err := v.Mutate(indigo.Add(r, "c33"), indigo.LastUpdate(t2)); err != nil {
-		t.Fatal(err)
-	}
-	debugLogf(t, "After add\n%s\n", v.Rule().Tree())
-	lu := v.LastUpdate()
-	if !lu.After(t1) {
-		t.Fatal("time stamp was not updated")
-	}
-	res, err := e.Eval(context.Background(), v.Rule(), map[string]any{"value": 15})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !res.Pass {
-		t.Error("expected pass")
-	}
-}
-
 func TestVault_DeleteRule(t *testing.T) {
 	_, v := setup(t)
 
@@ -181,7 +152,6 @@ func TestVault_AddRule(t *testing.T) {
 	}
 	snapshot := v.Rule()
 	debugLogf(t, "Snapshot before adding rule1.2 to rule1:\n%s\n", snapshot)
-	// fmt.Println("-------------------- ")
 	newRule2 := &indigo.Rule{ID: "rule1.2", Expr: `10<1`}
 	newRule3 := &indigo.Rule{ID: "rule1.3", Expr: `10<1`}
 	if err := v.Mutate(indigo.Add(newRule2, "rule1"), indigo.Add(newRule3, "rule1")); err != nil {
@@ -225,6 +195,36 @@ func TestVault_MoveRule(t *testing.T) {
 	}
 
 	debugLogf(t, "After\n%s\n", v.Rule())
+}
+
+// This tests adding a rule to a parent 3 levels deep
+func TestVault_NestedAdd(t *testing.T) {
+	e, v := setup2(t)
+	r := &indigo.Rule{
+		ID:   "x1",
+		Expr: `11 > 10`,
+	}
+	debugLogf(t, "Before add\n%s\n", v.Rule().Tree())
+	t1 := time.Date(2020, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
+	if err := v.Mutate(indigo.LastUpdate(t1)); err != nil {
+		t.Fatal(err)
+	}
+	t2 := time.Date(2022, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
+	if err := v.Mutate(indigo.Add(r, "c33"), indigo.LastUpdate(t2)); err != nil {
+		t.Fatal(err)
+	}
+	debugLogf(t, "After add\n%s\n", v.Rule().Tree())
+	lu := v.LastUpdate()
+	if !lu.After(t1) {
+		t.Fatal("time stamp was not updated")
+	}
+	res, err := e.Eval(context.Background(), v.Rule(), map[string]any{"value": 15})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Pass {
+		t.Error("expected pass")
+	}
 }
 
 func TestVault_Concurrency(t *testing.T) {
