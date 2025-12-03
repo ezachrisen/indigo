@@ -435,6 +435,11 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID stri
 // so that updates can be made to those rules. If a rule has already been copied, cloning
 // is skipped.
 func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, map[*Rule]any) {
+	fmt.Println("Making safe path between ", id, " and root ", root.ID)
+	fmt.Println("Already copied:", len(alreadyCopied))
+	for k := range alreadyCopied {
+		fmt.Println(k.ID)
+	}
 	path := root.Path(id)
 	for _, p := range path {
 		if _, ok := alreadyCopied[p]; ok {
@@ -442,10 +447,12 @@ func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, ma
 		}
 		// p is the root, has no parents
 		if p == root {
+			fmt.Println("Shallow copied ", root.ID)
 			root = shallowCopy(root)
 			alreadyCopied[p] = nil
 			continue
 		}
+		fmt.Println("Adding shalow copy of ", p.ID, " to ", root.ID)
 		root.Rules[p.ID] = shallowCopy(p)
 		alreadyCopied[p] = nil
 	}

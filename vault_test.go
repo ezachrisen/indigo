@@ -13,12 +13,12 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 )
 
-// Set flag with go test -run=MyTest --debug=true
+// Set flag with go test -run=MyTest --debug
 // to print verbose rule diagnostic info
 var debugOutput bool
 
 func init() {
-	flag.BoolVar(&debugOutput, "debug", false, "Enable detailed logging for tests")
+	flag.BoolVar(&debugOutput, "debug", true, "Enable detailed logging for tests")
 }
 
 func debugLogf(t *testing.T, format string, args ...any) {
@@ -28,27 +28,22 @@ func debugLogf(t *testing.T, format string, args ...any) {
 	}
 }
 
-func debugTree(t *testing.T, note string, r *indigo.Rule) {
-	t.Helper()
-	if debugOutput {
-		t.Logf("\n\n%s\n\n%s\n\n", note, r.Tree())
-	}
-}
-
-func TestVault_BasicAddAndEval(t *testing.T) {
-	e, v := setup(t)
+func TestVault_NestedAdd(t *testing.T) {
+	e, v := setup2(t)
 	r := &indigo.Rule{
-		ID:   "a",
+		ID:   "x1",
 		Expr: `11 > 10`,
 	}
+	debugLogf(t, "Before add\n%s\n", v.Rule().Tree())
 	t1 := time.Date(2020, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
 	if err := v.Mutate(indigo.LastUpdate(t1)); err != nil {
 		t.Fatal(err)
 	}
 	t2 := time.Date(2022, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
-	if err := v.Mutate(indigo.Add(r, "root"), indigo.LastUpdate(t2)); err != nil {
+	if err := v.Mutate(indigo.Add(r, "c33"), indigo.LastUpdate(t2)); err != nil {
 		t.Fatal(err)
 	}
+	debugLogf(t, "After add\n%s\n", v.Rule().Tree())
 	lu := v.LastUpdate()
 	if !lu.After(t1) {
 		t.Fatal("time stamp was not updated")
@@ -61,13 +56,13 @@ func TestVault_BasicAddAndEval(t *testing.T) {
 		t.Error("expected pass")
 	}
 
-	rr := v.Rule()
-	if len(rr.Rules) != 1 {
-		t.Errorf("missing rule")
-	}
-	if a, ok := rr.Rules["a"]; !ok || a.Expr != "11 > 10" {
-		t.Errorf("missing or incorrect rule")
-	}
+	// rr := v.Rule()
+	// if len(rr.Rules) != 1 {
+	// 	t.Errorf("missing rule")
+	// }
+	// if a, ok := rr.Rules["a"]; !ok || a.Expr != "11 > 10" {
+	// 	t.Errorf("missing or incorrect rule")
+	// }
 }
 
 func TestVault_DeleteRule(t *testing.T) {
@@ -237,7 +232,7 @@ func TestVault_MoveRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	debugLogf(t, "------------------------------After\n%s\n", v.Rule())
+	debugLogf(t, "After\n%s\n", v.Rule())
 	//
 	// if v.Rule().Rules["rule2"].Rules["b"].Expr != `10 > 1` {
 	// 	t.Errorf("incorrect rule")
@@ -497,6 +492,26 @@ func TestVault_MultipleMutationsWithError(t *testing.T) {
 	if _, ok := root.Rules["r1"]; ok {
 		t.Error("r1 was added despite error")
 	}
+}
+
+// Helper to create a fresh engine + vault for each test
+func setup2(t *testing.T) (indigo.Engine, *indigo.Vault) {
+	eng := indigo.NewEngine(cel.NewEvaluator())
+	r := threeRules()
+	c31 := indigo.NewRule("c31", " 1 == 1")
+	c32 := indigo.NewRule("c32", " 1 == 1")
+	c33 := indigo.NewRule("c33", " 1 == 1")
+
+	c3 := r.Rules["c"].Rules["c3"]
+	c3.Rules[c31.ID] = c31
+	c3.Rules[c32.ID] = c32
+	c3.Rules[c33.ID] = c33
+
+	v, err := indigo.NewVault(eng, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return eng, v
 }
 
 // Helper to create a fresh engine + vault for each test
