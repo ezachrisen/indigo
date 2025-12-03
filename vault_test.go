@@ -40,7 +40,7 @@ func TestVault_DeleteRule(t *testing.T) {
 		t.Fatal(err)
 	}
 	// snapshot snapshot
-	snapshot := v.Rule()
+	snapshot := v.ImmutableRule()
 
 	debugLogf(t, "Snapshot before\n%s\n", snapshot)
 	// Delete child
@@ -48,7 +48,7 @@ func TestVault_DeleteRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	root := v.Rule()
+	root := v.ImmutableRule()
 	if root == nil {
 		t.Fatal("root became nil")
 	}
@@ -82,10 +82,10 @@ func TestVault_UpdateRule(t *testing.T) {
 	if err := v.Mutate(indigo.Add(old, "root")); err != nil {
 		t.Fatal(err)
 	}
-	snapshot := v.Rule()
+	snapshot := v.ImmutableRule()
 	debugLogf(t, "Snapshot before\n%s\n", snapshot)
 
-	res, err := e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
+	res, err := e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"x": 42})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestVault_UpdateRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err = e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
+	res, err = e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"x": 42})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,8 +105,8 @@ func TestVault_UpdateRule(t *testing.T) {
 		t.Error("update did not take effect")
 	}
 
-	debugLogf(t, "After\n%s\n", v.Rule())
-	if v.Rule().Rules["rule1"].Expr != `2 + 2 == 4` {
+	debugLogf(t, "After\n%s\n", v.ImmutableRule())
+	if v.ImmutableRule().Rules["rule1"].Expr != `2 + 2 == 4` {
 		t.Errorf("incorrect rule")
 	}
 
@@ -123,7 +123,7 @@ func TestVault_UpdateRule(t *testing.T) {
 	if e := snapshot.Rules["rule1"].Expr; e != `2+2 == 3` {
 		t.Errorf("snapshot was updated: %s", e)
 	}
-	after := v.Rule()
+	after := v.ImmutableRule()
 	if len(after.Rules) > 0 || after.Expr != ` 1 == 1 ` {
 		t.Errorf("root was not replaced")
 	}
@@ -137,7 +137,7 @@ func TestVault_AddRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
+	res, err := e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"x": 42})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,12 +145,12 @@ func TestVault_AddRule(t *testing.T) {
 		t.Error("eval failed")
 	}
 
-	debugLogf(t, "Before adding rule2 to root:\n%s\n", v.Rule())
+	debugLogf(t, "Before adding rule2 to root:\n%s\n", v.ImmutableRule())
 	newRule := &indigo.Rule{ID: "rule2", Expr: `10<1`}
 	if err := v.Mutate(indigo.Add(newRule, "root")); err != nil {
 		t.Fatal(err)
 	}
-	snapshot := v.Rule()
+	snapshot := v.ImmutableRule()
 	debugLogf(t, "Snapshot before adding rule1.2 to rule1:\n%s\n", snapshot)
 	newRule2 := &indigo.Rule{ID: "rule1.2", Expr: `10<1`}
 	newRule3 := &indigo.Rule{ID: "rule1.3", Expr: `10<1`}
@@ -158,16 +158,16 @@ func TestVault_AddRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	debugLogf(t, "After adding rule1.2:\n%s\n", v.Rule())
-	_, err = e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
+	debugLogf(t, "After adding rule1.2:\n%s\n", v.ImmutableRule())
+	_, err = e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"x": 42})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if v.Rule().Rules["rule1"].Expr != `2+2 == 4` {
+	if v.ImmutableRule().Rules["rule1"].Expr != `2+2 == 4` {
 		t.Errorf("incorrect rule")
 	}
-	if v.Rule().Rules["rule2"].Expr != `10<1` {
+	if v.ImmutableRule().Rules["rule2"].Expr != `10<1` {
 		t.Errorf("incorrect rule")
 	}
 	debugLogf(t, "Snapshot after adds:\n%s", snapshot)
@@ -188,13 +188,13 @@ func TestVault_MoveRule(t *testing.T) {
 	if err := v.Mutate(indigo.Add(one, "root"), indigo.Add(two, "root")); err != nil {
 		t.Fatal(err)
 	}
-	debugLogf(t, "Before\n%s\n", v.Rule())
+	debugLogf(t, "Before\n%s\n", v.ImmutableRule())
 
 	if err := v.Mutate(indigo.Move("b", "rule2")); err != nil {
 		t.Fatal(err)
 	}
 
-	debugLogf(t, "After\n%s\n", v.Rule())
+	debugLogf(t, "After\n%s\n", v.ImmutableRule())
 }
 
 // This tests adding a rule to a parent 3 levels deep
@@ -204,7 +204,7 @@ func TestVault_NestedAdd(t *testing.T) {
 		ID:   "x1",
 		Expr: `11 > 10`,
 	}
-	debugLogf(t, "Before add\n%s\n", v.Rule().Tree())
+	debugLogf(t, "Before add\n%s\n", v.ImmutableRule().Tree())
 	t1 := time.Date(2020, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
 	if err := v.Mutate(indigo.LastUpdate(t1)); err != nil {
 		t.Fatal(err)
@@ -213,12 +213,12 @@ func TestVault_NestedAdd(t *testing.T) {
 	if err := v.Mutate(indigo.Add(r, "c33"), indigo.LastUpdate(t2)); err != nil {
 		t.Fatal(err)
 	}
-	debugLogf(t, "After add\n%s\n", v.Rule().Tree())
+	debugLogf(t, "After add\n%s\n", v.ImmutableRule().Tree())
 	lu := v.LastUpdate()
 	if !lu.After(t1) {
 		t.Fatal("time stamp was not updated")
 	}
-	res, err := e.Eval(context.Background(), v.Rule(), map[string]any{"value": 15})
+	res, err := e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"value": 15})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestVault_Concurrency(t *testing.T) {
 		ctx := context.Background()
 		errCount := 0
 		for i := range 3000 {
-			rule := v.Rule()
+			rule := v.ImmutableRule()
 
 			debugLogf(t, "Evaluating: \n%s\n", rule)
 			res, err := eng.Eval(ctx, rule, map[string]any{})
@@ -292,7 +292,7 @@ func TestVault_Concurrency(t *testing.T) {
 			}
 
 			// Move c1 back and forth between a and c
-			cr := v.Rule()
+			cr := v.ImmutableRule()
 			if _, ok := cr.Rules["c"].Rules["c1"]; ok {
 				if err := v.Mutate(indigo.Move("c1", "a")); err != nil {
 					t.Fatal(err)
@@ -303,7 +303,7 @@ func TestVault_Concurrency(t *testing.T) {
 				}
 			}
 
-			debugLogf(t, "After update: \n%s\n", v.Rule())
+			debugLogf(t, "After update: \n%s\n", v.ImmutableRule())
 			desiredResult.Store(newResult)
 			time.Sleep(3 * time.Millisecond)
 		}
@@ -471,7 +471,7 @@ func TestVault_MultipleMutationsWithError(t *testing.T) {
 	}
 
 	// Check that valid mutations before error were NOT applied
-	root := v.Rule()
+	root := v.ImmutableRule()
 	if _, ok := root.Rules["r1"]; ok {
 		t.Error("r1 was added despite error")
 	}
@@ -536,7 +536,7 @@ func TestVault_ConcurrentMutations_RaceCondition(t *testing.T) {
 	wg.Wait()
 
 	// Verify
-	finalRule := v.Rule()
+	finalRule := v.ImmutableRule()
 	if len(finalRule.Rules) != numWriters {
 		t.Errorf("Race condition detected! Expected %d rules, got %d", numWriters, len(finalRule.Rules))
 	}
@@ -576,7 +576,7 @@ func TestVault_MakeSafePath(t *testing.T) {
 	//----------------------------------------
 	// We'll preserve the baseline so we can compare to it
 	// after we mutate the vault
-	baseline := v.Rule()
+	baseline := v.ImmutableRule()
 	debugLogf(t, "baseline:\n%s\n", baseline)
 
 	if baseline.Rules["childA"] != originalChildA {
@@ -599,7 +599,7 @@ func TestVault_MakeSafePath(t *testing.T) {
 
 	//----------------------------------------
 	// Verify the new state
-	after := v.Rule()
+	after := v.ImmutableRule()
 
 	debugLogf(t, "baseline after grandChildB update:\n%s\n", baseline)
 	debugLogf(t, "after grandChildB update:\n%s\n", after)

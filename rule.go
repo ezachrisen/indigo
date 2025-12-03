@@ -94,7 +94,11 @@ type Rule struct {
 	// unspecified.
 	sortedRules []*Rule
 
+	// shard is set to true if this rule is a shard
 	shard bool
+
+	// hasBeenSharded is set to true if BuildShards has been run on the rule.
+	hasBeenSharded bool
 }
 
 const (
@@ -143,7 +147,13 @@ const defaultRuleID = "default"
 //
 // When you apply mutations to the rule in the vault, the vault will automatically apply sharding
 // specifications and place rules in the right shard.
+//
+// If you call BuildShards multiple times on a rule, no changes will be made to the shards.
+// To reshard the rule, build it from scratch.
 func (r *Rule) BuildShards() error {
+	if r.hasBeenSharded {
+		return nil
+	}
 	var detached map[string]*Rule
 	for _, sh := range r.Shards {
 		if sh == nil {
@@ -193,6 +203,7 @@ func (r *Rule) BuildShards() error {
 			return err
 		}
 	}
+	r.hasBeenSharded = true
 	return nil
 }
 

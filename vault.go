@@ -82,7 +82,7 @@ func NewVault(engine Engine, initialRoot *Rule, opts ...CompilationOption) (*Vau
 }
 
 // Rule returns the current immutable root rule for evaluation or inspection.
-func (v *Vault) Rule() *Rule {
+func (v *Vault) ImmutableRule() *Rule {
 	return v.root.Load()
 }
 
@@ -212,7 +212,7 @@ func (v *Vault) Mutate(mutations ...vaultMutation) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	r := v.Rule()
+	r := v.ImmutableRule()
 	mut, err := v.preProcessMoves(r, mutations)
 	if err != nil {
 		return fmt.Errorf("preprocessing moves: %w", err)
@@ -453,9 +453,9 @@ func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, ma
 		if i < len(path)-1 {
 			child = path[i+1]
 		} else {
-			updated, alreadyCopied = safeIt(parent, nil, alreadyCopied)
+			updated, alreadyCopied = makeSafe(parent, nil, alreadyCopied)
 		}
-		updated, alreadyCopied = safeIt(parent, child, alreadyCopied)
+		updated, alreadyCopied = makeSafe(parent, child, alreadyCopied)
 		if parent == root {
 			root = updated
 		}
@@ -463,7 +463,10 @@ func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, ma
 	return root, alreadyCopied, nil
 }
 
-func safeIt(parent, child *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any) {
+// makeSafe makes the parent safe, then the child, and adds the child
+// to the (now) safe parent. If the only the parent needs to be made safe,
+// such as in the case of adding a new rule to the Vault, pass child as nil.
+func makeSafe(parent, child *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any) {
 	if child != nil {
 	} else {
 	}

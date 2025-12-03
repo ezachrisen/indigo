@@ -133,6 +133,15 @@ root
 	`
 		compareStrings(wantTree, gotTree, t)
 
+		////--------------------------------------------------------------------------------
+		//// BuildShards idempotency
+		err = root.BuildShards()
+		if err != nil {
+			t.Fatal(err)
+		}
+		gotTree = root.Tree()
+		compareStrings(wantTree, gotTree, t)
+
 		//--------------------------------------------------------------------------------
 		// Evaluate the rule
 
@@ -210,6 +219,7 @@ root
 `
 		gotUnsharded := res.String()
 		compareStrings(wantUnsharded, gotUnsharded, t)
+		debugLogf(t, "Result:\n%s\n\n", res)
 
 		// We can also view the results in in a "flat" way, where all returned rules are available via an iterator, but shard rules are omitted from the results
 		wantFlat := `
@@ -297,7 +307,7 @@ func TestVaultShards(t *testing.T) {
 	//	Attach the shards to the rule
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
 
-	debugLogf(t, "Before sharding:\n%s\n", root)
+	debugLogf(t, "Before sharding:\n%s\n", root.Tree())
 
 	// Before building the shards, root looks like this:
 	//
@@ -321,8 +331,8 @@ func TestVaultShards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	debugLogf(t, "After sharding:\n%s\n", v.Rule())
-	gotTree := v.Rule().Tree()
+	debugLogf(t, "After sharding:\n%s\n", v.ImmutableRule().Tree())
+	gotTree := v.ImmutableRule().Tree()
 
 	// After building the shards, root should look like this:
 	wantTree := `
@@ -346,17 +356,18 @@ root
 	`
 	compareStrings(wantTree, gotTree, t)
 
-	//--------------------------------------------------------------------------------
-	// Add a new rule, make sure it ends up in the right shard
-	// Based on the sharding specification, it shold be placed into "woodlawnForeign"
+	t.Run("add_rule_to_shard", func(t *testing.T) {
+		//--------------------------------------------------------------------------------
+		// Add a new rule, make sure it ends up in the right shard
+		// Based on the sharding specification, it shold be placed into "woodlawnForeign"
 
-	woodlawnForeignJustOK := indigo.NewRule("woodlawnForeignJustOK", `school =="woodlawn" && class == 2026 && gpa > 2.0 && gpa < 3.7 && nationality != "US"`)
+		woodlawnForeignJustOK := indigo.NewRule("woodlawnForeignJustOK", `school =="woodlawn" && class == 2026 && gpa > 2.0 && gpa < 3.7 && nationality != "US"`)
 
-	err = v.Mutate(indigo.Add(woodlawnForeignJustOK, "root")) // <-- we can just add it to the root and let sharding place it
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantTree = `
+		err = v.Mutate(indigo.Add(woodlawnForeignJustOK, "root")) // <-- we can just add it to the root and let sharding place it
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantTree = `
   root
 ├── central (*)
 │   ├── centralAtRisk
@@ -376,11 +387,14 @@ root
         ├── woodlawnForeignHonors
         └── woodlawnForeignJustOK
   `
-	gotTree = v.Rule().Tree()
+		gotTree = v.ImmutableRule().Tree()
 
-	compareStrings(wantTree, gotTree, t)
+		debugLogf(t, "After adding new rule, ensuring it ends up in the right shard:\n%s\n", gotTree)
+		compareStrings(wantTree, gotTree, t)
+	})
 }
 
+// Helper function to compare rule trees from the rule.Tree() method
 func compareStrings(want, got string, t *testing.T) {
 	t.Helper()
 	want = strings.TrimSpace(want)

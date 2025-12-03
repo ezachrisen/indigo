@@ -697,6 +697,7 @@ func TestBuildShardsPreservesRuleProperties(t *testing.T) {
 }
 
 // TestBuildShardsEdgeCaseShardIDCollision tests when a rule ID matches a shard ID
+// This should result in a failure
 func TestBuildShardsEdgeCaseShardIDCollision(t *testing.T) {
 	root := indigo.NewRule("root", "")
 
@@ -714,6 +715,7 @@ func TestBuildShardsEdgeCaseShardIDCollision(t *testing.T) {
 		t.Fatalf("BuildShards failed: %v", err)
 	}
 
+	debugLogf(t, "After BuildShards\n%s\n", root)
 	// The rule should be moved into the shard
 	shardParent := root.Rules["shard1"]
 	if _, ok := shardParent.Rules["shard1"]; !ok {
