@@ -228,20 +228,88 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 		if m.op != move {
 			continue
 		}
-		rule, _ := root.FindRule(m.id)
 		if m.newParent == m.id {
 			return nil, fmt.Errorf("cannot move rule %s to itself", m.id)
 		}
-		if found, _ := rule.FindRule(m.newParent); found != nil {
-			return nil, fmt.Errorf("cannot move rule %s to its descendant %s", m.id, m.newParent)
-		}
+		fmt.Println("prepc finding ", m.id)
+		rule, _ := root.FindRule(m.id)
 		if rule == nil {
 			return nil, fmt.Errorf("moving rule %s: not found", m.id)
 		}
+		fmt.Println("  prepc found", rule.ID)
+		if found, _ := rule.FindRule(m.newParent); found != nil {
+			return nil, fmt.Errorf("cannot move rule %s to its descendant %s", m.id, m.newParent)
+		}
+		fmt.Println("    deleting ", m.id, "  adding to ", m.newParent)
 		mut = append(mut, Delete(m.id))           // delete from current parent
 		mut = append(mut, Add(rule, m.newParent)) // add to new parent
 	}
 	return mut, nil
+}
+
+func destinationShard(r, rr *Rule) (*Rule, error) {
+	var toReturn *Rule
+	fmt.Println("Checking ", rr.ID)
+	shardCount := 0
+	if r.shard {
+		shardCount++
+		ok, err := matchMeta(r, rr)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			fmt.Println("  It's r", r.ID)
+			toReturn = r
+		}
+	}
+
+shardLoop:
+	for _, shard := range r.sortedRules {
+		fmt.Println("   rule = ", shard.ID, shard.shard)
+		if !shard.shard {
+			continue
+		}
+		shardCount++
+		ok, err := matchMeta(shard, rr)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			toReturn = shard
+			break shardLoop
+		}
+		fmt.Println("   After count")
+	}
+
+	// if shardCount == 0 {
+	// 	toReturn = r
+	// }
+
+	if toReturn != nil {
+		fmt.Println("         After loop, toReturn = ", toReturn.ID, shardCount)
+	} else {
+		fmt.Println("       not found")
+	}
+	// We're in a sharding situation, and no shard matched rr (including the default shard)
+	if shardCount > 0 && toReturn != nil {
+		fmt.Println("In shard sitchj")
+		for _, c := range toReturn.Rules {
+			fmt.Println("In loop", c.ID)
+			sh, err := destinationShard(c, rr)
+			if err != nil {
+				return nil, err
+			}
+			if sh != nil {
+				return sh, nil
+			}
+		}
+	}
+	if toReturn != nil {
+		fmt.Println("   returning ", toReturn.ID)
+	} else {
+		fmt.Println("    returning nil ")
+	}
+	return toReturn, nil
 }
 
 // applyMutations performs the mutations against the root rule.
@@ -344,7 +412,7 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, ma
 
 // add adds the newRule to the parent rule with parentID, somewhere inside the root rule r
 func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID string) (*Rule, map[*Rule]any, error) {
-	target, err := r.destinationShard(newRule)
+	target, err := destinationShard(r, newRule)
 	if err != nil {
 		return nil, nil, err
 	}
