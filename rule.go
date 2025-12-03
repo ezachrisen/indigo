@@ -187,7 +187,7 @@ func (r *Rule) BuildShards() error {
 
 	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
 	for _, newChild := range r.Rules {
-		// fmt.Println("child ", newChild.ID, r.ID)
+		// //fmt.Println("child ", newChild.ID, r.ID)
 		err := newChild.BuildShards()
 		if err != nil {
 			return err
@@ -266,7 +266,7 @@ func (r *Rule) Path(id string) []*Rule {
 	if me == nil {
 		return nil
 	}
-	return ancestors
+	return append(ancestors, me)
 }
 
 // FindParent returns the parent of the rule with the id

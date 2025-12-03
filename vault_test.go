@@ -13,12 +13,12 @@ import (
 	"github.com/ezachrisen/indigo/cel"
 )
 
-// Set flag with go test -run=MyTest --debug
+// Set flag with go test -run=MyTest --debug=true
 // to print verbose rule diagnostic info
 var debugOutput bool
 
 func init() {
-	flag.BoolVar(&debugOutput, "debug", true, "Enable detailed logging for tests")
+	flag.BoolVar(&debugOutput, "debug", false, "Enable detailed logging for tests")
 }
 
 func debugLogf(t *testing.T, format string, args ...any) {
@@ -55,14 +55,6 @@ func TestVault_NestedAdd(t *testing.T) {
 	if !res.Pass {
 		t.Error("expected pass")
 	}
-
-	// rr := v.Rule()
-	// if len(rr.Rules) != 1 {
-	// 	t.Errorf("missing rule")
-	// }
-	// if a, ok := rr.Rules["a"]; !ok || a.Expr != "11 > 10" {
-	// 	t.Errorf("missing or incorrect rule")
-	// }
 }
 
 func TestVault_DeleteRule(t *testing.T) {
@@ -189,26 +181,26 @@ func TestVault_AddRule(t *testing.T) {
 	}
 	snapshot := v.Rule()
 	debugLogf(t, "Snapshot before adding rule1.2 to rule1:\n%s\n", snapshot)
+	// fmt.Println("-------------------- ")
 	newRule2 := &indigo.Rule{ID: "rule1.2", Expr: `10<1`}
 	newRule3 := &indigo.Rule{ID: "rule1.3", Expr: `10<1`}
 	if err := v.Mutate(indigo.Add(newRule2, "rule1"), indigo.Add(newRule3, "rule1")); err != nil {
 		t.Fatal(err)
 	}
 
-	debugLogf(t, "After:\n%s\n", v.Rule())
+	debugLogf(t, "After adding rule1.2:\n%s\n", v.Rule())
 	_, err = e.Eval(context.Background(), v.Rule(), map[string]any{"x": 42})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	debugLogf(t, "After\n%s\n", v.Rule())
 	if v.Rule().Rules["rule1"].Expr != `2+2 == 4` {
 		t.Errorf("incorrect rule")
 	}
 	if v.Rule().Rules["rule2"].Expr != `10<1` {
 		t.Errorf("incorrect rule")
 	}
-	debugLogf(t, "Snapshot after adds: %s", snapshot)
+	debugLogf(t, "Snapshot after adds:\n%s", snapshot)
 	if len(snapshot.Rules["rule1"].Rules) > 0 {
 		t.Errorf("snapshot modified")
 	}
@@ -233,15 +225,6 @@ func TestVault_MoveRule(t *testing.T) {
 	}
 
 	debugLogf(t, "After\n%s\n", v.Rule())
-	//
-	// if v.Rule().Rules["rule2"].Rules["b"].Expr != `10 > 1` {
-	// 	t.Errorf("incorrect rule")
-	// }
-	//
-	// // try to move the root rule
-	// if err := v.Mutate(indigo.Move("root", "rule1")); err == nil {
-	// 	t.Fatal("should get error when trying to move the root")
-	// }
 }
 
 func TestVault_Concurrency(t *testing.T) {
