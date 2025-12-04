@@ -3,6 +3,7 @@ package indigo
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -350,7 +351,9 @@ func (r *Rule) rulesToRows(n int) ([]table.Row, int) {
 	rows = append(rows, row)
 	maxExprLength := len(r.Expr)
 
-	for _, c := range r.Rules {
+	keys := slices.Sorted(maps.Keys(r.Rules))
+	for _, k := range keys {
+		c := r.Rules[k]
 		cr, maxLen := c.rulesToRows(n + 1)
 		if maxLen > maxExprLength {
 			maxExprLength = maxLen

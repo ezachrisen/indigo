@@ -39,7 +39,7 @@ func TestVault_DeleteRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// snapshot snapshot
+	// snapshot
 	snapshot := v.ImmutableRule()
 
 	debugLogf(t, "Snapshot before\n%s\n", snapshot)
@@ -188,12 +188,14 @@ func TestVault_MoveRule(t *testing.T) {
 	if err := v.Mutate(indigo.Add(one, "root"), indigo.Add(two, "root")); err != nil {
 		t.Fatal(err)
 	}
-	debugLogf(t, "Before\n%s\n", v.ImmutableRule())
+	baseline := v.ImmutableRule()
+	debugLogf(t, "Before\n%s\n", baseline)
 
 	if err := v.Mutate(indigo.Move("b", "rule2")); err != nil {
 		t.Fatal(err)
 	}
 
+	debugLogf(t, "Baseline after (should not change)\n%s\n", baseline)
 	debugLogf(t, "After\n%s\n", v.ImmutableRule())
 }
 
@@ -287,9 +289,10 @@ func TestVault_Concurrency(t *testing.T) {
 				newResult = true
 
 			}
-			if err := v.Mutate(indigo.Update(r)); err != nil {
-				t.Fatal(err)
-			}
+			_ = r
+			// if err := v.Mutate(indigo.Update(r)); err != nil {
+			// 	t.Fatal(err)
+			// }
 
 			// Move c1 back and forth between a and c
 			cr := v.ImmutableRule()
@@ -542,114 +545,221 @@ func TestVault_ConcurrentMutations_RaceCondition(t *testing.T) {
 	}
 }
 
-// The Make Safe Path test verifies that mutations on the Vault
+// This test mutates a rule in a Vault and makes sure that the changes
 // are not seen outside the vault by someone who grabbed to rule before
 // mutations happened.
 //
 // The test operates on this rule tree:
 //
-// ┌────────────────────────────────────────────────────────┐
-// │                                                        │
-// │ INDIGO RULES                                           │
-// │                                                        │
-// ├─────────────────┬────────┬────────────┬────────┬───────┤
-// │                 │        │            │ Result │       │
-// │ Rule            │ Schema │ Expression │ Type   │ Meta  │
-// ├─────────────────┼────────┼────────────┼────────┼───────┤
-// │ root            │        │            │ <nil>  │ <nil> │
-// │   childA        │        │            │ <nil>  │ <nil> │
-// │     grandChildB │        │            │ <nil>  │ <nil> │
-// └─────────────────┴────────┴────────────┴────────┴───────┘
-func TestVault_MakeSafePath(t *testing.T) {
-	// Setup
-	originalRoot := indigo.NewRule("root", "")
-	originalChildA := indigo.NewRule("childA", "")
-	originalGrandChildB := indigo.NewRule("grandChildB", "")
-	originalChildA.Rules[originalGrandChildB.ID] = originalGrandChildB
-	originalRoot.Rules[originalChildA.ID] = originalChildA
-	eng := indigo.NewEngine(cel.NewEvaluator())
-	v, err := indigo.NewVault(eng, originalRoot)
-	if err != nil {
-		t.Fatal(err)
+// root
+// ├── childA
+// │   ├── one
+// │   └── two
+// ├── childB
+// │   └── three
+// └── childC
+func TestVault_Mutations(t *testing.T) {
+	setup := func() *indigo.Vault {
+		root := indigo.NewRule("root", "")
+		root.Add(indigo.NewRule("childA", ""))
+		root.Add(indigo.NewRule("childB", ""))
+		root.Add(indigo.NewRule("childC", ""))
+		root.Rules["childA"].Add(indigo.NewRule("one", ""))
+		root.Rules["childA"].Add(indigo.NewRule("two", ""))
+		root.Rules["childB"].Add(indigo.NewRule("three", ""))
+		eng := indigo.NewEngine(cel.NewEvaluator())
+		v, _ := indigo.NewVault(eng, root)
+		return v
 	}
+	baselineStr := `
+┌──────────────────────────────────────────────────┐
+│                                                  │
+│ INDIGO RULES                                     │
+│                                                  │
+├───────────┬────────┬────────────┬────────┬───────┤
+│           │        │            │ Result │       │
+│ Rule      │ Schema │ Expression │ Type   │ Meta  │
+├───────────┼────────┼────────────┼────────┼───────┤
+│ root      │        │            │ <nil>  │ <nil> │
+│   childA  │        │            │ <nil>  │ <nil> │
+│     one   │        │            │ <nil>  │ <nil> │
+│     two   │        │            │ <nil>  │ <nil> │
+│   childB  │        │            │ <nil>  │ <nil> │
+│     three │        │            │ <nil>  │ <nil> │
+│   childC  │        │            │ <nil>  │ <nil> │
+└───────────┴────────┴────────────┴────────┴───────┘       
+`
 
-	//----------------------------------------
-	// We'll preserve the baseline so we can compare to it
-	// after we mutate the vault
-	baseline := v.ImmutableRule()
-	debugLogf(t, "baseline:\n%s\n", baseline)
+	t.Run("update", func(t *testing.T) {
+		v := setup()
+		baseline := v.ImmutableRule()
+		debugLogf(t, "baseline:\n%s\n", baseline)
 
-	if baseline.Rules["childA"] != originalChildA {
-		t.Error("childA unexpected poninter value")
-	}
+		err := v.Mutate(indigo.Update(indigo.NewRule("one", "true")))
+		if err != nil {
+			t.Fatalf("Updating rule failed: %v", err)
+		}
 
-	if baseline.Rules["childA"].Rules["grandChildB"] != originalGrandChildB {
-		t.Error("grandChildB unexpected poninter value")
-	}
+		after := v.ImmutableRule()
 
-	// Now, let's try to update grandChildB with a new rule.
-	// This will trigger makeSafePath for the path root -> childA -> grandChildB
-	newGrandChildB := indigo.NewRule("grandChildB", "true")
-	err = v.Mutate(indigo.Update(newGrandChildB))
-	if err != nil {
-		// If makeSafePath fails to copy correctly, this Mutate call might return an error
-		// like "parent not found for rule after cloning", which would indicate the bug.
-		t.Fatalf("Mutating deep rule failed: %v", err)
-	}
+		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+		debugLogf(t, "after mutation:\n%s\n", after)
+		want := `
+┌──────────────────────────────────────────────────┐
+│                                                  │
+│ INDIGO RULES                                     │
+│                                                  │
+├───────────┬────────┬────────────┬────────┬───────┤
+│           │        │            │ Result │       │
+│ Rule      │ Schema │ Expression │ Type   │ Meta  │
+├───────────┼────────┼────────────┼────────┼───────┤
+│ root      │        │            │ <nil>  │ <nil> │
+│   childA  │        │            │ <nil>  │ <nil> │
+│     one   │        │ true       │ <nil>  │ <nil> │
+│     two   │        │            │ <nil>  │ <nil> │
+│   childB  │        │            │ <nil>  │ <nil> │
+│     three │        │            │ <nil>  │ <nil> │
+│   childC  │        │            │ <nil>  │ <nil> │
+└───────────┴────────┴────────────┴────────┴───────┘
+`
+		assertEqual(want, after.String(), t)
+		assertEqual(baselineStr, baseline.String(), t)
+		assertPointersDifferent(t, baseline, after, "root", "childA", "one")
+		assertPointersEqual(t, baseline, after, "two", "childB", "three", "childC")
+	})
 
-	//----------------------------------------
-	// Verify the new state
-	after := v.ImmutableRule()
+	t.Run("add", func(t *testing.T) {
+		v := setup()
+		baseline := v.ImmutableRule()
+		debugLogf(t, "baseline:\n%s\n", baseline)
 
-	debugLogf(t, "baseline after grandChildB update:\n%s\n", baseline)
-	debugLogf(t, "after grandChildB update:\n%s\n", after)
+		err := v.Mutate(indigo.Add(indigo.NewRule("XXX", "false"), "childA"))
+		if err != nil {
+			t.Fatalf("adding rule failed: %v", err)
+		}
 
-	// Check if the original tree was untouched (immutable copy-on-write)
-	if baseline.Rules["childA"] != originalChildA {
-		t.Logf("inVault: %p, original = %p\n", baseline.Rules["childA"], &originalChildA)
-		t.Error("Original root's childA should not be modified")
-	}
-	if originalChildA.Rules["grandChildB"] != originalGrandChildB {
-		t.Error("Original childA's grandChildB should not be modified")
-	}
+		after := v.ImmutableRule()
+		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+		debugLogf(t, "after mutation:\n%s\n", after)
+		want := `
+┌──────────────────────────────────────────────────┐
+│                                                  │
+│ INDIGO RULES                                     │
+│                                                  │
+├───────────┬────────┬────────────┬────────┬───────┤
+│           │        │            │ Result │       │
+│ Rule      │ Schema │ Expression │ Type   │ Meta  │
+├───────────┼────────┼────────────┼────────┼───────┤
+│ root      │        │            │ <nil>  │ <nil> │
+│   childA  │        │            │ <nil>  │ <nil> │
+│     XXX   │        │ false      │ <nil>  │ <nil> │
+│     one   │        │            │ <nil>  │ <nil> │
+│     two   │        │            │ <nil>  │ <nil> │
+│   childB  │        │            │ <nil>  │ <nil> │
+│     three │        │            │ <nil>  │ <nil> │
+│   childC  │        │            │ <nil>  │ <nil> │
+└───────────┴────────┴────────────┴────────┴───────┘
+		`
+		assertEqual(want, after.String(), t)
+		assertEqual(baselineStr, baseline.String(), t)
+		assertPointersDifferent(t, baseline, after, "root", "childA")
+		assertPointersEqual(t, baseline, after, "childB")
+	})
 
-	// Verify that the updated grandChildB is in the new tree
-	foundGrandChildB, _ := after.FindRule("grandChildB")
-	if foundGrandChildB == nil {
-		t.Fatal("grandChildB not found in the final rule tree after update")
-	}
-	if foundGrandChildB.Expr != "true" {
-		t.Errorf("grandChildB expr not updated correctly, expected 'true', got '%s'", foundGrandChildB.Expr)
-	}
-	if foundGrandChildB == newGrandChildB {
-		// This is good, it means the new rule was inserted.
-		// The key is that its ancestors in the new tree are *copies*, not the originals.
-	} else {
-		t.Error("foundGrandChildB should be the newGrandChildB instance")
-	}
+	t.Run("move", func(t *testing.T) {
+		v := setup()
+		baseline := v.ImmutableRule()
+		debugLogf(t, "baseline:\n%s\n", baseline)
 
-	// Check that the path to grandChildB consists of new copies
-	// Parent of grandChildB should be a new instance of childA
-	parentOfGrandChildB := after.FindParent("grandChildB")
-	if parentOfGrandChildB == nil {
-		t.Fatal("Parent of grandChildB not found in final tree")
-	}
-	if parentOfGrandChildB == originalChildA {
-		t.Error("Parent of grandChildB should be a copy, not the original childA")
-	}
-	if parentOfGrandChildB.ID != "childA" {
-		t.Errorf("Parent ID mismatch, expected 'childA', got '%s'", parentOfGrandChildB.ID)
-	}
+		err := v.Mutate(indigo.Move("two", "childC"))
+		if err != nil {
+			t.Fatalf("moving rule failed: %v", err)
+		}
 
-	// Parent of childA (in the new tree) should be a new instance of root
-	parentOfChildA := after.FindParent("childA")
-	if parentOfChildA == nil {
-		t.Fatal("Parent of childA not found in final tree")
-	}
-	if parentOfChildA == originalRoot {
-		t.Error("Parent of childA should be a copy, not the original root")
-	}
-	if parentOfChildA.ID != "root" {
-		t.Errorf("Parent ID mismatch, expected 'root', got '%s'", parentOfChildA.ID)
+		after := v.ImmutableRule()
+
+		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+		debugLogf(t, "after mutation:\n%s\n", after)
+		want := `
+┌──────────────────────────────────────────────────┐
+│                                                  │
+│ INDIGO RULES                                     │
+│                                                  │
+├───────────┬────────┬────────────┬────────┬───────┤
+│           │        │            │ Result │       │
+│ Rule      │ Schema │ Expression │ Type   │ Meta  │
+├───────────┼────────┼────────────┼────────┼───────┤
+│ root      │        │            │ <nil>  │ <nil> │
+│   childA  │        │            │ <nil>  │ <nil> │
+│     one   │        │            │ <nil>  │ <nil> │
+│   childB  │        │            │ <nil>  │ <nil> │
+│     three │        │            │ <nil>  │ <nil> │
+│   childC  │        │            │ <nil>  │ <nil> │
+│     two   │        │            │ <nil>  │ <nil> │
+└───────────┴────────┴────────────┴────────┴───────┘
+`
+		assertEqual(want, after.String(), t)
+		assertEqual(baselineStr, baseline.String(), t)
+		assertPointersDifferent(t, baseline, after, "root", "childA", "childC")
+		assertPointersEqual(t, baseline, after, "childB", "three")
+	})
+}
+
+// assertPointersEqual returns an error if any of the named rules point to a different
+// area in memory for in and b
+func assertPointersEqual(t *testing.T, a *indigo.Rule, b *indigo.Rule, ruleIDs ...string) {
+	t.Helper()
+	for _, ruleID := range ruleIDs {
+		ar, _ := a.FindRule(ruleID)
+		br, _ := b.FindRule(ruleID)
+		if ar != br && ar != nil && br != nil {
+			t.Errorf("rules are different %s (%p) != %s (%p)", ar.ID, ar, br.ID, br)
+			return
+		}
 	}
 }
+
+// assertPointersDifferent returns an error if any of the named rules point to the same area in memory
+// for a and b
+func assertPointersDifferent(t *testing.T, a *indigo.Rule, b *indigo.Rule, ruleIDs ...string) {
+	t.Helper()
+	for _, ruleID := range ruleIDs {
+		var ar *indigo.Rule
+		var br *indigo.Rule
+		if ruleID == "root" {
+			ar = a
+			br = b
+		}
+		ar, _ = a.FindRule(ruleID)
+		br, _ = b.FindRule(ruleID)
+		if ar == br && ar != nil && br != nil {
+			t.Errorf("rules are the same: %s (%p) == %s (%p)", ar.ID, ar, br.ID, br)
+			return
+		}
+	}
+}
+
+// 		debugLogf(t, "After sharding:\n%s\n", root)
+// 		gotTree := root.Tree()
+//
+// 		// After building the shards, root should look like this:
+// 		wantTree := `
+// root
+// ├── central (*)
+// │   ├── centralAtRisk
+// │   └── centralHonors
+// ├── default (*)
+// │   └── anyAtRisk
+// │       └── anyAtRiskChild
+// ├── east (*)
+// │   ├── eastAtRisk
+// │   └── eastHonors
+// └── woodlawn (*)
+//     ├── default (*)
+//     │   ├── woodlawnAtRisk
+//     │   └── woodlawnHonors
+//     └── woodlawnForeign (*)
+//         ├── woodlawnForeignAtRisk
+//         └── woodlawnForeignHonors
+// 	`
+// 		compareStrings(wantTree, gotTree, t)

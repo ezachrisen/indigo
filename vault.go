@@ -243,7 +243,9 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 	return mut, nil
 }
 
-func destinationShard(r, rr *Rule) (*Rule, error) {
+// destinationParent returns either the parent (r), or a shard within r where
+// the rule rr should be placed
+func destinationParent(r, rr *Rule) (*Rule, error) {
 	var toReturn *Rule
 	shardCount := 0
 	if r.shard {
@@ -273,17 +275,10 @@ shardLoop:
 		}
 	}
 
-	// if shardCount == 0 {
-	// 	toReturn = r
-	// }
-
-	if toReturn != nil {
-	} else {
-	}
 	// We're in a sharding situation, and no shard matched rr (including the default shard)
 	if shardCount > 0 && toReturn != nil {
 		for _, c := range toReturn.Rules {
-			sh, err := destinationShard(c, rr)
+			sh, err := destinationParent(c, rr)
 			if err != nil {
 				return nil, err
 			}
@@ -291,9 +286,6 @@ shardLoop:
 				return sh, nil
 			}
 		}
-	}
-	if toReturn != nil {
-	} else {
 	}
 	return toReturn, nil
 }
@@ -390,7 +382,7 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, ma
 	}
 
 	// Check if the updated rule should be in a different shard
-	destinationShardRule, err := destinationShard(r, newRule)
+	destinationShardRule, err := destinationParent(r, newRule)
 	if err != nil {
 		return nil, nil, fmt.Errorf("checking destination shard: %w", err)
 	}
@@ -433,23 +425,27 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, ma
 
 // add adds the newRule to the parent rule with parentID, somewhere inside the root rule r
 func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID string) (*Rule, map[*Rule]any, error) {
-	target, err := destinationShard(r, newRule)
+	target, err := destinationParent(r, newRule)
 	if err != nil {
 		return nil, nil, err
 	}
 	if target != nil {
 		parentID = target.ID
 	}
+
 	r, alreadyCopied, err = makeSafePath(r, alreadyCopied, parentID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("making safe path: %w", err)
 	}
+
 	if newRule.ID == "" {
 		return nil, nil, fmt.Errorf("rule ID cannot be empty")
 	}
+
 	if existing, _ := r.FindRule(newRule.ID); existing != nil {
 		return nil, nil, fmt.Errorf("rule with ID %s already exists", newRule.ID)
 	}
+
 	err = v.engine.Compile(newRule, v.compileOptions...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
