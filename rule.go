@@ -3,7 +3,6 @@ package indigo
 import (
 	"fmt"
 	"maps"
-	"slices"
 	"sort"
 	"strings"
 
@@ -95,7 +94,11 @@ type Rule struct {
 	// unspecified.
 	sortedRules []*Rule
 
+	// shard is set to true if this rule is a shard
 	shard bool
+
+	// hasBeenSharded is set to true if BuildShards has been run on the rule.
+	hasBeenSharded bool
 }
 
 const (
@@ -137,9 +140,21 @@ const defaultRuleID = "default"
 // subdivided into X1 and X2.
 //
 // Recursively applies shard rules on r's children.
+//
+// Since rules stored in a Vault should not be modified outside the vault, DO NOT call BuildShards on
+// a rule inside the vault. You may of course call BuildShards before adding a rule to the vault, but
+// the Vault will automatically call BuildShards on the rule you pass to NewVault.
+//
+// When you apply mutations to the rule in the vault, the vault will automatically apply sharding
+// specifications and place rules in the right shard.
+//
+// If you call BuildShards multiple times on a rule, no changes will be made to the shards.
+// To reshard the rule, build it from scratch.
 func (r *Rule) BuildShards() error {
-	detached := maps.Clone(r.Rules)
-	r.Rules = map[string]*Rule{}
+	if r.hasBeenSharded {
+		return nil
+	}
+	var detached map[string]*Rule
 	for _, sh := range r.Shards {
 		if sh == nil {
 			return fmt.Errorf("nil shard in shard set")
@@ -150,6 +165,11 @@ func (r *Rule) BuildShards() error {
 		sh.shard = true
 		// this will ensure that rules in the shard are only evaluated if the shard rule itself is true
 		sh.EvalOptions.StopIfParentNegative = true
+		if detached == nil {
+			// We only want to do this if there are shards in r.
+			detached = maps.Clone(r.Rules)
+			r.Rules = map[string]*Rule{}
+		}
 		r.Rules[sh.ID] = sh
 	}
 	if len(r.Shards) > 0 {
@@ -177,12 +197,13 @@ func (r *Rule) BuildShards() error {
 
 	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
 	for _, newChild := range r.Rules {
-		// fmt.Println("child ", newChild.ID, r.ID)
+		// //fmt.Println("child ", newChild.ID, r.ID)
 		err := newChild.BuildShards()
 		if err != nil {
 			return err
 		}
 	}
+	r.hasBeenSharded = true
 	return nil
 }
 
@@ -207,16 +228,25 @@ func (r *Rule) targetParent(rr *Rule) (*Rule, error) {
 			return shard, nil
 		}
 	}
-	// If we're in a sharding situation, and no shard matched rr, we must
-	// be able to place rr in the default shard
+	// We're in a sharding situation, and no shard matched rr (including the default shard)
 	if shardCount > 0 {
-		def, ok := r.Rules[defaultRuleID]
-		if !ok {
-			return nil, fmt.Errorf("rule %s does not match the a shard definition for %s and no default shard found", rr.ID, r.ID)
-		}
-		def.Rules[rr.ID] = rr
+		return nil, fmt.Errorf("no shard matched %s, not even default", rr.ID)
 	}
 	return r, nil
+}
+
+func matchMeta(shard, r *Rule) (bool, error) {
+	switch f := shard.Meta.(type) {
+	case func(*Rule) bool:
+		if f(r) {
+			return true, nil
+		}
+	default:
+		if shard.ID != defaultRuleID {
+			return false, fmt.Errorf("unsupported meta type for shard %s: %t", shard.ID, shard.Meta)
+		}
+	}
+	return false, nil
 }
 
 // FindRule returns the rule with the id in the rule or any of its
@@ -240,14 +270,13 @@ func (r *Rule) FindRule(id string) (rule *Rule, ancestors []*Rule) {
 	return nil, nil
 }
 
-// Path returns rule with the id, and all its ancestors
+// Path returns all of the ancestors of the rule with the ID,
 // starting with the root of the rule tree.
 func (r *Rule) Path(id string) []*Rule {
 	me, ancestors := r.FindRule(id)
 	if me == nil {
 		return nil
 	}
-	slices.Reverse(ancestors)
 	return append(ancestors, me)
 }
 
@@ -387,6 +416,9 @@ func (r *Rule) Tree() string {
 	}
 	var sb strings.Builder
 	sb.WriteString(r.ID)
+	if r.shard {
+		sb.WriteString(" (*)")
+	}
 	sb.WriteString("\n")
 	r.buildTree(&sb, "", 0)
 	return sb.String()
@@ -418,6 +450,9 @@ func (r *Rule) buildTree(sb *strings.Builder, prefix string, depth int) {
 		sb.WriteString(prefix)
 		sb.WriteString(connector)
 		sb.WriteString(child.ID)
+		if child.shard {
+			sb.WriteString(" (*)")
+		}
 		sb.WriteString("\n")
 		// Recursively process this child's children
 		child.buildTree(sb, prefix+childPrefix, depth+1)
