@@ -367,6 +367,8 @@ func (v *Vault) delete(r *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, 
 }
 
 // update replaces the rule with the id newRule.ID with newRule inside the root rule r.
+// If the updated rule's expression matches different shard criteria, it will be moved
+// to the appropriate shard automatically.
 func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any, error) {
 	// Special case to allow replacing the root
 	if newRule.ID == r.ID {
@@ -378,14 +380,40 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, ma
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule: %s", newRule.ID)
 	}
+
 	var err error
-	r, alreadyCopied, err = makeSafePath(r, alreadyCopied, parent.ID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("making safe path: %w", err)
-	}
+
+	// Compile the new rule first to validate it
 	err = v.engine.Compile(newRule, v.compileOptions...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
+	}
+
+	// Check if the updated rule should be in a different shard
+	destinationShardRule, err := destinationShard(r, newRule)
+	if err != nil {
+		return nil, nil, fmt.Errorf("checking destination shard: %w", err)
+	}
+
+	// If destination shard is different from current parent, move the rule to the correct shard
+	if destinationShardRule != nil && destinationShardRule.ID != parent.ID {
+		// Delete from current parent
+		r, alreadyCopied, err = v.delete(r, alreadyCopied, newRule.ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("deleting rule %s for shard movement: %w", newRule.ID, err)
+		}
+		// Add to destination shard
+		r, alreadyCopied, err = v.add(r, newRule, alreadyCopied, destinationShardRule.ID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("adding rule %s to destination shard: %w", newRule.ID, err)
+		}
+		return r, alreadyCopied, nil
+	}
+
+	// Normal update: rule stays in same parent
+	r, alreadyCopied, err = makeSafePath(r, alreadyCopied, parent.ID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("making safe path: %w", err)
 	}
 
 	// we have to find the parent again because it will have been cloned in makeSafePath

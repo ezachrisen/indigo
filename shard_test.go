@@ -133,8 +133,8 @@ root
 	`
 		compareStrings(wantTree, gotTree, t)
 
-		////--------------------------------------------------------------------------------
-		//// BuildShards idempotency
+		//--------------------------------------------------------------------------------
+		// BuildShards idempotency
 		err = root.BuildShards()
 		if err != nil {
 			t.Fatal(err)
@@ -392,6 +392,503 @@ root
 		debugLogf(t, "After adding new rule, ensuring it ends up in the right shard:\n%s\n", gotTree)
 		compareStrings(wantTree, gotTree, t)
 	})
+}
+
+// TestVaultDelete tests the Vault Delete mutation with sharded rules
+func TestVaultDelete(t *testing.T) {
+	schema := &indigo.Schema{
+		ID: "x",
+		Elements: []indigo.DataElement{
+			{Name: "school", Type: indigo.String{}},
+			{Name: "nationality", Type: indigo.String{}},
+			{Name: "class", Type: indigo.Int{}},
+			{Name: "gpa", Type: indigo.Float{}},
+		},
+	}
+
+	// SETUP
+	root := indigo.NewRule("root", "")
+
+	centralHSHonors := indigo.NewRule("centralHonors", `school =="Central" && class == 2026 && gpa > 3.5`)
+	centralAtRisk := indigo.NewRule("centralAtRisk", `school =="Central" && class == 2026 && gpa < 2.5`)
+	root.Add(centralHSHonors)
+	root.Add(centralAtRisk)
+
+	woodlawnHSHonors := indigo.NewRule("woodlawnHonors", `school =="woodlawn" && class == 2026 && gpa > 3.7`)
+	woodlawnAtRisk := indigo.NewRule("woodlawnAtRisk", `school =="woodlawn" && class == 2026 && gpa < 2.0`)
+	root.Add(woodlawnHSHonors)
+	root.Add(woodlawnAtRisk)
+
+	eastHSHonors := indigo.NewRule("eastHonors", `school =="east" && class == 2026 && gpa > 3.3`)
+	eastAtRisk := indigo.NewRule("eastAtRisk", `school =="east" && class == 2026 && gpa < 2.2`)
+	root.Add(eastHSHonors)
+	root.Add(eastAtRisk)
+
+	// Shards
+	centralShard := indigo.NewRule("central", `school == "Central"`)
+	centralShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"Central"`)
+	}
+
+	woodlawnShard := indigo.NewRule("woodlawn", `school == "woodlawn"`)
+	woodlawnShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"woodlawn"`)
+	}
+
+	eastShard := indigo.NewRule("east", `school == "east"`)
+	eastShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"east"`)
+	}
+
+	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
+
+	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+	v, err := indigo.NewVault(e, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	beforeTree := v.ImmutableRule().Tree()
+	debugLogf(t, "Before delete:\n%s\n", beforeTree)
+
+	wantBefore := `
+root
+├── central (*)
+│   ├── centralAtRisk
+│   └── centralHonors
+├── default (*)
+├── east (*)
+│   ├── eastAtRisk
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantBefore, beforeTree, t)
+
+	// Delete centralAtRisk from the central shard
+	err = v.Mutate(indigo.Delete("centralAtRisk"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After delete centralAtRisk:\n%s\n", afterTree)
+
+	wantAfter := `
+root
+├── central (*)
+│   └── centralHonors
+├── default (*)
+├── east (*)
+│   ├── eastAtRisk
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantAfter, afterTree, t)
+
+	// Delete entire central shard
+	err = v.Mutate(indigo.Delete("central"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterDeleteShard := v.ImmutableRule().Tree()
+	debugLogf(t, "After delete central shard:\n%s\n", afterDeleteShard)
+
+	wantAfterDeleteShard := `
+root
+├── default (*)
+├── east (*)
+│   ├── eastAtRisk
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantAfterDeleteShard, afterDeleteShard, t)
+}
+
+// TestVaultUpdate tests the Vault Update mutation with sharded rules
+func TestVaultUpdate(t *testing.T) {
+	schema := &indigo.Schema{
+		ID: "x",
+		Elements: []indigo.DataElement{
+			{Name: "school", Type: indigo.String{}},
+			{Name: "nationality", Type: indigo.String{}},
+			{Name: "class", Type: indigo.Int{}},
+			{Name: "gpa", Type: indigo.Float{}},
+		},
+	}
+
+	// SETUP
+	root := indigo.NewRule("root", "")
+
+	centralHSHonors := indigo.NewRule("centralHonors", `school =="Central" && class == 2026 && gpa > 3.5`)
+	centralAtRisk := indigo.NewRule("centralAtRisk", `school =="Central" && class == 2026 && gpa < 2.5`)
+	root.Add(centralHSHonors)
+	root.Add(centralAtRisk)
+
+	woodlawnHSHonors := indigo.NewRule("woodlawnHonors", `school =="woodlawn" && class == 2026 && gpa > 3.7`)
+	woodlawnAtRisk := indigo.NewRule("woodlawnAtRisk", `school =="woodlawn" && class == 2026 && gpa < 2.0`)
+	root.Add(woodlawnHSHonors)
+	root.Add(woodlawnAtRisk)
+
+	eastHSHonors := indigo.NewRule("eastHonors", `school =="east" && class == 2026 && gpa > 3.3`)
+	root.Add(eastHSHonors)
+
+	// Shards
+	centralShard := indigo.NewRule("central", `school == "Central"`)
+	centralShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"Central"`)
+	}
+
+	woodlawnShard := indigo.NewRule("woodlawn", `school == "woodlawn"`)
+	woodlawnShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"woodlawn"`)
+	}
+
+	eastShard := indigo.NewRule("east", `school == "east"`)
+	eastShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"east"`)
+	}
+
+	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
+
+	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+	v, err := indigo.NewVault(e, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	beforeTree := v.ImmutableRule().Tree()
+	debugLogf(t, "Before update:\n%s\n", beforeTree)
+
+	wantBefore := `
+root
+├── central (*)
+│   ├── centralAtRisk
+│   └── centralHonors
+├── default (*)
+├── east (*)
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantBefore, beforeTree, t)
+
+	// Update centralHonors to have a child rule
+	updatedHonors := indigo.NewRule("centralHonors", `school =="Central" && class == 2026 && gpa > 3.8`)
+	honorsChild := indigo.NewRule("centralHonorsChild", `gpa > 3.9`)
+	updatedHonors.Add(honorsChild)
+
+	err = v.Mutate(indigo.Update(updatedHonors))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After updating centralHonors with child:\n%s\n", afterTree)
+
+	wantAfter := `
+root
+├── central (*)
+│   ├── centralAtRisk
+│   └── centralHonors
+│       └── centralHonorsChild
+├── default (*)
+├── east (*)
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantAfter, afterTree, t)
+
+	// Update eastHonors to modify its expression
+	updatedEastExpr := `school =="east" && class == 2026 && gpa > 3.5`
+	updatedEastHonors := indigo.NewRule("eastHonors", updatedEastExpr)
+	err = v.Mutate(indigo.Update(updatedEastHonors))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterUpdateEastTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After updating eastHonors expression:\n%s\n", afterUpdateEastTree)
+
+	// After updating eastHonors, the structure should remain the same
+	wantAfterUpdateEast := `
+root
+├── central (*)
+│   ├── centralAtRisk
+│   └── centralHonors
+│       └── centralHonorsChild
+├── default (*)
+├── east (*)
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantAfterUpdateEast, afterUpdateEastTree, t)
+
+	// Verify the expression was actually updated
+	updatedRule, _ := v.ImmutableRule().FindRule("eastHonors")
+	if updatedRule == nil {
+		t.Fatal("eastHonors rule not found after update")
+	}
+	if updatedRule.Expr != updatedEastExpr {
+		t.Errorf("eastHonors expression not updated; got %q, want %q", updatedRule.Expr, updatedEastExpr)
+	}
+	debugLogf(t, "Verified: eastHonors expression was updated to %q\n", updatedRule.Expr)
+}
+
+// TestVaultUpdateWithShardMovement tests updating a rule's expression and then
+// moving it to a different shard based on the updated criteria
+func TestVaultUpdateWithShardMovement(t *testing.T) {
+	schema := &indigo.Schema{
+		ID: "x",
+		Elements: []indigo.DataElement{
+			{Name: "school", Type: indigo.String{}},
+			{Name: "nationality", Type: indigo.String{}},
+			{Name: "class", Type: indigo.Int{}},
+			{Name: "gpa", Type: indigo.Float{}},
+		},
+	}
+
+	// SETUP
+	root := indigo.NewRule("root", "")
+
+	// Rule in central shard
+	centralAtRisk := indigo.NewRule("centralAtRisk", `school =="Central" && class == 2026 && gpa < 2.5`)
+	root.Add(centralAtRisk)
+
+	woodlawnHSHonors := indigo.NewRule("woodlawnHonors", `school =="woodlawn" && class == 2026 && gpa > 3.7`)
+	root.Add(woodlawnHSHonors)
+
+	// Shards
+	centralShard := indigo.NewRule("central", `school == "Central"`)
+	centralShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"Central"`)
+	}
+
+	woodlawnShard := indigo.NewRule("woodlawn", `school == "woodlawn"`)
+	woodlawnShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"woodlawn"`)
+	}
+
+	root.Shards = []*indigo.Rule{centralShard, woodlawnShard}
+
+	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+	v, err := indigo.NewVault(e, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	beforeTree := v.ImmutableRule().Tree()
+	debugLogf(t, "Before update and move:\n%s\n", beforeTree)
+
+	wantBefore := `
+root
+├── central (*)
+│   └── centralAtRisk
+├── default (*)
+└── woodlawn (*)
+    └── woodlawnHonors
+	`
+	compareStrings(wantBefore, beforeTree, t)
+
+	// Update centralAtRisk to change its school from "Central" to "woodlawn"
+	// The Update operation should automatically move it to the woodlawn shard
+	updatedExpr := `school =="woodlawn" && class == 2026 && gpa < 2.5`
+	updatedRule := indigo.NewRule("centralAtRisk", updatedExpr)
+	err = v.Mutate(indigo.Update(updatedRule))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterUpdateTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After updating centralAtRisk expression (automatically moved to woodlawn shard):\n%s\n", afterUpdateTree)
+
+	// The rule should now be automatically moved to the woodlawn shard because
+	// the updated expression matches the woodlawn shard criteria
+	wantAfterUpdate := `
+root
+├── central (*)
+├── default (*)
+└── woodlawn (*)
+    ├── centralAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantAfterUpdate, afterUpdateTree, t)
+
+	// Verify the expression was updated
+	updatedRuleInVault, _ := v.ImmutableRule().FindRule("centralAtRisk")
+	if updatedRuleInVault.Expr != updatedExpr {
+		t.Errorf("expression not updated; got %q, want %q", updatedRuleInVault.Expr, updatedExpr)
+	}
+	debugLogf(t, "Verified: expression updated to %q\n", updatedRuleInVault.Expr)
+
+	// Verify the rule is in the woodlawn shard (moved automatically by Update)
+	movedRule, ancestors := v.ImmutableRule().FindRule("centralAtRisk")
+	if movedRule == nil {
+		t.Fatal("centralAtRisk not found after update")
+	}
+	if len(ancestors) < 2 {
+		t.Fatalf("unexpected ancestor chain length; got %d, want at least 2", len(ancestors))
+	}
+	parentShard := ancestors[len(ancestors)-1]
+	if parentShard.ID != "woodlawn" {
+		t.Errorf("rule not in woodlawn shard; got parent %q", parentShard.ID)
+	}
+	debugLogf(t, "Verified: centralAtRisk was automatically moved to %q shard by Update\n", parentShard.ID)
+}
+
+// TestVaultMove tests the Vault Move mutation with sharded rules
+func TestVaultMove(t *testing.T) {
+	schema := &indigo.Schema{
+		ID: "x",
+		Elements: []indigo.DataElement{
+			{Name: "school", Type: indigo.String{}},
+			{Name: "nationality", Type: indigo.String{}},
+			{Name: "class", Type: indigo.Int{}},
+			{Name: "gpa", Type: indigo.Float{}},
+		},
+	}
+
+	// SETUP
+	root := indigo.NewRule("root", "")
+
+	centralHSHonors := indigo.NewRule("centralHonors", `school =="Central" && class == 2026 && gpa > 3.5`)
+	centralAtRisk := indigo.NewRule("centralAtRisk", `school =="Central" && class == 2026 && gpa < 2.5`)
+	root.Add(centralHSHonors)
+	root.Add(centralAtRisk)
+
+	woodlawnHSHonors := indigo.NewRule("woodlawnHonors", `school =="woodlawn" && class == 2026 && gpa > 3.7`)
+	woodlawnAtRisk := indigo.NewRule("woodlawnAtRisk", `school =="woodlawn" && class == 2026 && gpa < 2.0`)
+	root.Add(woodlawnHSHonors)
+	root.Add(woodlawnAtRisk)
+
+	eastHSHonors := indigo.NewRule("eastHonors", `school =="east" && class == 2026 && gpa > 3.3`)
+	root.Add(eastHSHonors)
+
+	// Shards
+	centralShard := indigo.NewRule("central", `school == "Central"`)
+	centralShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"Central"`)
+	}
+
+	woodlawnShard := indigo.NewRule("woodlawn", `school == "woodlawn"`)
+	woodlawnShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"woodlawn"`)
+	}
+
+	eastShard := indigo.NewRule("east", `school == "east"`)
+	eastShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"east"`)
+	}
+
+	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
+
+	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+	v, err := indigo.NewVault(e, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	beforeTree := v.ImmutableRule().Tree()
+	debugLogf(t, "Before move:\n%s\n", beforeTree)
+
+	wantBefore := `
+root
+├── central (*)
+│   ├── centralAtRisk
+│   └── centralHonors
+├── default (*)
+├── east (*)
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantBefore, beforeTree, t)
+
+	// Add a generic rule to default shard (no specific school), then move it to central
+	genericRule := indigo.NewRule("genericRule", `class == 2027`)
+	err = v.Mutate(indigo.Add(genericRule, "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterAddTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After adding generic rule to default:\n%s\n", afterAddTree)
+
+	wantAfterAdd := `
+root
+├── central (*)
+│   ├── centralAtRisk
+│   └── centralHonors
+├── default (*)
+│   └── genericRule
+├── east (*)
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantAfterAdd, afterAddTree, t)
+
+	// Move genericRule to central (note: since it doesn't match central shard criteria,
+	// it will stay in central because that's where we explicitly requested it to go)
+	err = v.Mutate(indigo.Move("genericRule", "central"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterMoveTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After moving genericRule to central:\n%s\n", afterMoveTree)
+
+	wantAfterMove := `
+root
+├── central (*)
+│   ├── centralAtRisk
+│   ├── centralHonors
+│   └── genericRule
+├── default (*)
+├── east (*)
+│   └── eastHonors
+└── woodlawn (*)
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantAfterMove, afterMoveTree, t)
+
+	// Move genericRule to woodlawn
+	err = v.Mutate(indigo.Move("genericRule", "woodlawn"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterSecondMoveTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After moving genericRule to woodlawn:\n%s\n", afterSecondMoveTree)
+
+	wantAfterSecondMove := `
+root
+├── central (*)
+│   ├── centralAtRisk
+│   └── centralHonors
+├── default (*)
+├── east (*)
+│   └── eastHonors
+└── woodlawn (*)
+    ├── genericRule
+    ├── woodlawnAtRisk
+    └── woodlawnHonors
+	`
+	compareStrings(wantAfterSecondMove, afterSecondMoveTree, t)
 }
 
 // Helper function to compare rule trees from the rule.Tree() method
