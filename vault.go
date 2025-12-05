@@ -33,10 +33,6 @@ type Vault struct {
 	// Current immutable root
 	root atomic.Pointer[Rule]
 
-	// the Indigo engine which will be used to compile rules before adding them
-	// to the root rule
-	engine Engine
-
 	// A list of compilation options, required for when we compile the rule
 	// before adding to the vault
 	compileOptions []CompilationOption
@@ -46,38 +42,26 @@ type Vault struct {
 	lastUpdate atomic.Pointer[time.Time]
 }
 
-// NewVault creates a new Vault with an optional initial rule tree.
-// If no initial root is provided, a default rule with id "root" is created.
-// If you provide initialRoot, it may be modified by the Vault, specifically
-// BuildShards will be called on it. This change is visible to the client who
-// called NewVault.
-//
-// The Vault will compile rules passed to it in [Mutate] using the compilation options.
+// NewVault creates a new Vault with an nitial rule tree.
 //
 // The Vault will call BuildShards on initialRoot if you provide it.
 // When you apply mutations to the rule in the vault, the vault will automatically apply sharding.
-func NewVault(engine Engine, initialRoot *Rule, opts ...CompilationOption) (*Vault, error) {
+func NewVault(root *Rule, opts ...CompilationOption) (*Vault, error) {
 	v := &Vault{
-		engine:         engine,
 		compileOptions: opts,
 	}
 
-	switch initialRoot {
-	case nil:
-		initialRoot = NewRule("root", "")
-	default:
-		err := initialRoot.BuildShards()
-		if err != nil {
-			return nil, fmt.Errorf("building shards on initial root: %w", err)
-		}
+	if root == nil {
+		return nil, fmt.Errorf("missing root rule")
 	}
 
-	err := v.engine.Compile(initialRoot, opts...)
+	err := root.BuildShards()
 	if err != nil {
-		return nil, fmt.Errorf("compiling initial root for the vault: %w", err)
+		return nil, fmt.Errorf("building shards on root: %w", err)
 	}
+
 	v.lastUpdate.Store(&time.Time{})
-	v.root.Store(initialRoot)
+	v.root.Store(root)
 	return v, nil
 }
 
@@ -179,7 +163,7 @@ func LastUpdate(t time.Time) vaultMutation {
 }
 
 // Mutate makes the changes to the rule stored in the Vault, applying the
-// mutations in sequence. Each rule is compiled before being added to the vault.
+// mutations in sequence.
 // At the end of all mutations, the resulting root rule becomes the new
 // active rule in the vault, and can be retrieved with the [Rule] function.
 //
@@ -243,7 +227,9 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 	return mut, nil
 }
 
-func destinationShard(r, rr *Rule) (*Rule, error) {
+// destinationParent returns either the parent (r), or a shard within r where
+// the rule rr should be placed
+func destinationParent(r, rr *Rule) (*Rule, error) {
 	var toReturn *Rule
 	shardCount := 0
 	if r.shard {
@@ -273,17 +259,10 @@ shardLoop:
 		}
 	}
 
-	// if shardCount == 0 {
-	// 	toReturn = r
-	// }
-
-	if toReturn != nil {
-	} else {
-	}
 	// We're in a sharding situation, and no shard matched rr (including the default shard)
 	if shardCount > 0 && toReturn != nil {
 		for _, c := range toReturn.Rules {
-			sh, err := destinationShard(c, rr)
+			sh, err := destinationParent(c, rr)
 			if err != nil {
 				return nil, err
 			}
@@ -291,9 +270,6 @@ shardLoop:
 				return sh, nil
 			}
 		}
-	}
-	if toReturn != nil {
-	} else {
 	}
 	return toReturn, nil
 }
@@ -341,6 +317,10 @@ func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
 func shallowCopy(r *Rule) *Rule {
 	rr := *r
 	rr.Rules = maps.Clone(r.Rules)
+	// fmt.Printf("r origran: %T\n", r.Program)
+	//
+	// // rr.Program = r.Program
+	// fmt.Printf("rr origran: %T\n", rr.Program)
 	return &rr
 }
 
@@ -383,14 +363,8 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, ma
 
 	var err error
 
-	// Compile the new rule first to validate it
-	err = v.engine.Compile(newRule, v.compileOptions...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
-	}
-
 	// Check if the updated rule should be in a different shard
-	destinationShardRule, err := destinationShard(r, newRule)
+	destinationShardRule, err := destinationParent(r, newRule)
 	if err != nil {
 		return nil, nil, fmt.Errorf("checking destination shard: %w", err)
 	}
@@ -433,7 +407,7 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, ma
 
 // add adds the newRule to the parent rule with parentID, somewhere inside the root rule r
 func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID string) (*Rule, map[*Rule]any, error) {
-	target, err := destinationShard(r, newRule)
+	target, err := destinationParent(r, newRule)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -444,15 +418,13 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID stri
 	if err != nil {
 		return nil, nil, fmt.Errorf("making safe path: %w", err)
 	}
+
 	if newRule.ID == "" {
 		return nil, nil, fmt.Errorf("rule ID cannot be empty")
 	}
+
 	if existing, _ := r.FindRule(newRule.ID); existing != nil {
 		return nil, nil, fmt.Errorf("rule with ID %s already exists", newRule.ID)
-	}
-	err = v.engine.Compile(newRule, v.compileOptions...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("compiling new rule %s: %w", newRule.ID, err)
 	}
 
 	parent, _ := r.FindRule(parentID)
@@ -477,13 +449,20 @@ func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, ma
 	path := root.Path(id)
 	for i := range path {
 		var parent, child, updated *Rule
+		var err error
 		parent = path[i]
 		if i < len(path)-1 {
 			child = path[i+1]
 		} else {
-			updated, alreadyCopied = makeSafe(parent, nil, alreadyCopied)
+			updated, alreadyCopied, err = makeSafe(parent, nil, alreadyCopied)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-		updated, alreadyCopied = makeSafe(parent, child, alreadyCopied)
+		updated, alreadyCopied, err = makeSafe(parent, child, alreadyCopied)
+		if err != nil {
+			return nil, nil, err
+		}
 		if parent == root {
 			root = updated
 		}
@@ -494,22 +473,22 @@ func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, ma
 // makeSafe makes the parent safe, then the child, and adds the child
 // to the (now) safe parent. If the only the parent needs to be made safe,
 // such as in the case of adding a new rule to the Vault, pass child as nil.
-func makeSafe(parent, child *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any) {
-	if child != nil {
-	} else {
-	}
-	if _, ok := alreadyCopied[parent]; ok {
-		return parent, alreadyCopied
-	}
-
+func makeSafe(parent, child *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any, error) {
 	if parent != nil {
-		parent = shallowCopy(parent)
-		alreadyCopied[parent] = nil
+		if _, ok := alreadyCopied[parent]; !ok {
+			parent = shallowCopy(parent)
+			alreadyCopied[parent] = nil
+		}
 	}
 	if child != nil {
-		childCopy := shallowCopy(child)
-		parent.Add(childCopy)
-		alreadyCopied[child] = nil
+		if parent == nil {
+			return nil, nil, fmt.Errorf("orphaned rule: %s", child.ID)
+		}
+		if _, ok := alreadyCopied[child]; !ok {
+			childCopy := shallowCopy(child)
+			parent.Add(childCopy)
+			alreadyCopied[child] = nil
+		}
 	}
-	return parent, alreadyCopied
+	return parent, alreadyCopied, nil
 }

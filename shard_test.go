@@ -28,7 +28,7 @@ func TestShards(t *testing.T) {
 	// We run this test many times because it is very important
 	// that the shard rules are sorted correctly for shard creation to work.
 	// This loop will catch any errors where the sort works most of the time, but fails sometimes.
-	for range 1 {
+	for range 100 {
 
 		//--------------------------------------------------------------------------------
 		// SETUP
@@ -131,7 +131,7 @@ root
         ├── woodlawnForeignAtRisk
         └── woodlawnForeignHonors
 	`
-		compareStrings(wantTree, gotTree, t)
+		assertEqual(wantTree, gotTree, t)
 
 		//--------------------------------------------------------------------------------
 		// BuildShards idempotency
@@ -140,7 +140,7 @@ root
 			t.Fatal(err)
 		}
 		gotTree = root.Tree()
-		compareStrings(wantTree, gotTree, t)
+		assertEqual(wantTree, gotTree, t)
 
 		//--------------------------------------------------------------------------------
 		// Evaluate the rule
@@ -192,7 +192,7 @@ root
 └──────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 		`
 		gotResults := res.String()
-		compareStrings(wantResults, gotResults, t)
+		assertEqual(wantResults, gotResults, t)
 
 		// We can also remove the shard rules from the results, leaving the original structure. This preserves any parent/child relationships
 		// in the original rule, but omits the shard rules.
@@ -218,7 +218,7 @@ root
 └────────────────────┴───────┴───────┴───────┴────────┴─────────────┴─────────┴─────────────┴────────────┴────────────┴─────────┴─────────┘
 `
 		gotUnsharded := res.String()
-		compareStrings(wantUnsharded, gotUnsharded, t)
+		assertEqual(wantUnsharded, gotUnsharded, t)
 		debugLogf(t, "Result:\n%s\n\n", res)
 
 		// We can also view the results in in a "flat" way, where all returned rules are available via an iterator, but shard rules are omitted from the results
@@ -234,7 +234,7 @@ anyAtRiskChild
 			flat = append(flat, r.Rule.ID)
 		}
 		gotFlat := strings.Join(flat, "\n")
-		compareStrings(wantFlat, gotFlat, t)
+		assertEqual(wantFlat, gotFlat, t)
 	}
 }
 
@@ -242,16 +242,6 @@ anyAtRiskChild
 // We verify that the Vault correctly applied the shard specification, and that the
 // rule hierarchy of the rule in the vault is correct.
 func TestVaultShards(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	//--------------------------------------------------------------------------------
 	// SETUP
 
@@ -326,8 +316,7 @@ func TestVaultShards(t *testing.T) {
 	//--------------------------------------------------------------------------------
 	// Create the vault with the root rule and the shards.
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,7 +343,7 @@ root
         ├── woodlawnForeignAtRisk
         └── woodlawnForeignHonors
 	`
-	compareStrings(wantTree, gotTree, t)
+	assertEqual(wantTree, gotTree, t)
 
 	t.Run("add_rule_to_shard", func(t *testing.T) {
 		//--------------------------------------------------------------------------------
@@ -390,22 +379,12 @@ root
 		gotTree = v.ImmutableRule().Tree()
 
 		debugLogf(t, "After adding new rule, ensuring it ends up in the right shard:\n%s\n", gotTree)
-		compareStrings(wantTree, gotTree, t)
+		assertEqual(wantTree, gotTree, t)
 	})
 }
 
 // TestVaultDelete tests the Vault Delete mutation with sharded rules
 func TestVaultDelete(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	// SETUP
 	root := indigo.NewRule("root", "")
 
@@ -442,8 +421,7 @@ func TestVaultDelete(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,7 +442,7 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantBefore, beforeTree, t)
+	assertEqual(wantBefore, beforeTree, t)
 
 	// Delete centralAtRisk from the central shard
 	err = v.Mutate(indigo.Delete("centralAtRisk"))
@@ -487,7 +465,7 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantAfter, afterTree, t)
+	assertEqual(wantAfter, afterTree, t)
 
 	// Delete entire central shard
 	err = v.Mutate(indigo.Delete("central"))
@@ -508,21 +486,11 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantAfterDeleteShard, afterDeleteShard, t)
+	assertEqual(wantAfterDeleteShard, afterDeleteShard, t)
 }
 
 // TestVaultUpdate tests the Vault Update mutation with sharded rules
 func TestVaultUpdate(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	// SETUP
 	root := indigo.NewRule("root", "")
 
@@ -557,8 +525,7 @@ func TestVaultUpdate(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -578,7 +545,7 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantBefore, beforeTree, t)
+	assertEqual(wantBefore, beforeTree, t)
 
 	// Update centralHonors to have a child rule
 	updatedHonors := indigo.NewRule("centralHonors", `school =="Central" && class == 2026 && gpa > 3.8`)
@@ -606,7 +573,7 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantAfter, afterTree, t)
+	assertEqual(wantAfter, afterTree, t)
 
 	// Update eastHonors to modify its expression
 	updatedEastExpr := `school =="east" && class == 2026 && gpa > 3.5`
@@ -633,7 +600,7 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantAfterUpdateEast, afterUpdateEastTree, t)
+	assertEqual(wantAfterUpdateEast, afterUpdateEastTree, t)
 
 	// Verify the expression was actually updated
 	updatedRule, _ := v.ImmutableRule().FindRule("eastHonors")
@@ -649,16 +616,6 @@ root
 // TestVaultUpdateWithShardMovement tests updating a rule's expression and then
 // moving it to a different shard based on the updated criteria
 func TestVaultUpdateWithShardMovement(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	// SETUP
 	root := indigo.NewRule("root", "")
 
@@ -682,8 +639,7 @@ func TestVaultUpdateWithShardMovement(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard}
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -699,7 +655,7 @@ root
 └── woodlawn (*)
     └── woodlawnHonors
 	`
-	compareStrings(wantBefore, beforeTree, t)
+	assertEqual(wantBefore, beforeTree, t)
 
 	// Update centralAtRisk to change its school from "Central" to "woodlawn"
 	// The Update operation should automatically move it to the woodlawn shard
@@ -723,7 +679,7 @@ root
     ├── centralAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantAfterUpdate, afterUpdateTree, t)
+	assertEqual(wantAfterUpdate, afterUpdateTree, t)
 
 	// Verify the expression was updated
 	updatedRuleInVault, _ := v.ImmutableRule().FindRule("centralAtRisk")
@@ -749,16 +705,6 @@ root
 
 // TestVaultMove tests the Vault Move mutation with sharded rules
 func TestVaultMove(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	// SETUP
 	root := indigo.NewRule("root", "")
 
@@ -793,8 +739,7 @@ func TestVaultMove(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -814,7 +759,7 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantBefore, beforeTree, t)
+	assertEqual(wantBefore, beforeTree, t)
 
 	// Add a generic rule to default shard (no specific school), then move it to central
 	genericRule := indigo.NewRule("genericRule", `class == 2027`)
@@ -839,7 +784,7 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantAfterAdd, afterAddTree, t)
+	assertEqual(wantAfterAdd, afterAddTree, t)
 
 	// Move genericRule to central (note: since it doesn't match central shard criteria,
 	// it will stay in central because that's where we explicitly requested it to go)
@@ -864,7 +809,7 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantAfterMove, afterMoveTree, t)
+	assertEqual(wantAfterMove, afterMoveTree, t)
 
 	// Move genericRule to woodlawn
 	err = v.Mutate(indigo.Move("genericRule", "woodlawn"))
@@ -888,11 +833,11 @@ root
     ├── woodlawnAtRisk
     └── woodlawnHonors
 	`
-	compareStrings(wantAfterSecondMove, afterSecondMoveTree, t)
+	assertEqual(wantAfterSecondMove, afterSecondMoveTree, t)
 }
 
 // Helper function to compare rule trees from the rule.Tree() method
-func compareStrings(want, got string, t *testing.T) {
+func assertEqual(want, got string, t *testing.T) {
 	t.Helper()
 	want = strings.TrimSpace(want)
 	got = strings.TrimSpace(got)

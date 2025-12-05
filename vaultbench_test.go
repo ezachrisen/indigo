@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ezachrisen/indigo"
-	"github.com/ezachrisen/indigo/cel"
 )
 
 // buildTree creates a balanced tree with total node count ≈ totalNodes
@@ -55,11 +54,9 @@ func buildTree(totalNodes int) *indigo.Rule {
 }
 
 func BenchmarkVault_Mutate_LargeTree_10k(b *testing.B) {
-	eng := indigo.NewEngine(cel.NewEvaluator())
-
 	// Build a ~10,000+ node tree once
 	big := buildTree(12_000)
-	vault, err := indigo.NewVault(eng, big)
+	vault, err := indigo.NewVault(big)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -83,9 +80,8 @@ func BenchmarkVault_Mutate_LargeTree_10k(b *testing.B) {
 }
 
 func BenchmarkVault_Mutate_LargeTree_10k_Move(b *testing.B) {
-	eng := indigo.NewEngine(cel.NewEvaluator())
 	big := buildTree(12_000)
-	vault, err := indigo.NewVault(eng, big)
+	vault, err := indigo.NewVault(big)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -104,9 +100,8 @@ func BenchmarkVault_Mutate_LargeTree_10k_Move(b *testing.B) {
 }
 
 func BenchmarkVault_Mutate_LargeTree_10k_Noop(b *testing.B) {
-	eng := indigo.NewEngine(cel.NewEvaluator())
 	big := buildTree(12_000)
-	vault, err := indigo.NewVault(eng, big)
+	vault, err := indigo.NewVault(big)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -123,9 +118,8 @@ func BenchmarkVault_Mutate_LargeTree_10k_Noop(b *testing.B) {
 
 // Optional: Add a baseline with smaller tree to compare scaling
 func BenchmarkVault_Mutate_SmallTree(b *testing.B) {
-	eng := indigo.NewEngine(cel.NewEvaluator())
 	small := indigo.NewRule("root", "")
-	vault, _ := indigo.NewVault(eng, small)
+	vault, _ := indigo.NewVault(small)
 
 	update := indigo.Rule{ID: "test", Expr: "true"}
 
