@@ -34,8 +34,12 @@ func TestRaceConditionRulesMapMutation(t *testing.T) {
 		child := indigo.NewRule(fmt.Sprintf("child_%d", i), "x > 0")
 		root.Add(child)
 	}
+	err := eng.Compile(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	v, err := indigo.NewVault(eng, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatalf("vault creation failed: %v", err)
 	}
@@ -164,7 +168,7 @@ func TestParallelEvalDuringMutation(t *testing.T) {
 		root.Add(parent)
 	}
 
-	v, err := indigo.NewVault(eng, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatalf("vault creation failed: %v", err)
 	}
@@ -180,7 +184,7 @@ func TestParallelEvalDuringMutation(t *testing.T) {
 				rule := v.ImmutableRule()
 				// Use extreme parallel settings to stress sortChildRules more
 				_, _ = eng.Eval(context.Background(), rule, map[string]any{"x": 50},
-					indigo.Parallel(5, 50))  // High parallelism
+					indigo.Parallel(5, 50)) // High parallelism
 			}
 		}(evaluator)
 	}
@@ -238,7 +242,7 @@ func TestSortedRulesRaceCondition(t *testing.T) {
 		root.Add(child)
 	}
 
-	v, err := indigo.NewVault(eng, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatalf("vault creation failed: %v", err)
 	}
@@ -324,15 +328,6 @@ func TestDestinationShardRaceCondition(t *testing.T) {
 		t.SkipNow()
 	}
 
-	schema := &indigo.Schema{
-		ID: "shard_race",
-		Elements: []indigo.DataElement{
-			{Name: "type", Type: indigo.String{}},
-		},
-	}
-
-	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-
 	// Create sharded rule structure
 	root := indigo.NewRule("root", "true")
 
@@ -348,7 +343,7 @@ func TestDestinationShardRaceCondition(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{shard1, shard2}
 
-	v, err := indigo.NewVault(eng, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatalf("vault creation failed: %v", err)
 	}

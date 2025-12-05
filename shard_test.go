@@ -242,16 +242,6 @@ anyAtRiskChild
 // We verify that the Vault correctly applied the shard specification, and that the
 // rule hierarchy of the rule in the vault is correct.
 func TestVaultShards(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	//--------------------------------------------------------------------------------
 	// SETUP
 
@@ -326,8 +316,7 @@ func TestVaultShards(t *testing.T) {
 	//--------------------------------------------------------------------------------
 	// Create the vault with the root rule and the shards.
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,16 +385,6 @@ root
 
 // TestVaultDelete tests the Vault Delete mutation with sharded rules
 func TestVaultDelete(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	// SETUP
 	root := indigo.NewRule("root", "")
 
@@ -442,8 +421,7 @@ func TestVaultDelete(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -513,16 +491,6 @@ root
 
 // TestVaultUpdate tests the Vault Update mutation with sharded rules
 func TestVaultUpdate(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	// SETUP
 	root := indigo.NewRule("root", "")
 
@@ -557,8 +525,7 @@ func TestVaultUpdate(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -649,16 +616,6 @@ root
 // TestVaultUpdateWithShardMovement tests updating a rule's expression and then
 // moving it to a different shard based on the updated criteria
 func TestVaultUpdateWithShardMovement(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	// SETUP
 	root := indigo.NewRule("root", "")
 
@@ -682,8 +639,7 @@ func TestVaultUpdateWithShardMovement(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard}
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -749,16 +705,6 @@ root
 
 // TestVaultMove tests the Vault Move mutation with sharded rules
 func TestVaultMove(t *testing.T) {
-	schema := &indigo.Schema{
-		ID: "x",
-		Elements: []indigo.DataElement{
-			{Name: "school", Type: indigo.String{}},
-			{Name: "nationality", Type: indigo.String{}},
-			{Name: "class", Type: indigo.Int{}},
-			{Name: "gpa", Type: indigo.Float{}},
-		},
-	}
-
 	// SETUP
 	root := indigo.NewRule("root", "")
 
@@ -793,8 +739,7 @@ func TestVaultMove(t *testing.T) {
 
 	root.Shards = []*indigo.Rule{centralShard, woodlawnShard, eastShard}
 
-	e := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(e, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatal(err)
 	}

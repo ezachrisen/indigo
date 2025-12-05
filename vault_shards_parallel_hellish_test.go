@@ -46,7 +46,7 @@ func TestHellishShardedVaultParallelStress(t *testing.T) {
 	root := createDeeplyNestedShardedRule()
 
 	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(eng, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatalf("failed to create vault: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestHellishShardedVaultParallelStress(t *testing.T) {
 			"priority": 10,
 		},
 		nil, // Will cause panic in evaluator if not handled
-		map[string]any{}, // Empty data
+		{},  // Empty data
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -327,7 +327,6 @@ func TestHellishShardedVaultParallelStress(t *testing.T) {
 		"status":   "active",
 		"priority": 100,
 	})
-
 	if err != nil {
 		t.Logf("Final evaluation error: %v (may be expected if vault was damaged)", err)
 	}
@@ -346,15 +345,6 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 		t.SkipNow()
 	}
 
-	schema := &indigo.Schema{
-		ID: "edge",
-		Elements: []indigo.DataElement{
-			{Name: "type", Type: indigo.String{}},
-		},
-	}
-
-	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-
 	// Test 1: Update a rule so its expression matches NO shards (should go to default)
 	t.Run("update_to_no_shard_match", func(t *testing.T) {
 		root := indigo.NewRule("root", "true")
@@ -371,7 +361,7 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 
 		root.Shards = []*indigo.Rule{shard1, shard2}
 
-		v, err := indigo.NewVault(eng, root)
+		v, err := indigo.NewVault(root)
 		if err != nil {
 			t.Fatalf("vault creation failed: %v", err)
 		}
@@ -405,7 +395,7 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 			t.Fatal("rule_a not found after update")
 		}
 		if len(ancestors) == 0 || ancestors[len(ancestors)-1].ID != "default" {
-			t.Errorf("rule_a should be in default shard, got parent %s", 
+			t.Errorf("rule_a should be in default shard, got parent %s",
 				func() string {
 					if len(ancestors) > 0 {
 						return ancestors[len(ancestors)-1].ID
@@ -439,7 +429,7 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 		primary.Shards = []*indigo.Rule{secondary1, secondary2}
 		root.Shards = []*indigo.Rule{primary}
 
-		v, err := indigo.NewVault(eng, root)
+		v, err := indigo.NewVault(root)
 		if err != nil {
 			t.Fatalf("vault creation failed: %v", err)
 		}
@@ -495,7 +485,7 @@ func TestConcurrentUpdateWithParallelEval(t *testing.T) {
 	root := createComplexRuleTree(100)
 
 	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-	v, err := indigo.NewVault(eng, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatalf("vault creation failed: %v", err)
 	}
@@ -612,7 +602,7 @@ func TestMakeSafePathRaceConditions(t *testing.T) {
 	level1.Add(level2)
 	root.Add(level1)
 
-	v, err := indigo.NewVault(eng, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatalf("vault creation failed: %v", err)
 	}
@@ -720,7 +710,7 @@ func TestParallelEvalEdgeCasesWithShards(t *testing.T) {
 	defaultShard := indigo.NewRule("default", "true")
 	root.Add(defaultShard)
 
-	v, err := indigo.NewVault(eng, root)
+	v, err := indigo.NewVault(root)
 	if err != nil {
 		t.Fatalf("vault creation failed: %v", err)
 	}
@@ -745,7 +735,6 @@ func TestParallelEvalEdgeCasesWithShards(t *testing.T) {
 			rule := v.ImmutableRule()
 			result, err := eng.Eval(context.Background(), rule, testData,
 				indigo.Parallel(cfg.batchSize, cfg.maxParallel))
-
 			if err != nil {
 				t.Logf("Eval error with batch=%d, parallel=%d: %v",
 					cfg.batchSize, cfg.maxParallel, err)
