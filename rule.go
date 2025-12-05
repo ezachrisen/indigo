@@ -237,6 +237,12 @@ func (r *Rule) targetParent(rr *Rule) (*Rule, error) {
 }
 
 func matchMeta(shard, r *Rule) (bool, error) {
+	if r == nil {
+		return false, nil
+	}
+	if shard.Meta == nil {
+		return true, nil
+	}
 	switch f := shard.Meta.(type) {
 	case func(*Rule) bool:
 		if f(r) {

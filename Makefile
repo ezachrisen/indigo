@@ -1,10 +1,7 @@
 test:
-	go test -count=1 ./...
+	go test -count=1 -race ./... 
 
 full_test: race_test test benchmark
-
-race_test:
-	go test -v -race ./...
 
 
 benchmark:

@@ -381,7 +381,8 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 		if len(ancestors) == 0 || ancestors[len(ancestors)-1].ID != "shard_a" {
 			t.Error("rule_a not in shard_a")
 		}
-
+		fmt.Println(root1.Tree())
+		fmt.Println("----------------------------------------")
 		// Update it to not match any shard
 		updated := indigo.NewRule("rule_a", `type == "C"`)
 		if err := v.Mutate(indigo.Update(updated)); err != nil {
