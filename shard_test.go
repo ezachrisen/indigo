@@ -349,7 +349,6 @@ root
 		//--------------------------------------------------------------------------------
 		// Add a new rule, make sure it ends up in the right shard
 		// Based on the sharding specification, it shold be placed into "woodlawnForeign"
-
 		woodlawnForeignJustOK := indigo.NewRule("woodlawnForeignJustOK", `school =="woodlawn" && class == 2026 && gpa > 2.0 && gpa < 3.7 && nationality != "US"`)
 
 		err = v.Mutate(indigo.Add(woodlawnForeignJustOK, "root")) // <-- we can just add it to the root and let sharding place it

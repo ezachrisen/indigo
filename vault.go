@@ -292,52 +292,114 @@ func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutatio
 
 // destinationParent returns either the parent (r), or a shard within r where
 // the rule rr should be placed
-func destinationParent(r, rr *Rule) (*Rule, error) {
-	toReturn := r.FindParent(rr.ID)
-	shardCount := 0
-	if r.shard {
-		shardCount++
-		ok, err := matchMeta(r, rr)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			toReturn = r
-		}
+func destinationParent(root, rr *Rule) (*Rule, error) {
+	toReturn := root.FindParent(rr.ID)
+
+	if root.shard && matchMeta(root, rr) {
+		fmt.Println("   - ", root.ID, " is my shard (root)")
+		toReturn = root
 	}
 
-shardLoop:
-	for _, shard := range r.sortedRules {
-		if !shard.shard {
-			continue
-		}
-		shardCount++
-		ok, err := matchMeta(shard, rr)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
+	for _, shard := range root.sortedRules {
+		if matchMeta(shard, rr) {
+			fmt.Println("   - ", shard.ID, " is my shard")
 			toReturn = shard
-			break shardLoop
+			break
 		}
 	}
 
-	// We're in a sharding situation, and we found a matching shard,
-	// check if there is a more specific shard in that shard's children
-	if shardCount > 0 && toReturn != nil {
-		for _, c := range toReturn.Rules {
-			sh, err := destinationParent(c, rr)
-			if err != nil {
-				return nil, err
-			}
-			if sh != nil {
-				return sh, nil
-			}
+	if toReturn == nil {
+		return nil, nil
+	}
+
+	if !toReturn.shard {
+		return toReturn, nil
+	}
+
+	for _, c := range toReturn.sortedRules {
+		sh, err := destinationParent(c, rr)
+		if err != nil {
+			return nil, err
+		}
+		if sh != nil {
+			fmt.Println("  found new shard:", sh.ID)
+			return sh, nil
 		}
 	}
 	return toReturn, nil
 }
 
+func isMyShard(root, rr *Rule) bool {
+	if ok := matchMeta(root, rr); ok {
+		return true
+	}
+	return false
+}
+
+// // destinationParent returns either the parent (r), or a shard within r where
+// // the rule rr should be placed
+//
+//	func destinationParentOld(r, rr *Rule) (*Rule, error) {
+//		toReturn := r.FindParent(rr.ID)
+//
+//		shardCount := 0
+//		if r.shard {
+//			fmt.Println("Checking shard ", r.ID)
+//			shardCount++
+//			ok, err := matchMeta(r, rr)
+//			if err != nil {
+//				return nil, err
+//			}
+//			if ok {
+//				fmt.Println("   - ", r.ID, " is my shard")
+//				toReturn = r
+//			}
+//		}
+//
+//		fmt.Println("Shards in order ----")
+//		for _, shard := range r.sortedRules {
+//			if shard.shard {
+//				fmt.Println("    - ", shard.ID)
+//			}
+//		}
+//		fmt.Println("---<")
+//
+// shardLoop:
+//
+//		for _, shard := range r.sortedRules {
+//			if !shard.shard {
+//				continue
+//			}
+//			fmt.Println("Checking shard ", shard.ID)
+//			shardCount++
+//			ok, err := matchMeta(shard, rr)
+//			if err != nil {
+//				return nil, err
+//			}
+//			if ok {
+//				fmt.Println("   - ", shard.ID, " is my shard")
+//				toReturn = shard
+//				break shardLoop
+//			}
+//		}
+//
+//		// We're in a sharding situation, and we found a matching shard,
+//		// check if there is a more specific shard in that shard's children
+//		if shardCount > 0 && toReturn != nil {
+//			for _, c := range toReturn.sortedRules {
+//				sh, err := destinationParent(c, rr)
+//				if err != nil {
+//					return nil, err
+//				}
+//				if sh != nil {
+//					fmt.Println("  found new shard:", sh.ID)
+//					return sh, nil
+//				}
+//			}
+//		}
+//		return toReturn, nil
+//	}
+//
 // applyMutations performs the mutations against the root rule.
 func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
 	// we keep track of which rules have already been cloned, i.e., made safe
