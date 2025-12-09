@@ -349,7 +349,6 @@ root
 		//--------------------------------------------------------------------------------
 		// Add a new rule, make sure it ends up in the right shard
 		// Based on the sharding specification, it shold be placed into "woodlawnForeign"
-
 		woodlawnForeignJustOK := indigo.NewRule("woodlawnForeignJustOK", `school =="woodlawn" && class == 2026 && gpa > 2.0 && gpa < 3.7 && nationality != "US"`)
 
 		err = v.Mutate(indigo.Add(woodlawnForeignJustOK, "root")) // <-- we can just add it to the root and let sharding place it
@@ -700,7 +699,6 @@ root
 	if parentShard.ID != "woodlawn" {
 		t.Errorf("rule not in woodlawn shard; got parent %q", parentShard.ID)
 	}
-	debugLogf(t, "Verified: centralAtRisk was automatically moved to %q shard by Update\n", parentShard.ID)
 }
 
 // TestVaultMove tests the Vault Move mutation with sharded rules
@@ -789,51 +787,65 @@ root
 	// Move genericRule to central (note: since it doesn't match central shard criteria,
 	// it will stay in central because that's where we explicitly requested it to go)
 	err = v.Mutate(indigo.Move("genericRule", "central"))
+	if err == nil {
+		t.Fatalf("expected error that moving a rule to a shard is not allowed")
+	}
+
+	// Let's add a rule to a non-shard rule, then move it to another non-shard rule
+	err = v.Mutate(indigo.Add(indigo.NewRule("bingo", ""), "woodlawnHonors"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = v.Mutate(indigo.Move("bingo", "genericRule"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	afterMoveTree := v.ImmutableRule().Tree()
-	debugLogf(t, "After moving genericRule to central:\n%s\n", afterMoveTree)
+	debugLogf(t, "After moving bingo:\n%s\n\n", afterMoveTree)
 
 	wantAfterMove := `
 root
 ├── central (*)
 │   ├── centralAtRisk
-│   ├── centralHonors
-│   └── genericRule
-├── default (*)
-├── east (*)
-│   └── eastHonors
-└── woodlawn (*)
-    ├── woodlawnAtRisk
-    └── woodlawnHonors
-	`
-	assertEqual(wantAfterMove, afterMoveTree, t)
-
-	// Move genericRule to woodlawn
-	err = v.Mutate(indigo.Move("genericRule", "woodlawn"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	afterSecondMoveTree := v.ImmutableRule().Tree()
-	debugLogf(t, "After moving genericRule to woodlawn:\n%s\n", afterSecondMoveTree)
-
-	wantAfterSecondMove := `
-root
-├── central (*)
-│   ├── centralAtRisk
 │   └── centralHonors
 ├── default (*)
+│   └── genericRule
+│       └── bingo
 ├── east (*)
 │   └── eastHonors
 └── woodlawn (*)
-    ├── genericRule
     ├── woodlawnAtRisk
     └── woodlawnHonors
-	`
-	assertEqual(wantAfterSecondMove, afterSecondMoveTree, t)
+ `
+	assertEqual(wantAfterMove, afterMoveTree, t)
+
+	//	// Move genericRule to woodlawn
+	//	err = v.Mutate(indigo.Move("genericRule", "woodlawn"))
+	//	if err != nil {
+	//		t.Fatal(err)
+	//	}
+	//
+	//	afterSecondMoveTree := v.ImmutableRule().Tree()
+	//	debugLogf(t, "After moving genericRule to woodlawn:\n%s\n", afterSecondMoveTree)
+	//
+	//	wantAfterSecondMove := `
+	//
+	// root
+	// ├── central (*)
+	// │   ├── centralAtRisk
+	// │   └── centralHonors
+	// ├── default (*)
+	// ├── east (*)
+	// │   └── eastHonors
+	// └── woodlawn (*)
+	//
+	//	    ├── genericRule
+	//	    ├── woodlawnAtRisk
+	//	    └── woodlawnHonors
+	//		`
+	//		assertEqual(wantAfterSecondMove, afterSecondMoveTree, t)
 }
 
 // Helper function to compare rule trees from the rule.Tree() method

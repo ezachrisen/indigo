@@ -198,7 +198,6 @@ func (r *Rule) BuildShards() error {
 
 	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
 	for _, newChild := range r.Rules {
-		// //fmt.Println("child ", newChild.ID, r.ID)
 		err := newChild.BuildShards()
 		if err != nil {
 			return err
@@ -236,18 +235,20 @@ func (r *Rule) targetParent(rr *Rule) (*Rule, error) {
 	return r, nil
 }
 
-func matchMeta(shard, r *Rule) (bool, error) {
+func matchMeta(shard, r *Rule) bool {
+	if r == nil || shard == nil || !shard.shard {
+		return false
+	}
+	if shard.Meta == nil {
+		return true
+	}
 	switch f := shard.Meta.(type) {
 	case func(*Rule) bool:
 		if f(r) {
-			return true, nil
-		}
-	default:
-		if shard.ID != defaultRuleID {
-			return false, fmt.Errorf("unsupported meta type for shard %s: %t", shard.ID, shard.Meta)
+			return true
 		}
 	}
-	return false, nil
+	return false
 }
 
 // FindRule returns the rule with the id in the rule or any of its

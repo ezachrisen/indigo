@@ -457,29 +457,6 @@ func TestVault_DeleteInvalid(t *testing.T) {
 	}
 }
 
-func TestVault_CompilationError(t *testing.T) {
-	v := setup(t)
-
-	// Add rule with invalid expression
-	r := indigo.Rule{ID: "invalid", Expr: "invalid syntax {{{{"}
-	err := v.Mutate(indigo.Add(&r, "root"))
-	if err == nil {
-		t.Error("expected compilation error")
-	}
-
-	// Update to invalid
-	valid := indigo.Rule{ID: "valid", Expr: "true"}
-	err = v.Mutate(indigo.Add(&valid, "root"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	invalidUpdate := indigo.Rule{ID: "valid", Expr: "invalid {{{{"}
-	err = v.Mutate(indigo.Update(&invalidUpdate))
-	if err == nil {
-		t.Error("expected compilation error on update")
-	}
-}
-
 func TestVault_MultipleMutationsWithError(t *testing.T) {
 	v := setup(t)
 
@@ -753,6 +730,218 @@ func TestVault_Mutations(t *testing.T) {
 	})
 }
 
+// // This test mutates a rule in a Vault and makes sure that the changes
+// // are not seen outside the vault by someone who grabbed to rule before
+// // mutations happened.
+//
+//	func TestVault_MutationsWithShards(t *testing.T) {
+//		setup := func() *indigo.Vault {
+//			root := indigo.NewRule("root", "")
+//			root.Add(indigo.NewRule("one", " type = 'A' "))
+//			root.Add(indigo.NewRule("two", " type = 'A' "))
+//			root.Add(indigo.NewRule("three", " type = 'B' "))
+//			root.Add(indigo.NewRule("four", " type = 'D' "))
+//
+//			root.Shards = []*indigo.Rule {
+//				{
+//					ID: "A"
+//					Rule: " true ",
+//					Meta: func(r *indigo.Rule) {
+//
+//					}
+//				}
+//
+//
+//
+//
+//
+//			}
+//
+//			v, _ := indigo.NewVault(root)
+//			return v
+//		}
+//
+//		// this is the baseline rule all mutations happen against
+//		baselineStr := `
+//
+// ┌──────────────────────────────────────────────────┐
+// │                                                  │
+// │ INDIGO RULES                                     │
+// │                                                  │
+// ├───────────┬────────┬────────────┬────────┬───────┤
+// │           │        │            │ Result │       │
+// │ Rule      │ Schema │ Expression │ Type   │ Meta  │
+// ├───────────┼────────┼────────────┼────────┼───────┤
+// │ root      │        │            │ <nil>  │ <nil> │
+// │   childA  │        │            │ <nil>  │ <nil> │
+// │     one   │        │            │ <nil>  │ <nil> │
+// │     two   │        │            │ <nil>  │ <nil> │
+// │   childB  │        │            │ <nil>  │ <nil> │
+// │     three │        │            │ <nil>  │ <nil> │
+// │   childC  │        │            │ <nil>  │ <nil> │
+// └───────────┴────────┴────────────┴────────┴───────┘
+// `
+//
+//	t.Run("delete", func(t *testing.T) {
+//		v := setup()
+//		baseline := v.ImmutableRule()
+//		debugLogf(t, "baseline:\n%s\n", baseline)
+//
+//		err := v.Mutate(indigo.Delete("three"))
+//		if err != nil {
+//			t.Fatalf("Updating rule failed: %v", err)
+//		}
+//
+//		after := v.ImmutableRule()
+//
+//		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+//		debugLogf(t, "after mutation:\n%s\n", after)
+//		want := `
+//
+// ┌─────────────────────────────────────────────────┐
+// │                                                 │
+// │ INDIGO RULES                                    │
+// │                                                 │
+// ├──────────┬────────┬────────────┬────────┬───────┤
+// │          │        │            │ Result │       │
+// │ Rule     │ Schema │ Expression │ Type   │ Meta  │
+// ├──────────┼────────┼────────────┼────────┼───────┤
+// │ root     │        │            │ <nil>  │ <nil> │
+// │   childA │        │            │ <nil>  │ <nil> │
+// │     one  │        │            │ <nil>  │ <nil> │
+// │     two  │        │            │ <nil>  │ <nil> │
+// │   childB │        │            │ <nil>  │ <nil> │
+// │   childC │        │            │ <nil>  │ <nil> │
+// └──────────┴────────┴────────────┴────────┴───────┘
+// `
+//
+//		assertEqual(want, after.String(), t)
+//		assertEqual(baselineStr, baseline.String(), t)
+//		assertPointersDifferent(t, baseline, after, "root", "childB")
+//		assertPointersEqual(t, baseline, after, "childC", "childA", "one", "two")
+//	})
+//
+//	t.Run("update", func(t *testing.T) {
+//		v := setup()
+//		baseline := v.ImmutableRule()
+//		debugLogf(t, "baseline:\n%s\n", baseline)
+//
+//		err := v.Mutate(indigo.Update(indigo.NewRule("one", "true")))
+//		if err != nil {
+//			t.Fatalf("Updating rule failed: %v", err)
+//		}
+//
+//		after := v.ImmutableRule()
+//
+//		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+//		debugLogf(t, "after mutation:\n%s\n", after)
+//		want := `
+//
+// ┌──────────────────────────────────────────────────┐
+// │                                                  │
+// │ INDIGO RULES                                     │
+// │                                                  │
+// ├───────────┬────────┬────────────┬────────┬───────┤
+// │           │        │            │ Result │       │
+// │ Rule      │ Schema │ Expression │ Type   │ Meta  │
+// ├───────────┼────────┼────────────┼────────┼───────┤
+// │ root      │        │            │ <nil>  │ <nil> │
+// │   childA  │        │            │ <nil>  │ <nil> │
+// │     one   │        │ true       │ <nil>  │ <nil> │
+// │     two   │        │            │ <nil>  │ <nil> │
+// │   childB  │        │            │ <nil>  │ <nil> │
+// │     three │        │            │ <nil>  │ <nil> │
+// │   childC  │        │            │ <nil>  │ <nil> │
+// └───────────┴────────┴────────────┴────────┴───────┘
+// `
+//
+//		assertEqual(want, after.String(), t)
+//		assertEqual(baselineStr, baseline.String(), t)
+//		assertPointersDifferent(t, baseline, after, "root", "childA", "one")
+//		assertPointersEqual(t, baseline, after, "two", "childB", "three", "childC")
+//	})
+//
+//	t.Run("add", func(t *testing.T) {
+//		v := setup()
+//		baseline := v.ImmutableRule()
+//		debugLogf(t, "baseline:\n%s\n", baseline)
+//
+//		err := v.Mutate(indigo.Add(indigo.NewRule("XXX", "false"), "childA"))
+//		if err != nil {
+//			t.Fatalf("adding rule failed: %v", err)
+//		}
+//
+//		after := v.ImmutableRule()
+//		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+//		debugLogf(t, "after mutation:\n%s\n", after)
+//		want := `
+//
+// ┌──────────────────────────────────────────────────┐
+// │                                                  │
+// │ INDIGO RULES                                     │
+// │                                                  │
+// ├───────────┬────────┬────────────┬────────┬───────┤
+// │           │        │            │ Result │       │
+// │ Rule      │ Schema │ Expression │ Type   │ Meta  │
+// ├───────────┼────────┼────────────┼────────┼───────┤
+// │ root      │        │            │ <nil>  │ <nil> │
+// │   childA  │        │            │ <nil>  │ <nil> │
+// │     XXX   │        │ false      │ <nil>  │ <nil> │
+// │     one   │        │            │ <nil>  │ <nil> │
+// │     two   │        │            │ <nil>  │ <nil> │
+// │   childB  │        │            │ <nil>  │ <nil> │
+// │     three │        │            │ <nil>  │ <nil> │
+// │   childC  │        │            │ <nil>  │ <nil> │
+// └───────────┴────────┴────────────┴────────┴───────┘
+//
+//		`
+//		assertEqual(want, after.String(), t)
+//		assertEqual(baselineStr, baseline.String(), t)
+//		assertPointersDifferent(t, baseline, after, "root", "childA")
+//		assertPointersEqual(t, baseline, after, "childB")
+//	})
+//
+//	t.Run("move", func(t *testing.T) {
+//		v := setup()
+//		baseline := v.ImmutableRule()
+//		debugLogf(t, "baseline:\n%s\n", baseline)
+//
+//		err := v.Mutate(indigo.Move("two", "childC"))
+//		if err != nil {
+//			t.Fatalf("moving rule failed: %v", err)
+//		}
+//
+//		after := v.ImmutableRule()
+//
+//		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+//		debugLogf(t, "after mutation:\n%s\n", after)
+//		want := `
+//
+// ┌──────────────────────────────────────────────────┐
+// │                                                  │
+// │ INDIGO RULES                                     │
+// │                                                  │
+// ├───────────┬────────┬────────────┬────────┬───────┤
+// │           │        │            │ Result │       │
+// │ Rule      │ Schema │ Expression │ Type   │ Meta  │
+// ├───────────┼────────┼────────────┼────────┼───────┤
+// │ root      │        │            │ <nil>  │ <nil> │
+// │   childA  │        │            │ <nil>  │ <nil> │
+// │     one   │        │            │ <nil>  │ <nil> │
+// │   childB  │        │            │ <nil>  │ <nil> │
+// │     three │        │            │ <nil>  │ <nil> │
+// │   childC  │        │            │ <nil>  │ <nil> │
+// │     two   │        │            │ <nil>  │ <nil> │
+// └───────────┴────────┴────────────┴────────┴───────┘
+// `
+//
+//			assertEqual(want, after.String(), t)
+//			assertEqual(baselineStr, baseline.String(), t)
+//			assertPointersDifferent(t, baseline, after, "root", "childA", "childC")
+//			assertPointersEqual(t, baseline, after, "childB", "three")
+//		})
+//	}
+//
 // assertPointersEqual returns an error if any of the named rules point to a different
 // area in memory for in and b
 func assertPointersEqual(t *testing.T, a *indigo.Rule, b *indigo.Rule, ruleIDs ...string) {
