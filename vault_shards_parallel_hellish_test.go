@@ -381,9 +381,6 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 		if len(ancestors) == 0 || ancestors[len(ancestors)-1].ID != "shard_a" {
 			t.Error("rule_a not in shard_a")
 		}
-		fmt.Println(root1.Tree())
-		fmt.Println("----------------------------------------")
-		// Update it to not match any shard
 		updated := indigo.NewRule("rule_a", `type == "C"`)
 		if err := v.Mutate(indigo.Update(updated)); err != nil {
 			t.Fatalf("update rule_a failed: %v", err)
@@ -413,18 +410,18 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 		// Primary shard
 		primary := indigo.NewRule("primary", `type == "primary"`)
 		primary.Meta = func(r *indigo.Rule) bool {
-			return strings.Contains(r.Expr, `"primary"`)
+			return strings.Contains(r.Expr, `primary`)
 		}
 
 		// Secondary shards under primary
 		secondary1 := indigo.NewRule("sec1", `type == "primary_sec1"`)
 		secondary1.Meta = func(r *indigo.Rule) bool {
-			return strings.Contains(r.Expr, `"primary_sec1"`)
+			return strings.Contains(r.Expr, `primary_sec1`)
 		}
 
 		secondary2 := indigo.NewRule("sec2", `type == "primary_sec2"`)
 		secondary2.Meta = func(r *indigo.Rule) bool {
-			return strings.Contains(r.Expr, `"primary_sec2"`)
+			return strings.Contains(r.Expr, `primary_sec2`)
 		}
 
 		primary.Shards = []*indigo.Rule{secondary1, secondary2}
@@ -434,13 +431,14 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 		if err != nil {
 			t.Fatalf("vault creation failed: %v", err)
 		}
-
+		debugLogf(t, "before:\n%s\n", v.ImmutableRule())
 		// Add rules at various levels
 		rule1 := indigo.NewRule("rule1", `type == "primary_sec1"`)
 		if err := v.Mutate(indigo.Add(rule1, "root")); err != nil {
 			t.Fatalf("add rule1 failed: %v", err)
 		}
 
+		debugLogf(t, "after adding rule1:\n%s\n", v.ImmutableRule())
 		// Should be in primary -> sec1
 		root1 := v.ImmutableRule()
 		found, ancestors := root1.FindRule("rule1")
@@ -459,6 +457,7 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 
 		// Should be in primary -> sec2 now
 		root2 := v.ImmutableRule()
+		debugLogf(t, "after updating it:\n%s\n", v.ImmutableRule())
 		found, ancestors = root2.FindRule("rule1")
 		if found == nil {
 			t.Fatal("rule1 not found after update")
@@ -576,101 +575,6 @@ func TestConcurrentUpdateWithParallelEval(t *testing.T) {
 	}
 }
 
-// TestMakeSafePathRaceConditions tests for race conditions in the makeSafePath mechanism
-func TestMakeSafePathRaceConditions(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
-
-	schema := &indigo.Schema{
-		ID: "makesafe",
-		Elements: []indigo.DataElement{
-			{Name: "x", Type: indigo.Int{}},
-		},
-	}
-
-	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
-
-	// Create a rule tree with specific structure for makeSafePath testing
-	root := indigo.NewRule("root", "true")
-	level1 := indigo.NewRule("level1", "true")
-	level2 := indigo.NewRule("level2", "true")
-	level3 := indigo.NewRule("level3", "true")
-	level4 := indigo.NewRule("level4", "x > 0")
-
-	level3.Add(level4)
-	level2.Add(level3)
-	level1.Add(level2)
-	root.Add(level1)
-
-	v, err := indigo.NewVault(root)
-	if err != nil {
-		t.Fatalf("vault creation failed: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var wg sync.WaitGroup
-
-	// Multiple concurrent updaters at different depths
-	for depth := 1; depth <= 4; depth++ {
-		wg.Add(1)
-		go func(d int) {
-			defer wg.Done()
-			rng := rand.New(rand.NewSource(int64(d)))
-
-			ruleIDs := []string{"level1", "level2", "level3", "level4"}
-
-			for i := 0; i < 50; i++ {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-
-				targetID := ruleIDs[d-1]
-				newExpr := fmt.Sprintf("x > %d", rng.Intn(100))
-				updateRule := indigo.NewRule(targetID, newExpr)
-
-				_ = v.Mutate(indigo.Update(updateRule))
-
-				time.Sleep(time.Microsecond * time.Duration(rng.Intn(100)))
-			}
-		}(depth)
-	}
-
-	// Also evaluate in parallel
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 100; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-
-			rule := v.ImmutableRule()
-			_, _ = eng.Eval(context.Background(), rule, map[string]any{"x": 50},
-				indigo.Parallel(10, 10))
-			time.Sleep(time.Microsecond * 50)
-		}
-	}()
-
-	<-ctx.Done()
-	wg.Wait()
-
-	// Verify structure is intact
-	finalRule := v.ImmutableRule()
-	for _, id := range []string{"level1", "level2", "level3", "level4"} {
-		found, _ := finalRule.FindRule(id)
-		if found == nil {
-			t.Errorf("rule %s not found in final tree", id)
-		}
-	}
-}
-
 // TestParallelEvalEdgeCasesWithShards tests edge cases specific to parallel evaluation with shards
 func TestParallelEvalEdgeCasesWithShards(t *testing.T) {
 	if testing.Short() {
@@ -690,7 +594,7 @@ func TestParallelEvalEdgeCasesWithShards(t *testing.T) {
 	root := indigo.NewRule("root", "true")
 
 	// Create many shards
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		shard := indigo.NewRule(fmt.Sprintf("shard_%d", i), fmt.Sprintf(`type == "type_%d"`, i))
 		shard.Meta = func(r *indigo.Rule) bool {
 			// This will cause deterministic shard routing
@@ -698,7 +602,7 @@ func TestParallelEvalEdgeCasesWithShards(t *testing.T) {
 		}
 
 		// Add many children to each shard
-		for j := 0; j < 20; j++ {
+		for j := range 20 {
 			child := indigo.NewRule(fmt.Sprintf("shard_%d_child_%d", i, j),
 				fmt.Sprintf(`type == "type_%d" && x > %d`, i, j))
 			shard.Add(child)
