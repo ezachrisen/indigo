@@ -730,6 +730,856 @@ func TestVault_Mutations(t *testing.T) {
 	})
 }
 
+// TestVaultParallelEvalWithShardedMutations targets a specific race condition:
+// When a vault mutation clones and modifies parent.Rules map in makeSafe/Add,
+// while concurrently an evaluation is reading that same Rules map in sortChildRules().
+//
+// The race can occur in this sequence:
+// 1. Vault mutation: makeSafe() clones parent rule
+// 2. Vault mutation: parent.Add(childCopy) modifies the cloned parent's Rules map
+// 3. Meanwhile, Eval: sortChildRules(parent.Rules) is iterating over parent.Rules
+// 4. This causes a "concurrent map iteration and map modification" race
+func TestVaultParallelEvalWithShardedMutations(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	schema := &indigo.Schema{
+		ID: "test",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	// Create root with sharding setup
+	root := indigo.NewRule("root", "true")
+
+	// Add some initial rules
+	for i := range 20 {
+		child := indigo.NewRule(fmt.Sprintf("initial_%d", i), "x > 0")
+		root.Add(child)
+	}
+
+	// Create shards to make mutations more complex
+	shard1 := indigo.NewRule("shard_a", "true")
+	shard1.Meta = func(r *indigo.Rule) bool {
+		return r != nil // Always matches
+	}
+
+	root.Shards = []*indigo.Rule{shard1}
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	// Compile before testing
+	rule := v.ImmutableRule()
+	err = engine.Compile(rule)
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	numWorkers := 3
+	errChan := make(chan error, numWorkers*3)
+
+	t.Logf("Starting test with %d workers", numWorkers)
+
+	// Goroutine group 1: Continuous parallel evaluations
+	for i := range numWorkers {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					t.Logf("Eval worker %d exiting", id)
+					return
+				default:
+				}
+
+				rule := v.ImmutableRule()
+				_, err := engine.Eval(ctx, rule, map[string]any{"x": 42},
+					indigo.Parallel(5, 8)) // Use parallel evaluation
+				if err != nil && ctx.Err() == nil {
+					errChan <- fmt.Errorf("eval error from worker %d: %w", id, err)
+				}
+			}
+		}(i)
+	}
+
+	// Goroutine group 2: Rapid vault mutations (adds that trigger makeSafe and parent.Add)
+	for i := range numWorkers {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			counter := 0
+			for {
+				select {
+				case <-ctx.Done():
+					t.Logf("Add worker %d exiting", id)
+					return
+				default:
+				}
+
+				// Add rules to root - this will clone root and modify its Rules map
+				newRule := indigo.NewRule(fmt.Sprintf("added_%d_%d", id, counter), "x > 5")
+				err := v.Mutate(indigo.Add(newRule, "root"))
+				if err != nil && ctx.Err() == nil {
+					errChan <- fmt.Errorf("add error from worker %d: %w", id, err)
+				}
+				counter++
+			}
+		}(i)
+	}
+
+	// Goroutine group 3: Update existing rules
+	for i := range numWorkers {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			counter := 0
+			for {
+				select {
+				case <-ctx.Done():
+					t.Logf("Update worker %d exiting", id)
+					return
+				default:
+				}
+
+				// Update rules that exist
+				targetID := fmt.Sprintf("initial_%d", counter%20)
+				updated := indigo.NewRule(targetID, fmt.Sprintf("x > %d", counter%100))
+				err := v.Mutate(indigo.Update(updated))
+				if err != nil && ctx.Err() == nil {
+					errChan <- fmt.Errorf("update error from worker %d: %w", id, err)
+				}
+				counter++
+			}
+		}(i)
+	}
+
+	// Wait for timeout
+	<-ctx.Done()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+		close(errChan)
+	}()
+
+	select {
+	case <-done:
+		// Check for any errors collected
+		for err := range errChan {
+			t.Errorf("Error during test: %v", err)
+		}
+		t.Log("Test completed successfully")
+	case <-time.After(8 * time.Second):
+		t.Error("Test timed out - goroutines still running")
+	}
+}
+
+// TestRaceConditionRulesMapMutation specifically targets the Rules map race condition
+// This test is designed to maximize the chance of detecting the specific race where
+// one goroutine modifies Rules map while another reads it during sortChildRules().
+func TestRaceConditionRulesMapMutation(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	schema := &indigo.Schema{
+		ID: "race_test",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	// Create a rule with many children to increase race likelihood
+	root := indigo.NewRule("root", "true")
+	for i := 0; i < 50; i++ {
+		child := indigo.NewRule(fmt.Sprintf("child_%d", i), "x > 0")
+		root.Add(child)
+	}
+	err := eng.Compile(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	// Goroutine 1: Continuously update rules (modifies Rules map)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		counter := 0
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// Update a rule with new expression
+			targetID := fmt.Sprintf("child_%d", counter%50)
+			newRule := indigo.NewRule(targetID, fmt.Sprintf("x > %d", counter%100))
+
+			_ = v.Mutate(indigo.Update(newRule))
+			counter++
+		}
+	}()
+
+	// Goroutine 2: Continuously evaluate (reads Rules map during sort)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			rule := v.ImmutableRule()
+			_, _ = eng.Eval(context.Background(), rule, map[string]any{"x": 42})
+		}
+	}()
+
+	// Goroutine 3: Hammer the Rules map with many mutations
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		counter := 0
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// Add many rules rapidly
+			newID := fmt.Sprintf("added_%d", counter)
+			newRule := indigo.NewRule(newID, "x > 50")
+			parent := "root"
+
+			if counter%2 == 0 {
+				parentID := fmt.Sprintf("child_%d", counter%50)
+				_ = v.Mutate(indigo.Add(newRule, parentID))
+			} else {
+				_ = v.Mutate(indigo.Add(newRule, parent))
+			}
+			counter++
+		}
+	}()
+
+	// Let them run until timeout
+	<-ctx.Done()
+	close(stop)
+
+	// Wait for all goroutines with a timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Log("Test completed successfully (race detector should find issues)")
+	case <-time.After(15 * time.Second):
+		t.Fatal("Test goroutines did not complete in time")
+	}
+}
+
+// TestParallelEvalDuringMutation tests parallel evaluation while mutations are happening
+// This tests the specific race between sortChildRules() and Rules map modification
+func TestParallelEvalDuringMutation(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	schema := &indigo.Schema{
+		ID: "parallel_mutation",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	// Create rule tree with structure that will stress sortChildRules
+	root := indigo.NewRule("root", "true")
+
+	// Create parent rules with many children
+	for p := 0; p < 5; p++ {
+		parent := indigo.NewRule(fmt.Sprintf("parent_%d", p), "x > 0")
+		for c := 0; c < 20; c++ {
+			child := indigo.NewRule(fmt.Sprintf("parent_%d_child_%d", p, c), "x > 5")
+			parent.Add(child)
+		}
+		root.Add(parent)
+	}
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	var wg sync.WaitGroup
+
+	// Concurrent parallel evaluators - they call sortChildRules
+	for evaluator := 0; evaluator < 5; evaluator++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < 200; i++ {
+				rule := v.ImmutableRule()
+				// Use extreme parallel settings to stress sortChildRules more
+				_, _ = eng.Eval(context.Background(), rule, map[string]any{"x": 50},
+					indigo.Parallel(5, 50)) // High parallelism
+			}
+		}(evaluator)
+	}
+
+	// Concurrent mutators - they modify Rules map
+	for mutator := 0; mutator < 5; mutator++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < 200; i++ {
+				parentID := fmt.Sprintf("parent_%d", i%5)
+				childID := fmt.Sprintf("parent_%d_child_%d_added_%d", i%5, i%20, i)
+				newRule := indigo.NewRule(childID, fmt.Sprintf("x > %d", i))
+
+				_ = v.Mutate(indigo.Add(newRule, parentID))
+			}
+		}(mutator)
+	}
+
+	// Wait with timeout
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Log("Parallel eval + mutation test completed")
+	case <-time.After(30 * time.Second):
+		t.Fatal("Test timed out - potential deadlock")
+	}
+}
+
+// TestSortedRulesRaceCondition specifically targets the sortChildRules race
+// by repeatedly calling it via Eval while modifying the underlying Rules map
+func TestSortedRulesRaceCondition(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	schema := &indigo.Schema{
+		ID: "sorted_race",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	eng := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	// Create a rule with many children
+	root := indigo.NewRule("root", "true")
+	for i := 0; i < 100; i++ {
+		child := indigo.NewRule(fmt.Sprintf("child_%d", i), "x > 0")
+		root.Add(child)
+	}
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	// Goroutine 1: Continuously eval (calls sortChildRules internally)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			rule := v.ImmutableRule()
+			_, _ = eng.Eval(context.Background(), rule, map[string]any{"x": 50})
+		}
+	}()
+
+	// Goroutine 2: Continuously add to Rules map
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		counter := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			newRule := indigo.NewRule(fmt.Sprintf("added_%d", counter), "x > 0")
+			_ = v.Mutate(indigo.Add(newRule, "root"))
+			counter++
+		}
+	}()
+
+	// Goroutine 3: Continuously delete and update
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		counter := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			targetID := fmt.Sprintf("child_%d", counter%100)
+			updated := indigo.NewRule(targetID, fmt.Sprintf("x > %d", counter%50))
+			_ = v.Mutate(indigo.Update(updated))
+			counter++
+		}
+	}()
+
+	<-ctx.Done()
+
+	// Wait for goroutines
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Log("SortedRules race test completed")
+	case <-time.After(10 * time.Second):
+		t.Fatal("Test timed out")
+	}
+}
+
+// TestDestinationShardRaceCondition targets the destinationShard function
+// which walks the tree while Rules maps may be modified
+func TestDestinationShardRaceCondition(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	// Create sharded rule structure
+	root := indigo.NewRule("root", "true")
+
+	shard1 := indigo.NewRule("shard_a", `type == "A"`)
+	shard1.Meta = func(r *indigo.Rule) bool {
+		return r != nil
+	}
+
+	shard2 := indigo.NewRule("shard_b", `type == "B"`)
+	shard2.Meta = func(r *indigo.Rule) bool {
+		return r != nil
+	}
+
+	root.Shards = []*indigo.Rule{shard1, shard2}
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	// Goroutine 1: Add rules (triggers destinationShard)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		counter := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			newRule := indigo.NewRule(fmt.Sprintf("rule_%d", counter), "true")
+			_ = v.Mutate(indigo.Add(newRule, "root"))
+			counter++
+		}
+	}()
+
+	// Goroutine 2: Update rules (may move between shards)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		counter := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			targetID := fmt.Sprintf("rule_%d", counter%100)
+			updated := indigo.NewRule(targetID, "true")
+			_ = v.Mutate(indigo.Update(updated))
+			counter++
+		}
+	}()
+
+	<-ctx.Done()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Log("DestinationShard race test completed")
+	case <-time.After(10 * time.Second):
+		t.Fatal("Test timed out")
+	}
+}
+
+// TestVaultMutateRulesMapDirectModification targets the issue in makeSafe
+// where parent.Rules map is modified while potentially being read elsewhere
+func TestVaultMutateRulesMapDirectModification(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	schema := &indigo.Schema{
+		ID: "test",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	root := indigo.NewRule("root", "true")
+
+	// Create a parent rule with many children
+	parent := indigo.NewRule("parent", "x > 0")
+	for i := range 50 {
+		child := indigo.NewRule(fmt.Sprintf("child_%d", i), "x > 0")
+		parent.Add(child)
+	}
+	root.Add(parent)
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	// Goroutine 1: Continuously eval parent (which calls sortChildRules on parent.Rules)
+	wg.Go(func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			rule := v.ImmutableRule()
+			_, _ = engine.Eval(context.Background(), rule, map[string]any{"x": 42})
+		}
+	})
+
+	// Goroutine 2: Mutate by adding to parent (this modifies parent.Rules map)
+	wg.Go(func() {
+		counter := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// Add children to parent - triggers Rules map modification in makeSafe
+			newRule := indigo.NewRule(fmt.Sprintf("newchild_%d", counter), "x > 10")
+			_ = v.Mutate(indigo.Add(newRule, "parent"))
+			counter++
+		}
+	})
+
+	<-ctx.Done()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Log("Test completed")
+	case <-time.After(10 * time.Second):
+		t.Fatal("Test timed out")
+	}
+}
+
+// TestVaultMutationDeadlock tests for deadlocks when mutations happen
+// while evaluations are in progress
+func TestVaultMutationDeadlock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	schema := &indigo.Schema{
+		ID: "test",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	root := indigo.NewRule("root", "true")
+
+	// Create a parent rule with many children
+	parent := indigo.NewRule("parent", "x > 0")
+	for i := range 100 {
+		child := indigo.NewRule(fmt.Sprintf("child_%d", i), "x > 0")
+		parent.Add(child)
+	}
+	root.Add(parent)
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	var evalCount atomic.Int64
+	var mutateCount atomic.Int64
+
+	// Goroutine 1: Continuously eval (NO parallel)
+	wg.Go(func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			rule := v.ImmutableRule()
+			_, _ = engine.Eval(context.Background(), rule, map[string]any{"x": 42})
+			evalCount.Add(1)
+		}
+	})
+
+	// Goroutine 2: Mutate by adding to parent (this triggers vault.mu.Lock())
+	wg.Go(func() {
+		counter := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			// Add children to parent
+			newRule := indigo.NewRule(fmt.Sprintf("newchild_%d", counter), "x > 10")
+			_ = v.Mutate(indigo.Add(newRule, "parent"))
+			mutateCount.Add(1)
+			counter++
+		}
+	})
+
+	<-ctx.Done()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Logf("Test completed. Evals: %d, Mutations: %d", evalCount.Load(), mutateCount.Load())
+	case <-time.After(8 * time.Second):
+		t.Errorf("Test timed out - deadlock detected. Evals: %d, Mutations: %d", evalCount.Load(), mutateCount.Load())
+	}
+}
+
+// TestVaultParallelEvalMutationDeadlock tests for deadlocks with parallel evaluation
+func TestVaultParallelEvalMutationDeadlock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	schema := &indigo.Schema{
+		ID: "test",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	root := indigo.NewRule("root", "true")
+
+	// Create parent with children to allow parallel evaluation
+	parent := indigo.NewRule("parent", "x > 0")
+	for i := range 100 {
+		child := indigo.NewRule(fmt.Sprintf("child_%d", i), "x > 0")
+		parent.Add(child)
+	}
+	root.Add(parent)
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	var evalCount atomic.Int64
+	var mutateCount atomic.Int64
+
+	// Goroutine 1: Continuously eval WITH PARALLEL
+	wg.Go(func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			rule := v.ImmutableRule()
+			_, _ = engine.Eval(context.Background(), rule, map[string]any{"x": 42}, indigo.Parallel(10, 4)) // Use parallel
+			evalCount.Add(1)
+		}
+	})
+
+	// Goroutine 2: Mutate by adding to parent
+	wg.Go(func() {
+		counter := 0
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			newRule := indigo.NewRule(fmt.Sprintf("newchild_%d", counter), "x > 10")
+			_ = v.Mutate(indigo.Add(newRule, "parent"))
+			mutateCount.Add(1)
+			counter++
+		}
+	})
+
+	<-ctx.Done()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		t.Logf("Test completed. Evals: %d, Mutations: %d", evalCount.Load(), mutateCount.Load())
+	case <-time.After(8 * time.Second):
+		t.Errorf("Test timed out - deadlock detected. Evals: %d, Mutations: %d", evalCount.Load(), mutateCount.Load())
+	}
+}
+
+// TestShardedVaultParallel demonstrates that sharded vaults
+// can be used with parallel evaluation
+func TestShardedVaultParallel(t *testing.T) {
+	schema := &indigo.Schema{
+		ID: "test",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	// Create sharded vault
+	root := indigo.NewRule("root", "true")
+	shard1 := indigo.NewRule("shard_a", "true")
+	shard1.Meta = func(r *indigo.Rule) bool { return r != nil }
+	root.Shards = []*indigo.Rule{shard1}
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatalf("vault creation failed: %v", err)
+	}
+
+	rule := v.ImmutableRule()
+	err = engine.Compile(rule)
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+
+	// Try sequential eval - works fine
+	_, err = engine.Eval(context.Background(), rule, map[string]any{"x": 42})
+	if err != nil {
+		t.Fatalf("Sequential eval failed: %v", err)
+	}
+
+	// Try parallel eval - should now work with the fix
+	_, err = engine.Eval(context.Background(), rule, map[string]any{"x": 42},
+		indigo.Parallel(10, 4))
+	if err != nil {
+		t.Fatalf("FIX FAILED: Parallel eval still fails: %v", err)
+	}
+}
+
 // // This test mutates a rule in a Vault and makes sure that the changes
 // // are not seen outside the vault by someone who grabbed to rule before
 // // mutations happened.

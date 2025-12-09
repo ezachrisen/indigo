@@ -58,8 +58,9 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	applyEvaluatorOptions(&o, opts...)
 	d = setSelfKey(r, d, o)
 
-	// Check for incompatible options: sortFunc and parallel cannot be used together
-	if o.SortFunc != nil && (o.Parallel.BatchSize > 1 || o.Parallel.MaxParallel > 1) {
+	// Check for incompatible options: user-provided sortFunc and parallel cannot be used together
+	// However, internal sort functions (like those set by sharding) are compatible with parallel
+	if o.SortFunc != nil && !o.sortFuncIsInternal && (o.Parallel.BatchSize > 1 || o.Parallel.MaxParallel > 1) {
 		return nil, fmt.Errorf("rule %s: sortFunc and parallel options are incompatible - parallel processing cannot guarantee evaluation order", r.ID)
 	}
 
@@ -554,6 +555,11 @@ type EvalOptions struct {
 	//  (2) Rule did not supply its own sort
 	// and was overridden by a global eval option,
 	overrideSort bool
+
+	// sortFuncIsInternal is set to true if the SortFunc was set by internal
+	// operations like sharding, rather than by user code. Internal sort functions
+	// are compatible with parallel evaluation, while user-provided ones are not.
+	sortFuncIsInternal bool
 
 	// Parallel controls parallel evaluation of child rules with batching.
 	Parallel ParallelConfig `json:"parallel"`
