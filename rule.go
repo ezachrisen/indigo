@@ -198,7 +198,6 @@ func (r *Rule) BuildShards() error {
 
 	r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
 	for _, newChild := range r.Rules {
-		fmt.Println(r.ID, " -> ", newChild.ID)
 		err := newChild.BuildShards()
 		if err != nil {
 			return err
