@@ -551,9 +551,12 @@ func TestVault_Mutations(t *testing.T) {
 		root.Add(indigo.NewRule("childA", ""))
 		root.Add(indigo.NewRule("childB", ""))
 		root.Add(indigo.NewRule("childC", ""))
+		root.Add(indigo.NewRule("childD", ""))
 		root.Rules["childA"].Add(indigo.NewRule("one", ""))
 		root.Rules["childA"].Add(indigo.NewRule("two", ""))
-		root.Rules["childB"].Add(indigo.NewRule("three", ""))
+		root.Rules["childD"].Add(indigo.NewRule("x", ""))
+		root.Rules["childD"].Rules["x"].Add(indigo.NewRule("y", ""))
+		root.Rules["childD"].Rules["x"].Rules["y"].Add(indigo.NewRule("z", ""))
 		v, _ := indigo.NewVault(root)
 		return v
 	}
@@ -573,9 +576,12 @@ func TestVault_Mutations(t *testing.T) {
 │     one   │        │            │ <nil>  │ <nil> │
 │     two   │        │            │ <nil>  │ <nil> │
 │   childB  │        │            │ <nil>  │ <nil> │
-│     three │        │            │ <nil>  │ <nil> │
 │   childC  │        │            │ <nil>  │ <nil> │
-└───────────┴────────┴────────────┴────────┴───────┘       
+│   childD  │        │            │ <nil>  │ <nil> │
+│     x     │        │            │ <nil>  │ <nil> │
+│       y   │        │            │ <nil>  │ <nil> │
+│         z │        │            │ <nil>  │ <nil> │
+└───────────┴────────┴────────────┴────────┴───────┘
 `
 
 	t.Run("delete", func(t *testing.T) {
@@ -583,7 +589,7 @@ func TestVault_Mutations(t *testing.T) {
 		baseline := v.ImmutableRule()
 		debugLogf(t, "baseline:\n%s\n", baseline)
 
-		err := v.Mutate(indigo.Delete("three"))
+		err := v.Mutate(indigo.Delete("z"))
 		if err != nil {
 			t.Fatalf("Updating rule failed: %v", err)
 		}
@@ -607,12 +613,15 @@ func TestVault_Mutations(t *testing.T) {
 │     two  │        │            │ <nil>  │ <nil> │
 │   childB │        │            │ <nil>  │ <nil> │
 │   childC │        │            │ <nil>  │ <nil> │
+│   childD │        │            │ <nil>  │ <nil> │
+│     x    │        │            │ <nil>  │ <nil> │
+│       y  │        │            │ <nil>  │ <nil> │
 └──────────┴────────┴────────────┴────────┴───────┘
 `
 		assertEqual(want, after.String(), t)
 		assertEqual(baselineStr, baseline.String(), t)
-		assertPointersDifferent(t, baseline, after, "root", "childB")
-		assertPointersEqual(t, baseline, after, "childC", "childA", "one", "two")
+		assertPointersDifferent(t, baseline, after, "root", "childD", "x", "y")
+		assertPointersEqual(t, baseline, after, "childB", "childC", "childA", "one", "two")
 	})
 
 	t.Run("update", func(t *testing.T) {
@@ -658,7 +667,7 @@ func TestVault_Mutations(t *testing.T) {
 		baseline := v.ImmutableRule()
 		debugLogf(t, "baseline:\n%s\n", baseline)
 
-		err := v.Mutate(indigo.Add(indigo.NewRule("XXX", "false"), "childA"))
+		err := v.Mutate(indigo.Add(indigo.NewRule("zzz", "false"), "z"))
 		if err != nil {
 			t.Fatalf("adding rule failed: %v", err)
 		}
@@ -667,6 +676,46 @@ func TestVault_Mutations(t *testing.T) {
 		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
 		debugLogf(t, "after mutation:\n%s\n", after)
 		want := `
+┌──────────────────────────────────────────────────────┐
+│                                                      │
+│ INDIGO RULES                                         │
+│                                                      │
+├───────────────┬────────┬────────────┬────────┬───────┤
+│               │        │            │ Result │       │
+│ Rule          │ Schema │ Expression │ Type   │ Meta  │
+├───────────────┼────────┼────────────┼────────┼───────┤
+│ root          │        │            │ <nil>  │ <nil> │
+│   childA      │        │            │ <nil>  │ <nil> │
+│     one       │        │            │ <nil>  │ <nil> │
+│     two       │        │            │ <nil>  │ <nil> │
+│   childB      │        │            │ <nil>  │ <nil> │
+│   childC      │        │            │ <nil>  │ <nil> │
+│   childD      │        │            │ <nil>  │ <nil> │
+│     x         │        │            │ <nil>  │ <nil> │
+│       y       │        │            │ <nil>  │ <nil> │
+│         z     │        │            │ <nil>  │ <nil> │
+│           zzz │        │ false      │ <nil>  │ <nil> │
+└───────────────┴────────┴────────────┴────────┴───────┘
+		`
+		_ = want
+		_ = baseline
+		assertEqual(want, after.String(), t)
+		assertEqual(baselineStr, baseline.String(), t)
+		assertPointersDifferent(t, baseline, after, "root", "childD", "x", "y", "z")
+		assertPointersEqual(t, baseline, after, "childB")
+
+		// monkey with the baseline; when I change this,
+		// only the baseline should be affected
+		// I'm deliberately changing the rules that were touched in the mutation,
+		// see pointer difference assertion above.
+		// You should NEVER do this, once fetched from vault.ImmutableRule(),
+		// the rule should be considered constant.
+		baseline.Expr = "rrr"
+		baseline.Rules["childD"].Expr = "ddd"
+		baseline.Rules["childD"].Rules["x"].Expr = "xxx"
+		baseline.Rules["childD"].Rules["x"].Rules["y"].Expr = "yyy"
+		baseline.Rules["childD"].Rules["x"].Rules["y"].Rules["z"].Expr = "zXz"
+		wantSulliedBaseline := `
 ┌──────────────────────────────────────────────────┐
 │                                                  │
 │ INDIGO RULES                                     │
@@ -675,20 +724,79 @@ func TestVault_Mutations(t *testing.T) {
 │           │        │            │ Result │       │
 │ Rule      │ Schema │ Expression │ Type   │ Meta  │
 ├───────────┼────────┼────────────┼────────┼───────┤
-│ root      │        │            │ <nil>  │ <nil> │
+│ root      │        │ rrr        │ <nil>  │ <nil> │
 │   childA  │        │            │ <nil>  │ <nil> │
-│     XXX   │        │ false      │ <nil>  │ <nil> │
 │     one   │        │            │ <nil>  │ <nil> │
 │     two   │        │            │ <nil>  │ <nil> │
 │   childB  │        │            │ <nil>  │ <nil> │
-│     three │        │            │ <nil>  │ <nil> │
 │   childC  │        │            │ <nil>  │ <nil> │
+│   childD  │        │ ddd        │ <nil>  │ <nil> │
+│     x     │        │ xxx        │ <nil>  │ <nil> │
+│       y   │        │ yyy        │ <nil>  │ <nil> │
+│         z │        │ zXz        │ <nil>  │ <nil> │
 └───────────┴────────┴────────────┴────────┴───────┘
-		`
-		assertEqual(want, after.String(), t)
-		assertEqual(baselineStr, baseline.String(), t)
-		assertPointersDifferent(t, baseline, after, "root", "childA")
-		assertPointersEqual(t, baseline, after, "childB")
+ `
+
+		assertEqual(wantSulliedBaseline, baseline.String(), t)
+		debugLogf(t, "(monkey with) baseline (should have expression changes):\n%s\n", baseline)
+		debugLogf(t, "in the vault:\n%s\n", v.ImmutableRule())
+
+		// Now I'm going to update the rules that were NOT touched in the mutation.
+		// This will update BOTH the baseline and the rule in the vault.
+		// You should NEVER do this, once fetched from vault.ImmutableRule(),
+		// the rule should be considered constant.
+		baseline.Rules["childA"].Expr = "aaa"
+		baseline.Rules["childA"].Rules["one"].Expr = "111"
+		baseline.Rules["childA"].Rules["two"].Expr = "222"
+		baseline.Rules["childB"].Expr = "bbb"
+		baseline.Rules["childC"].Expr = "ccc"
+		debugLogf(t, "(monkey with; updated common) baseline (should have expression changes):\n%s\n", baseline)
+		debugLogf(t, "in the vault:\n%s\n", v.ImmutableRule())
+		wantMoreSulliedBaseline := `
+┌──────────────────────────────────────────────────┐
+│                                                  │
+│ INDIGO RULES                                     │
+│                                                  │
+├───────────┬────────┬────────────┬────────┬───────┤
+│           │        │            │ Result │       │
+│ Rule      │ Schema │ Expression │ Type   │ Meta  │
+├───────────┼────────┼────────────┼────────┼───────┤
+│ root      │        │ rrr        │ <nil>  │ <nil> │
+│   childA  │        │ aaa        │ <nil>  │ <nil> │
+│     one   │        │ 111        │ <nil>  │ <nil> │
+│     two   │        │ 222        │ <nil>  │ <nil> │
+│   childB  │        │ bbb        │ <nil>  │ <nil> │
+│   childC  │        │ ccc        │ <nil>  │ <nil> │
+│   childD  │        │ ddd        │ <nil>  │ <nil> │
+│     x     │        │ xxx        │ <nil>  │ <nil> │
+│       y   │        │ yyy        │ <nil>  │ <nil> │
+│         z │        │ zXz        │ <nil>  │ <nil> │
+└───────────┴────────┴────────────┴────────┴───────┘
+`
+		assertEqual(wantMoreSulliedBaseline, baseline.String(), t)
+		wantVaultRule := `
+┌──────────────────────────────────────────────────────┐
+│                                                      │
+│ INDIGO RULES                                         │
+│                                                      │
+├───────────────┬────────┬────────────┬────────┬───────┤
+│               │        │            │ Result │       │
+│ Rule          │ Schema │ Expression │ Type   │ Meta  │
+├───────────────┼────────┼────────────┼────────┼───────┤
+│ root          │        │            │ <nil>  │ <nil> │
+│   childA      │        │ aaa        │ <nil>  │ <nil> │
+│     one       │        │ 111        │ <nil>  │ <nil> │
+│     two       │        │ 222        │ <nil>  │ <nil> │
+│   childB      │        │ bbb        │ <nil>  │ <nil> │
+│   childC      │        │ ccc        │ <nil>  │ <nil> │
+│   childD      │        │            │ <nil>  │ <nil> │
+│     x         │        │            │ <nil>  │ <nil> │
+│       y       │        │            │ <nil>  │ <nil> │
+│         z     │        │            │ <nil>  │ <nil> │
+│           zzz │        │ false      │ <nil>  │ <nil> │
+└───────────────┴────────┴────────────┴────────┴───────┘
+`
+		assertEqual(wantVaultRule, v.ImmutableRule().String(), t)
 	})
 
 	t.Run("move", func(t *testing.T) {
@@ -1822,6 +1930,12 @@ func assertPointersDifferent(t *testing.T, a *indigo.Rule, b *indigo.Rule, ruleI
 		if ar == br && ar != nil && br != nil {
 			t.Errorf("rules are the same: %s (%p) == %s (%p)", ar.ID, ar, br.ID, br)
 			return
+		} else {
+			if ar != nil && br != nil {
+				if ar != br {
+					t.Logf("They're NOT the same: %s \n%p\n%p\n", ar.ID, ar, br)
+				}
+			}
 		}
 	}
 }
