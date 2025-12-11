@@ -652,8 +652,11 @@ func TestVault_Mutations(t *testing.T) {
 │     one   │        │ true       │ <nil>  │ <nil> │
 │     two   │        │            │ <nil>  │ <nil> │
 │   childB  │        │            │ <nil>  │ <nil> │
-│     three │        │            │ <nil>  │ <nil> │
 │   childC  │        │            │ <nil>  │ <nil> │
+│   childD  │        │            │ <nil>  │ <nil> │
+│     x     │        │            │ <nil>  │ <nil> │
+│       y   │        │            │ <nil>  │ <nil> │
+│         z │        │            │ <nil>  │ <nil> │
 └───────────┴────────┴────────────┴────────┴───────┘
 `
 		assertEqual(want, after.String(), t)
@@ -666,6 +669,17 @@ func TestVault_Mutations(t *testing.T) {
 		v := setup()
 		baseline := v.ImmutableRule()
 		debugLogf(t, "baseline:\n%s\n", baseline)
+
+		savedPtrs := map[string]*indigo.Rule{}
+		savedPtrs["childA"] = baseline.Rules["childA"]
+		savedPtrs["childB"] = baseline.Rules["childB"]
+		savedPtrs["childC"] = baseline.Rules["childC"]
+		savedPtrs["childD"] = baseline.Rules["childD"]
+		savedPtrs["one"] = baseline.Rules["childA"].Rules["one"]
+		savedPtrs["two"] = baseline.Rules["childA"].Rules["two"]
+		savedPtrs["x"] = baseline.Rules["childD"].Rules["x"]
+		savedPtrs["y"] = baseline.Rules["childD"].Rules["y"]
+		savedPtrs["z"] = baseline.Rules["childD"].Rules["z"]
 
 		err := v.Mutate(indigo.Add(indigo.NewRule("zzz", "false"), "z"))
 		if err != nil {
@@ -797,6 +811,7 @@ func TestVault_Mutations(t *testing.T) {
 └───────────────┴────────┴────────────┴────────┴───────┘
 `
 		assertEqual(wantVaultRule, v.ImmutableRule().String(), t)
+		assertPointersEqualMap(t, baseline, savedPtrs, "childA", "childB", "childD", "one", "two", "x", "y", "z")
 	})
 
 	t.Run("move", func(t *testing.T) {
@@ -826,15 +841,20 @@ func TestVault_Mutations(t *testing.T) {
 │   childA  │        │            │ <nil>  │ <nil> │
 │     one   │        │            │ <nil>  │ <nil> │
 │   childB  │        │            │ <nil>  │ <nil> │
-│     three │        │            │ <nil>  │ <nil> │
 │   childC  │        │            │ <nil>  │ <nil> │
 │     two   │        │            │ <nil>  │ <nil> │
+│   childD  │        │            │ <nil>  │ <nil> │
+│     x     │        │            │ <nil>  │ <nil> │
+│       y   │        │            │ <nil>  │ <nil> │
+│         z │        │            │ <nil>  │ <nil> │
 └───────────┴────────┴────────────┴────────┴───────┘
 `
 		assertEqual(want, after.String(), t)
 		assertEqual(baselineStr, baseline.String(), t)
 		assertPointersDifferent(t, baseline, after, "root", "childA", "childC")
 		assertPointersEqual(t, baseline, after, "childB", "three")
+
+		// assertPointersEqual(t, baseline, b *indigo.Rule, ruleIDs ...string)
 	})
 }
 
@@ -1914,6 +1934,18 @@ func assertPointersEqual(t *testing.T, a *indigo.Rule, b *indigo.Rule, ruleIDs .
 	}
 }
 
+func assertPointersEqualMap(t *testing.T, a *indigo.Rule, b map[string]*indigo.Rule, ruleIDs ...string) {
+	t.Helper()
+	for _, ruleID := range ruleIDs {
+		ar, _ := a.FindRule(ruleID)
+		br, _ := b[ruleID]
+		if ar != br && ar != nil && br != nil {
+			t.Errorf("rules are different %s (%p) != %s (%p)", ar.ID, ar, br.ID, br)
+			return
+		}
+	}
+}
+
 // assertPointersDifferent returns an error if any of the named rules point to the same area in memory
 // for a and b
 func assertPointersDifferent(t *testing.T, a *indigo.Rule, b *indigo.Rule, ruleIDs ...string) {
@@ -1930,12 +1962,6 @@ func assertPointersDifferent(t *testing.T, a *indigo.Rule, b *indigo.Rule, ruleI
 		if ar == br && ar != nil && br != nil {
 			t.Errorf("rules are the same: %s (%p) == %s (%p)", ar.ID, ar, br.ID, br)
 			return
-		} else {
-			if ar != nil && br != nil {
-				if ar != br {
-					t.Logf("They're NOT the same: %s \n%p\n%p\n", ar.ID, ar, br)
-				}
-			}
 		}
 	}
 }
