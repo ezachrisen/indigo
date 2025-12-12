@@ -122,6 +122,9 @@ const (
 // If the Vault rule is sharded the rule will be placed in the
 // parent rule determined by the sharding rules instead of the parent.
 func Add(r *Rule, parent string) Mutation {
+	if r == nil {
+		return Mutation{op: noOp}
+	}
 	return Mutation{
 		id:     r.ID,
 		rule:   r,
