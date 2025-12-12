@@ -2193,7 +2193,7 @@ r := v.Rule()
 res, err := engine.Eval(...)
 ```
 
-Readers and writers of the Vault do not need to obtain or release a mutex lock. The reader can hold on to the rule for as long as it needs it, maybe run a long batch process.
+Readers and writers of the Vault do not need to obtain or release a mutex lock. The reader can hold on to the rule for as long as it needs it.
 
 ***
 </br>
