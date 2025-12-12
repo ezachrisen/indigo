@@ -75,8 +75,9 @@ func (v *Vault) LastUpdate() time.Time {
 	return *v.lastUpdate.Load()
 }
 
-// vaultMutation defines a single change to the the vault
-type vaultMutation struct {
+// Mutation defines a single change to the the vault
+// Use the Add, Update and Delete functions to create a Mutation.
+type Mutation struct {
 	// Required; gobally unique id for the rule being changed/added
 	id string
 
@@ -90,9 +91,6 @@ type vaultMutation struct {
 
 	// Required when moving a rule from one parent to another
 	newParent string
-
-	// Required when changing the ID of a rule
-	newID string
 
 	// A time stamp to record as the last time the vault was updated
 	// Will update the Vault's last update time
@@ -122,8 +120,8 @@ const (
 // The parent must exist.
 // If the Vault rule is sharded the rule will be placed in the
 // parent rule determined by the sharding rules instead of the parent.
-func Add(r *Rule, parent string) vaultMutation {
-	return vaultMutation{
+func Add(r *Rule, parent string) Mutation {
+	return Mutation{
 		id:     r.ID,
 		rule:   r,
 		parent: parent,
@@ -133,8 +131,8 @@ func Add(r *Rule, parent string) vaultMutation {
 
 // Add returns a mutation that adds the rule to the parent,
 // bypassing any sharding specifications.
-func addDoNotShard(r *Rule, parent string) vaultMutation {
-	return vaultMutation{
+func addDoNotShard(r *Rule, parent string) Mutation {
+	return Mutation{
 		id:         r.ID,
 		rule:       r,
 		parent:     parent,
@@ -147,8 +145,8 @@ func addDoNotShard(r *Rule, parent string) vaultMutation {
 // id r.ID with the new rule. Keep in mind that this not only updates
 // the rule's fields, such as expression or meta, but also all of its
 // children.
-func Update(r *Rule) vaultMutation {
-	return vaultMutation{
+func Update(r *Rule) Mutation {
+	return Mutation{
 		id:   r.ID,
 		rule: r,
 		op:   update,
@@ -156,8 +154,8 @@ func Update(r *Rule) vaultMutation {
 }
 
 // Delete deletes the rule with the id
-func Delete(id string) vaultMutation {
-	return vaultMutation{
+func Delete(id string) Mutation {
+	return Mutation{
 		id: id,
 		op: deleteOp,
 	}
@@ -165,8 +163,8 @@ func Delete(id string) vaultMutation {
 
 // Move moves the rule with the id to the newParent.
 // The newParent must exist
-func Move(id string, newParent string) vaultMutation {
-	return vaultMutation{
+func Move(id string, newParent string) Mutation {
+	return Mutation{
 		id:        id,
 		newParent: newParent,
 		op:        move,
@@ -174,8 +172,8 @@ func Move(id string, newParent string) vaultMutation {
 }
 
 // LastUpdate updates the LastUpdate timestamp in the Vault
-func LastUpdate(t time.Time) vaultMutation {
-	return vaultMutation{
+func LastUpdate(t time.Time) Mutation {
+	return Mutation{
 		lastUpdate: t,
 		op:         timeUpdate,
 	}
@@ -211,7 +209,7 @@ func LastUpdate(t time.Time) vaultMutation {
 //
 // Vaults support sharding, and will automatically place mutated rules in the correct
 // shard.
-func (v *Vault) Mutate(mutations ...vaultMutation) error {
+func (v *Vault) Mutate(mutations ...Mutation) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -229,8 +227,8 @@ func (v *Vault) Mutate(mutations ...vaultMutation) error {
 
 // preProcessShardChanges determines if an update to a rule will cause it to move
 // to a different shard. If so, the update will be replaced with delete and add operations.
-func (v *Vault) preProcessShardChanges(root *Rule, mut []vaultMutation) ([]vaultMutation, error) {
-	u := make([]vaultMutation, 0, len(mut))
+func (v *Vault) preProcessShardChanges(root *Rule, mut []Mutation) ([]Mutation, error) {
+	u := make([]Mutation, 0, len(mut))
 	for _, m := range mut {
 		if m.op != update {
 			u = append(u, m)
@@ -258,7 +256,7 @@ func (v *Vault) preProcessShardChanges(root *Rule, mut []vaultMutation) ([]vault
 
 // preProcessMoves converts a "move" mutation into a "delete" and an "add" mutation
 // When we process mutations later, the "move" operation will be ignored.
-func (v *Vault) preProcessMoves(root *Rule, mut []vaultMutation) ([]vaultMutation, error) {
+func (v *Vault) preProcessMoves(root *Rule, mut []Mutation) ([]Mutation, error) {
 	for _, m := range mut {
 		if m.op != move {
 			continue
@@ -322,75 +320,12 @@ func destinationShard(root, rr *Rule) *Rule {
 	return toReturn
 }
 
-// // destinationParent returns either the parent (r), or a shard within r where
-// // the rule rr should be placed
-//
-//	func destinationParentOld(r, rr *Rule) (*Rule, error) {
-//		toReturn := r.FindParent(rr.ID)
-//
-//		shardCount := 0
-//		if r.shard {
-//			//fmt.Println("Checking shard ", r.ID)
-//			shardCount++
-//			ok, err := matchMeta(r, rr)
-//			if err != nil {
-//				return nil, err
-//			}
-//			if ok {
-//				//fmt.Println("   - ", r.ID, " is my shard")
-//				toReturn = r
-//			}
-//		}
-//
-//		//fmt.Println("Shards in order ----")
-//		for _, shard := range r.sortedRules {
-//			if shard.shard {
-//				//fmt.Println("    - ", shard.ID)
-//			}
-//		}
-//		//fmt.Println("---<")
-//
-// shardLoop:
-//
-//		for _, shard := range r.sortedRules {
-//			if !shard.shard {
-//				continue
-//			}
-//			//fmt.Println("Checking shard ", shard.ID)
-//			shardCount++
-//			ok, err := matchMeta(shard, rr)
-//			if err != nil {
-//				return nil, err
-//			}
-//			if ok {
-//				//fmt.Println("   - ", shard.ID, " is my shard")
-//				toReturn = shard
-//				break shardLoop
-//			}
-//		}
-//
-//		// We're in a sharding situation, and we found a matching shard,
-//		// check if there is a more specific shard in that shard's children
-//		if shardCount > 0 && toReturn != nil {
-//			for _, c := range toReturn.sortedRules {
-//				sh, err := destinationParent(c, rr)
-//				if err != nil {
-//					return nil, err
-//				}
-//				if sh != nil {
-//					//fmt.Println("  found new shard:", sh.ID)
-//					return sh, nil
-//				}
-//			}
-//		}
-//		return toReturn, nil
-//	}
-//
 // applyMutations performs the mutations against the root rule.
-func (v *Vault) applyMutations(root *Rule, mutations []vaultMutation) error {
+func (v *Vault) applyMutations(root *Rule, mutations []Mutation) error {
 	// we keep track of which rules have already been cloned, i.e., made safe
-	// for modifications
-	alreadyCopied := make(map[*Rule]any)
+	// for modifications.
+	// Map is Original Pointer -> New Copy Pointer
+	alreadyCopied := make(map[*Rule]*Rule)
 	var err error
 	for _, m := range mutations {
 		switch m.op {
@@ -432,7 +367,7 @@ func shallowCopy(r *Rule) *Rule {
 }
 
 // delete removes the rule with the id from the root rule r.
-func (v *Vault) delete(r *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, map[*Rule]any, error) {
+func (v *Vault) delete(r *Rule, alreadyCopied map[*Rule]*Rule, id string) (*Rule, map[*Rule]*Rule, error) {
 	parent := r.FindParent(id)
 	if parent == nil {
 		return nil, nil, fmt.Errorf("parent not found for rule %s", id)
@@ -456,7 +391,7 @@ func (v *Vault) delete(r *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, 
 // update replaces the rule with the id newRule.ID with newRule inside the root rule r.
 // If the updated rule's expression matches different shard criteria, it will be moved
 // to the appropriate shard automatically.
-func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any, error) {
+func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]*Rule) (*Rule, map[*Rule]*Rule, error) {
 	// Special case to allow replacing the root
 	if newRule.ID == r.ID {
 		r = newRule
@@ -494,7 +429,7 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]any) (*Rule, ma
 }
 
 // add adds the newRule to the parent rule with parentID, somewhere inside the root rule r
-func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID string, doNotShard bool) (*Rule, map[*Rule]any, error) {
+func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]*Rule, parentID string, doNotShard bool) (*Rule, map[*Rule]*Rule, error) {
 	if newRule == nil || r == nil {
 		return nil, nil, fmt.Errorf("rule inconsistency: nil")
 	}
@@ -535,45 +470,42 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]any, parentID stri
 // makeSafePath makes shallow copies of rules between the root and the rule with the id,
 // so that updates can be made to those rules. If a rule has already been copied, cloning
 // is skipped.
-func makeSafePath(root *Rule, alreadyCopied map[*Rule]any, id string) (*Rule, map[*Rule]any, error) {
-	path := root.Path(id)
-	for i := range path {
-		var parent, child, updated *Rule
-		var err error
-		parent = path[i]
-		if i < len(path)-1 {
-			child = path[i+1]
-		}
-		updated, alreadyCopied, err = makeSafe(parent, child, alreadyCopied)
-		if err != nil {
-			return nil, nil, err
-		}
-		if parent == root {
-			root = updated
-		}
+//
+// The alreadyCopied map has the key of the original Rule, and the value is the copied version of the rule.
+func makeSafePath(root *Rule, alreadyCopied map[*Rule]*Rule, id string) (*Rule, map[*Rule]*Rule, error) {
+	path := root.Path(id) // root, A, B
+	if len(path) == 0 {
+		return root, alreadyCopied, nil
 	}
-	return root, alreadyCopied, nil
-}
 
-// makeSafe makes the parent safe, then the child, and adds the child
-// to the (now) safe parent. If only the parent needs to be made safe,
-// such as in the case of adding a new rule to the Vault, pass child as nil.
-func makeSafe(parent, child *Rule, alreadyCopied map[*Rule]any) (*Rule, map[*Rule]any, error) {
-	if parent != nil {
-		if _, ok := alreadyCopied[parent]; !ok {
-			parent = shallowCopy(parent)
-			alreadyCopied[parent] = nil
-		}
+	var currentSafeParent *Rule
+
+	// Handle Root
+	rootOrig := path[0] // root
+	if safeRoot, ok := alreadyCopied[rootOrig]; ok {
+		currentSafeParent = safeRoot
+	} else {
+		currentSafeParent = shallowCopy(rootOrig)   // root'
+		alreadyCopied[rootOrig] = currentSafeParent // root = root'
 	}
-	if child != nil {
-		if parent == nil {
-			return nil, nil, fmt.Errorf("orphaned rule: %s", child.ID)
+
+	newRoot := currentSafeParent // root'
+
+	// Traverse the rest
+	for i := 0; i < len(path)-1; i++ {
+		childOrig := path[i+1] // A  // B
+		var childSafe *Rule
+
+		if safe, ok := alreadyCopied[childOrig]; ok {
+			childSafe = safe
+		} else {
+			childSafe = shallowCopy(childOrig)   // A' // B'
+			alreadyCopied[childOrig] = childSafe // A = A', B = B'
+			// IMPORTANT: We must add the child copy to the parent copy
+			currentSafeParent.Add(childSafe) // root'.Add(A'), A'.Add
 		}
-		if _, ok := alreadyCopied[child]; !ok {
-			childCopy := shallowCopy(child)
-			parent.Add(childCopy)
-			alreadyCopied[child] = nil
-		}
+		currentSafeParent = childSafe // A'
 	}
-	return parent, alreadyCopied, nil
+
+	return newRoot, alreadyCopied, nil
 }

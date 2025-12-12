@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1493,4 +1494,115 @@ func TestParallelEvalOptionOverride(t *testing.T) {
 	if maxActiveEvals > 1 {
 		t.Errorf("Expected max 1 active evaluation in sequential mode, got %d", maxActiveEvals)
 	}
+}
+
+// TestParallelEvalContextCancellation tests that parallel evaluation properly handles context cancellation
+// This test specifically targets a deadlock where worker goroutines block trying to send on channels
+// when the main evaluation goroutine has already exited due to context cancellation
+func TestParallelEvalContextCancellation(t *testing.T) {
+	schema := &indigo.Schema{
+		ID: "test",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	// Create a root rule with many child rules to ensure parallel is triggered
+	root := indigo.NewRule("root", "true")
+	for i := range 100 {
+		child := indigo.NewRule(fmt.Sprintf("child_%d", i), "x > 0")
+		root.Add(child)
+	}
+
+	err := engine.Compile(root)
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+
+	// Create a context that will be cancelled quickly
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	var evalCount atomic.Int64
+	var wg sync.WaitGroup
+
+	// Start many parallel evaluations that will be cancelled
+	for i := range 10 {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			_, err := engine.Eval(ctx, root, map[string]any{"x": 42}, indigo.Parallel(10, 8)) // High parallelism
+			evalCount.Add(1)
+			if err != nil && err != context.DeadlineExceeded {
+				t.Logf("Eval %d error: %v", id, err)
+			}
+		}(i)
+	}
+
+	// Wait for all evals to complete
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	// If this test deadlocks, it will timeout
+	select {
+	case <-done:
+		t.Logf("Test passed. Completed %d evaluations", evalCount.Load())
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Test timed out - deadlock in parallel eval context handling. Completed %d evals", evalCount.Load())
+	}
+}
+
+// TestParallelEvalCancellationSendsOnClosedChannels tests worker goroutines sending on channels
+func TestParallelEvalWorkerChannelHandling(t *testing.T) {
+	schema := &indigo.Schema{
+		ID: "test",
+		Elements: []indigo.DataElement{
+			{Name: "x", Type: indigo.Int{}},
+		},
+	}
+
+	engine := indigo.NewEngine(cel.NewEvaluator(cel.FixedSchema(schema)))
+
+	root := indigo.NewRule("root", "true")
+	for i := range 200 {
+		child := indigo.NewRule(fmt.Sprintf("child_%d", i), "x > 0")
+		root.Add(child)
+	}
+
+	err := engine.Compile(root)
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+
+	// Create context that times out mid-evaluation
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var evalDone atomic.Bool
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	// Start evaluation with high parallelism
+	_, err = engine.Eval(ctx, root, map[string]any{"x": 42}, indigo.Parallel(20, 16)) // Very high parallelism
+
+	evalDone.Store(true)
+
+	if err != context.Canceled && err != nil {
+		t.Logf("Got error: %v", err)
+	}
+
+	// Give worker goroutines time to try to send on channels
+	time.Sleep(100 * time.Millisecond)
+
+	if !evalDone.Load() {
+		t.Fatal("Evaluation did not complete")
+	}
+
+	t.Log("Test passed - no deadlock")
 }

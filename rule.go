@@ -186,6 +186,7 @@ func (r *Rule) BuildShards() error {
 			}
 			return rules[i].ID < rules[j].ID
 		}
+		r.EvalOptions.sortFuncIsInternal = true
 		r.sortedRules = r.sortChildRules(r.EvalOptions.SortFunc, true)
 	}
 	for _, child := range detached {
