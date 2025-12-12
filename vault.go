@@ -114,6 +114,7 @@ const (
 	deleteOp
 	move
 	timeUpdate
+	noOp // does nothing
 )
 
 // Add returns a mutation that adds the rule to the parent.
@@ -146,6 +147,9 @@ func addDoNotShard(r *Rule, parent string) Mutation {
 // the rule's fields, such as expression or meta, but also all of its
 // children.
 func Update(r *Rule) Mutation {
+	if r == nil {
+		return Mutation{op: noOp}
+	}
 	return Mutation{
 		id:   r.ID,
 		rule: r,
@@ -289,14 +293,11 @@ func (v *Vault) preProcessMoves(root *Rule, mut []Mutation) ([]Mutation, error) 
 func destinationShard(root, rr *Rule) *Rule {
 	var toReturn *Rule
 	if matchMeta(root, rr) {
-		// fmt.Println("   - ", root.ID, " is my shard (root)")
 		toReturn = root
 	}
 
 	for _, shard := range root.sortedRules {
-		// fmt.Println(root.ID, "   - checking rules ", shard.ID)
 		if matchMeta(shard, rr) {
-			// fmt.Println(root.ID, "   - ", shard.ID, " is my shard")
 			toReturn = shard
 			break
 		}
@@ -309,11 +310,8 @@ func destinationShard(root, rr *Rule) *Rule {
 	if !toReturn.shard {
 		return toReturn
 	}
-	// fmt.Println("Entering child loop")
 	for _, c := range toReturn.sortedRules {
-		// fmt.Println("   - checking ", c.ID)
 		if sh := destinationShard(c, rr); sh != nil {
-			// fmt.Println("  found new shard:", sh.ID)
 			return sh
 		}
 	}
@@ -352,6 +350,8 @@ func (v *Vault) applyMutations(root *Rule, mutations []Mutation) error {
 
 		case move:
 			// we've already handled the move operation in [preprocessMoves]
+			continue
+		case noOp:
 			continue
 		}
 	}
@@ -417,10 +417,6 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]*Rule) (*Rule, 
 		return nil, nil, fmt.Errorf("inconsistent state; parent whose child is being updated has no children")
 	}
 
-	// if _, ok := alreadyCopied[parentInNew]; !ok {
-	// 	return nil, nil, fmt.Errorf("parent is not safe %s", parentInNew.ID)
-	// }
-
 	parentInNew.Rules[newRule.ID] = newRule
 	// This step is handled automatically when we compile parent, but we do not want to
 	// recompile parent, so we do it manually here
@@ -463,7 +459,6 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]*Rule, parentID st
 	// This step is handled automatically when we compile parent, but we do not want to
 	// recompile parent, so we do it manually here
 	parent.sortedRules = parent.sortChildRules(parent.EvalOptions.SortFunc, true)
-	// r.Rules[parent.ID] = parent
 	return r, alreadyCopied, nil
 }
 
