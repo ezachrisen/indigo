@@ -353,7 +353,14 @@ func BenchmarkHierarchicalRulesParallel(b *testing.B) {
 func BenchmarkProtoComplex(b *testing.B) {
 	// b.ResetTimer()
 
-	root := createHierarchicalRulesNoProto(2, 1000)
+	schema := indigo.Schema{
+		ID: "benchmark_student_schema",
+		Elements: []indigo.DataElement{
+			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
+			{Name: "now", Type: indigo.Timestamp{}},
+		},
+	}
+	root := createHierarchicalRules(2, 1000, schema)
 	engine := indigo.NewEngine(cel.NewEvaluator())
 
 	err := engine.Compile(root)
@@ -417,55 +424,6 @@ func studentSchema() indigo.Schema {
 		},
 	}
 	return schema
-}
-
-func createHierarchicalRulesNoProto(depth, breadth int) *indigo.Rule {
-	if depth <= 0 {
-		return nil
-	}
-
-	// Complex expressions using various Student proto fields
-	complexExprs := []string{
-		// GPA and grade analysis
-		`student.gpa >= 3.5 && student.grades.exists(g, g >= 3.0) && size(student.grades) >= 3`,
-		// Status and enrollment checks
-		// `student.status == testdata.school.Student.status_type.ENROLLED && student.age >= 18 && student.credits >= 12`,
-		// Suspension and behavioral analysis
-		`size(student.suspensions) == 0 || student.suspensions.all(s, s.cause != "Cheating")`,
-		// Attribute and housing checks
-		`student.attrs.exists(k, k == "major") && has(student.on_campus) && student.on_campus.building != ""`,
-		// Time-based calculations
-		`now - student.enrollment_date > duration("8760h") && student.gpa > 2.0`, // 1 year
-		// Complex grade calculations using sum
-		`student.grades.exists(g, g == 4.0) && student.grades.all(g, g >= 2.0) && student.gpa >= 3.0`,
-		// Advanced attribute filtering
-		`student.attrs.exists(k, k == "home_town") && student.attrs["home_town"] in ["Chicago", "Boston", "Seattle"]`,
-		// Combined logic with multiple conditions
-		// `(student.gpa >= 3.0 && student.status != testdata.school.Student.status_type.PROBATION) || (student.credits >= 60 && student.age >= 21)`,
-		// List operations and filtering
-		`student.grades.filter(g, g >= 3.0).size() >= student.grades.filter(g, g < 3.0).size()`,
-		// Complex suspension logic
-		`!student.suspensions.exists(s, s.cause == "Fighting") && student.suspensions.size() <= 1`,
-	}
-
-	root := indigo.NewRule(fmt.Sprintf("level_%d", depth), "")
-	root.Schema = studentSchema()
-	root.Expr = complexExprs[depth%len(complexExprs)]
-
-	// Create child rules if we haven't reached the bottom
-	if depth > 1 {
-		for i := 0; i < breadth; i++ {
-			childID := fmt.Sprintf("level_%d_child_%d", depth, i)
-			childRule := createHierarchicalRules(depth-1, breadth, studentSchema())
-			if childRule != nil {
-				childRule.ID = childID
-				childRule.Expr = complexExprs[(depth+i)%len(complexExprs)]
-				root.Rules[childID] = childRule
-			}
-		}
-	}
-
-	return root
 }
 
 func createHierarchicalRules3(depth, breadth int, schema indigo.Schema) *indigo.Rule {

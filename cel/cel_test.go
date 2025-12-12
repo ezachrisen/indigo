@@ -814,7 +814,7 @@ func BenchmarkEval2000Rules(b *testing.B) {
 		Elements: []indigo.DataElement{
 			{Name: "student", Type: indigo.Proto{Message: &school.Student{}}},
 			{Name: "now", Type: indigo.Timestamp{}},
-			{Name: "honors", Type: indigo.Proto{Message: &school.HonorsConfiguration{}}},
+			{Name: "self", Type: indigo.Proto{Message: &school.HonorsConfiguration{}}},
 		},
 	}
 
@@ -829,8 +829,9 @@ func BenchmarkEval2000Rules(b *testing.B) {
 	for i := 0; i < 2_000; i++ {
 		cr := &indigo.Rule{
 			ID:     fmt.Sprintf("at_risk_%d", i),
-			Expr:   `student.gpa < honors.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
+			Expr:   `student.gpa < self.Minimum_GPA && student.status == testdata.school.Student.status_type.PROBATION`,
 			Schema: schema,
+			Self:   &school.HonorsConfiguration{Minimum_GPA: 3.7},
 			Meta:   false,
 		}
 		r.Rules[cr.ID] = cr
@@ -853,7 +854,6 @@ func BenchmarkEval2000Rules(b *testing.B) {
 	data := map[string]any{
 		"student": &s,
 		"now":     &timestamppb.Timestamp{Seconds: time.Now().Unix()},
-		"honors":  &school.HonorsConfiguration{Minimum_GPA: 3.7},
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
@@ -1145,7 +1145,6 @@ func BenchmarkCompileRuleWithFixedSchema(b *testing.B) {
 }
 
 func TestEval2000RulesParallel(t *testing.T) {
-
 	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
 	if err != nil {
 		t.Error(err)
@@ -1202,11 +1201,9 @@ func TestEval2000RulesParallel(t *testing.T) {
 		t.Error(err)
 	}
 	//	fmt.Println("Took ", time.Since(start))
-
 }
 
 func TestEval2000Rules(t *testing.T) {
-
 	_, err := pb.DefaultDb.RegisterMessage(&school.Student{})
 	if err != nil {
 		t.Error(err)
@@ -1263,7 +1260,6 @@ func TestEval2000Rules(t *testing.T) {
 		t.Error(err)
 	}
 	//	fmt.Println("Took ", time.Since(start))
-
 }
 
 func TestRuleSelfFunctionality(t *testing.T) {
