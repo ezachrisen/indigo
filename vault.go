@@ -121,6 +121,8 @@ const (
 // The parent must exist.
 // If the Vault rule is sharded the rule will be placed in the
 // parent rule determined by the sharding rules instead of the parent.
+//
+// If the rule already exists, it will be replaced.
 func Add(r *Rule, parent string) Mutation {
 	if r == nil {
 		return Mutation{op: noOp}
@@ -445,10 +447,6 @@ func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]*Rule, parentID st
 
 	if newRule.ID == "" {
 		return nil, nil, fmt.Errorf("rule ID cannot be empty")
-	}
-
-	if existing, _ := r.FindRule(newRule.ID); existing != nil {
-		return nil, nil, fmt.Errorf("rule with ID %s already exists", newRule.ID)
 	}
 
 	parent, _ := r.FindRule(parentID)
