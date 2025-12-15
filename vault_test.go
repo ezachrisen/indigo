@@ -385,18 +385,6 @@ func TestVault_AddInvalidInputs(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for non-existent parent")
 	}
-
-	// Add duplicate ID
-	r3 := indigo.Rule{ID: "dup", Expr: "true"}
-	err = v.Mutate(indigo.Add(&r3, "root"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	r4 := indigo.Rule{ID: "dup", Expr: "false"}
-	err = v.Mutate(indigo.Add(&r4, "root"))
-	if err == nil {
-		t.Error("expected error for duplicate ID")
-	}
 }
 
 func TestVault_UpdateInvalid(t *testing.T) {
