@@ -111,6 +111,7 @@ type mutationOp int
 const (
 	add mutationOp = iota
 	update
+	upsert
 	deleteOp
 	move
 	timeUpdate
@@ -159,6 +160,24 @@ func Update(r *Rule) Mutation {
 		id:   r.ID,
 		rule: r,
 		op:   update,
+	}
+}
+
+// Upsert returns a mutation that either replaces the rule with the
+// id r.ID with the new rule, or adds it if it doesn't already exists.
+// If the vault is sharded, the updated rule may be moved to a different shard,
+// and an added rule will be placed in the appropriate shard.
+//
+// If you are not using sharding, use Add and Update instead for the added
+// control over where the rule is placed.
+func Upsert(r *Rule) Mutation {
+	if r == nil {
+		return Mutation{op: noOp}
+	}
+	return Mutation{
+		id:   r.ID,
+		rule: r,
+		op:   upsert,
 	}
 }
 
@@ -223,44 +242,22 @@ func (v *Vault) Mutate(mutations ...Mutation) error {
 	defer v.mu.Unlock()
 
 	r := v.ImmutableRule()
+
 	mut, err := v.preProcessMoves(r, mutations)
 	if err != nil {
 		return fmt.Errorf("preprocessing moves: %w", err)
 	}
+
+	mut, err = v.preProcessUpserts(r, mut)
+	if err != nil {
+		return fmt.Errorf("preprocessing upserts: %w", err)
+	}
+
 	mut, err = v.preProcessShardChanges(r, mut)
 	if err != nil {
 		return fmt.Errorf("preprocessing shard changes: %w", err)
 	}
 	return v.applyMutations(r, mut)
-}
-
-// preProcessShardChanges determines if an update to a rule will cause it to move
-// to a different shard. If so, the update will be replaced with delete and add operations.
-func (v *Vault) preProcessShardChanges(root *Rule, mut []Mutation) ([]Mutation, error) {
-	u := make([]Mutation, 0, len(mut))
-	for _, m := range mut {
-		if m.op != update {
-			u = append(u, m)
-			continue
-		}
-		currentParent := root.FindParent(m.id)
-		if currentParent == nil {
-			return nil, fmt.Errorf("parent not found for %s", m.id)
-		}
-
-		targetParent := destinationShard(root, m.rule)
-		// if targetParent != nil {
-		// 	fmt.Println("Target parent for ", m.id, " is ", targetParent.ID)
-		// }
-		switch {
-		case targetParent != nil && currentParent.ID != targetParent.ID:
-			u = append(u, Delete(m.id))                 // delete from current parent
-			u = append(u, Add(m.rule, targetParent.ID)) // add to new parent
-		default:
-			u = append(u, m)
-		}
-	}
-	return u, nil
 }
 
 // preProcessMoves converts a "move" mutation into a "delete" and an "add" mutation
@@ -291,6 +288,55 @@ func (v *Vault) preProcessMoves(root *Rule, mut []Mutation) ([]Mutation, error) 
 		mut = append(mut, addDoNotShard(rule, m.newParent)) // add to new parent
 	}
 	return mut, nil
+}
+
+// preProcessUpserts determines if an Upsert is an update or an add.
+// The upsert operation is replaced with either an update or add.
+func (v *Vault) preProcessUpserts(root *Rule, mut []Mutation) ([]Mutation, error) {
+	u := make([]Mutation, 0, len(mut))
+	for _, m := range mut {
+		if m.op != upsert {
+			u = append(u, m)
+			continue
+		}
+		existing, _ := root.FindRule(m.id)
+		switch existing {
+		case nil:
+			u = append(u, Add(m.rule, root.ID))
+		default:
+			u = append(u, Update(m.rule))
+		}
+	}
+	return u, nil
+}
+
+// preProcessShardChanges determines if an update to a rule will cause it to move
+// to a different shard. If so, the update will be replaced with delete and add operations.
+func (v *Vault) preProcessShardChanges(root *Rule, mut []Mutation) ([]Mutation, error) {
+	u := make([]Mutation, 0, len(mut))
+	for _, m := range mut {
+		if m.op != update {
+			u = append(u, m)
+			continue
+		}
+		currentParent := root.FindParent(m.id)
+		if currentParent == nil {
+			return nil, fmt.Errorf("parent not found for %s", m.id)
+		}
+
+		targetParent := destinationShard(root, m.rule)
+		// if targetParent != nil {
+		// 	fmt.Println("Target parent for ", m.id, " is ", targetParent.ID)
+		// }
+		switch {
+		case targetParent != nil && currentParent.ID != targetParent.ID:
+			u = append(u, Delete(m.id))                 // delete from current parent
+			u = append(u, Add(m.rule, targetParent.ID)) // add to new parent
+		default:
+			u = append(u, m)
+		}
+	}
+	return u, nil
 }
 
 // destinationShard returns either the parent (r), or a shard within r where

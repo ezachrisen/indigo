@@ -848,6 +848,116 @@ root
 	//		assertEqual(wantAfterSecondMove, afterSecondMoveTree, t)
 }
 
+// TestVaultUpserWithShardMovement tests either updating or inserting a rule,
+// resulting in moving an existing rule to a different shart, or just inserting a new rule
+// in its proper shard.
+func TestVaultUpsertWithShardMovement(t *testing.T) {
+	// SETUP
+	root := indigo.NewRule("root", "")
+
+	// Rule in central shard
+	centralAtRisk := indigo.NewRule("centralAtRisk", `school =="Central" && class == 2026 && gpa < 2.5`)
+	root.Add(centralAtRisk)
+
+	woodlawnHSHonors := indigo.NewRule("woodlawnHonors", `school =="woodlawn" && class == 2026 && gpa > 3.7`)
+	root.Add(woodlawnHSHonors)
+
+	// Shards
+	centralShard := indigo.NewRule("central", `school == "Central"`)
+	centralShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"Central"`)
+	}
+
+	woodlawnShard := indigo.NewRule("woodlawn", `school == "woodlawn"`)
+	woodlawnShard.Meta = func(r *indigo.Rule) bool {
+		return strings.Contains(r.Expr, `"woodlawn"`)
+	}
+
+	root.Shards = []*indigo.Rule{centralShard, woodlawnShard}
+
+	v, err := indigo.NewVault(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	beforeTree := v.ImmutableRule().Tree()
+	debugLogf(t, "Before upsert:\n%s\n", beforeTree)
+
+	wantBefore := `
+root
+├── central (*)
+│   └── centralAtRisk
+├── default (*)
+└── woodlawn (*)
+    └── woodlawnHonors
+	`
+	assertEqual(wantBefore, beforeTree, t)
+
+	// Update centralAtRisk to change its school from "Central" to "woodlawn"
+	// The Update operation should automatically move it to the woodlawn shard
+	updatedExpr := `school =="woodlawn" && class == 2026 && gpa < 2.5`
+	updatedRule := indigo.NewRule("centralAtRisk", updatedExpr) // <--- this is an existing rule ID
+	err = v.Mutate(indigo.Upsert(updatedRule))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	afterUpdateTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After updating centralAtRisk expression (automatically moved to woodlawn shard):\n%s\n", afterUpdateTree)
+
+	// The rule should now be automatically moved to the woodlawn shard because
+	// the updated expression matches the woodlawn shard criteria
+	wantAfterUpdate := `
+root
+├── central (*)
+├── default (*)
+└── woodlawn (*)
+    ├── centralAtRisk
+    └── woodlawnHonors
+	`
+	assertEqual(wantAfterUpdate, afterUpdateTree, t)
+
+	// Verify the expression was updated
+	updatedRuleInVault, _ := v.ImmutableRule().FindRule("centralAtRisk")
+	if updatedRuleInVault.Expr != updatedExpr {
+		t.Errorf("expression not updated; got %q, want %q", updatedRuleInVault.Expr, updatedExpr)
+	}
+	debugLogf(t, "Verified: expression updated to %q\n", updatedRuleInVault.Expr)
+
+	// Verify the rule is in the woodlawn shard (moved automatically by Upsert)
+	movedRule, ancestors := v.ImmutableRule().FindRule("centralAtRisk")
+	if movedRule == nil {
+		t.Fatal("centralAtRisk not found after update")
+	}
+	if len(ancestors) < 2 {
+		t.Fatalf("unexpected ancestor chain length; got %d, want at least 2", len(ancestors))
+	}
+	parentShard := ancestors[len(ancestors)-1]
+	if parentShard.ID != "woodlawn" {
+		t.Errorf("rule not in woodlawn shard; got parent %q", parentShard.ID)
+	}
+
+	// Now let's add a new rule using the upsert mutation
+	newExpr := `school =="Central" && class == 2026`
+	newRule := indigo.NewRule("myNewRule", newExpr) // <--- this is an new rule ID
+	err = v.Mutate(indigo.Upsert(newRule))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantAfterUpsertNew := `
+root
+├── central (*)
+│   └── myNewRule
+├── default (*)
+└── woodlawn (*)
+    ├── centralAtRisk
+    └── woodlawnHonors
+	`
+	afterUpsertNewTree := v.ImmutableRule().Tree()
+	debugLogf(t, "After adding newRule (should be in central shard):\n%s\n", afterUpdateTree)
+	assertEqual(wantAfterUpsertNew, afterUpsertNewTree, t)
+}
+
 // Helper function to compare rule trees from the rule.Tree() method
 func assertEqual(want, got string, t *testing.T) {
 	t.Helper()
