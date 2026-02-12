@@ -181,7 +181,8 @@ func Upsert(r *Rule) Mutation {
 	}
 }
 
-// Delete deletes the rule with the id
+// Delete deletes the rule with the id. If the rule does not exist,
+// the operation is skipped with no error.
 func Delete(id string) Mutation {
 	return Mutation{
 		id: id,
@@ -320,7 +321,7 @@ func (v *Vault) preProcessShardChanges(root *Rule, mut []Mutation) ([]Mutation, 
 			continue
 		}
 		currentParent := root.FindParent(m.id)
-		if currentParent == nil {
+		if currentParent == nil && m.op != deleteOp {
 			return nil, fmt.Errorf("parent not found for %s", m.id)
 		}
 
@@ -419,9 +420,12 @@ func shallowCopy(r *Rule) *Rule {
 
 // delete removes the rule with the id from the root rule r.
 func (v *Vault) delete(r *Rule, alreadyCopied map[*Rule]*Rule, id string) (*Rule, map[*Rule]*Rule, error) {
+	if r.ID == id {
+		return nil, nil, fmt.Errorf("the root rule cannot be deleted")
+	}
 	parent := r.FindParent(id)
 	if parent == nil {
-		return nil, nil, fmt.Errorf("parent not found for rule %s", id)
+		return r, alreadyCopied, nil
 	}
 	var err error
 	r, alreadyCopied, err = makeSafePath(r, alreadyCopied, parent.ID)

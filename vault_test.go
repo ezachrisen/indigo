@@ -581,6 +581,11 @@ func TestVault_Mutations(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Updating rule failed: %v", err)
 		}
+		// delete rule that doesn't exist
+		err = v.Mutate(indigo.Delete("bogus"))
+		if err != nil {
+			t.Fatal(err)
+		}
 
 		after := v.ImmutableRule()
 
