@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,177 +29,6 @@ func debugLogf(t *testing.T, format string, args ...any) {
 	}
 }
 
-//	func TestVault_DeleteRule(t *testing.T) {
-//		_, v := setup(t)
-//
-//		a := indigo.Rule{ID: "a", Rules: map[string]*indigo.Rule{
-//			"child": {ID: "child", Expr: `true`},
-//		}}
-//
-//		err := v.Mutate(indigo.Add(&a, "root"))
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//		// snapshot
-//		snapshot := v.ImmutableRule()
-//
-//		debugLogf(t, "Snapshot before\n%s\n", snapshot)
-//		// Delete child
-//		if err := v.Mutate(indigo.Delete("child")); err != nil {
-//			t.Fatal(err)
-//		}
-//
-//		root := v.ImmutableRule()
-//		if root == nil {
-//			t.Fatal("root became nil")
-//		}
-//		child, _ := root.FindRule("child")
-//		if child != nil {
-//			t.Error("deleted child still present")
-//		}
-//
-//		if snapshot.Expr != "" {
-//			t.Error("root expression was updated")
-//		}
-//
-//		// make sure rule is still there in the snapshot
-//		child, _ = snapshot.FindRule("child")
-//		if child == nil {
-//			t.Error("child deleted from snapshot")
-//		}
-//
-//		debugLogf(t, "Snapshot after: \n%s\n", snapshot)
-//		debugLogf(t, "Updated after: \n%s\n", root)
-//		// try to delete a rule that doesn't exist
-//		if err := v.Mutate(indigo.Delete("XXX")); err == nil {
-//			t.Fatal("wanted error")
-//		}
-//	}
-//
-//	func TestVault_UpdateRule(t *testing.T) {
-//		e, v := setup(t)
-//
-//		old := &indigo.Rule{ID: "rule1", Expr: `2+2 == 3`}
-//		if err := v.Mutate(indigo.Add(old, "root")); err != nil {
-//			t.Fatal(err)
-//		}
-//		snapshot := v.ImmutableRule()
-//		debugLogf(t, "Snapshot before\n%s\n", snapshot)
-//
-//		res, err := e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"x": 42})
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//		if res.Pass {
-//			t.Error("eval failed")
-//		}
-//		newRule := &indigo.Rule{ID: "rule1", Expr: `2 + 2 == 4`}
-//		if err := v.Mutate(indigo.Update(newRule)); err != nil {
-//			t.Fatal(err)
-//		}
-//
-//		res, err = e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"x": 42})
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//		if !res.Pass {
-//			t.Error("update did not take effect")
-//		}
-//
-//		debugLogf(t, "After\n%s\n", v.ImmutableRule())
-//		if v.ImmutableRule().Rules["rule1"].Expr != `2 + 2 == 4` {
-//			t.Errorf("incorrect rule")
-//		}
-//
-//		debugLogf(t, "Snapshot After\n%s\n", snapshot)
-//		if e := snapshot.Rules["rule1"].Expr; e != `2+2 == 3` {
-//			t.Errorf("snapshot was updated: %s", e)
-//		}
-//
-//		// Update the root (clearing the vault)
-//		newRoot := &indigo.Rule{ID: "root", Expr: ` 1 == 1 `}
-//		if err := v.Mutate(indigo.Update(newRoot)); err != nil {
-//			t.Fatal(err)
-//		}
-//		if e := snapshot.Rules["rule1"].Expr; e != `2+2 == 3` {
-//			t.Errorf("snapshot was updated: %s", e)
-//		}
-//		after := v.ImmutableRule()
-//		if len(after.Rules) > 0 || after.Expr != ` 1 == 1 ` {
-//			t.Errorf("root was not replaced")
-//		}
-//	}
-//
-//	func TestVault_AddRule(t *testing.T) {
-//		e, v := setup(t)
-//
-//		old := &indigo.Rule{ID: "rule1", Expr: `2+2 == 4`}
-//		if err := v.Mutate(indigo.Add(old, "root")); err != nil {
-//			t.Fatal(err)
-//		}
-//
-//		res, err := e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"x": 42})
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//		if !res.Pass {
-//			t.Error("eval failed")
-//		}
-//
-//		debugLogf(t, "Before adding rule2 to root:\n%s\n", v.ImmutableRule())
-//		newRule := &indigo.Rule{ID: "rule2", Expr: `10<1`}
-//		if err := v.Mutate(indigo.Add(newRule, "root")); err != nil {
-//			t.Fatal(err)
-//		}
-//		snapshot := v.ImmutableRule()
-//		debugLogf(t, "Snapshot before adding rule1.2 to rule1:\n%s\n", snapshot)
-//		newRule2 := &indigo.Rule{ID: "rule1.2", Expr: `10<1`}
-//		newRule3 := &indigo.Rule{ID: "rule1.3", Expr: `10<1`}
-//		if err := v.Mutate(indigo.Add(newRule2, "rule1"), indigo.Add(newRule3, "rule1")); err != nil {
-//			t.Fatal(err)
-//		}
-//
-//		debugLogf(t, "After adding rule1.2:\n%s\n", v.ImmutableRule())
-//		_, err = e.Eval(context.Background(), v.ImmutableRule(), map[string]any{"x": 42})
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//
-//		if v.ImmutableRule().Rules["rule1"].Expr != `2+2 == 4` {
-//			t.Errorf("incorrect rule")
-//		}
-//		if v.ImmutableRule().Rules["rule2"].Expr != `10<1` {
-//			t.Errorf("incorrect rule")
-//		}
-//		debugLogf(t, "Snapshot after adds:\n%s", snapshot)
-//		if len(snapshot.Rules["rule1"].Rules) > 0 {
-//			t.Errorf("snapshot modified")
-//		}
-//	}
-//
-//	func TestVault_MoveRule(t *testing.T) {
-//		_, v := setup(t)
-//
-//		one := &indigo.Rule{ID: "rule1", Expr: `2+2 == 4`}
-//		b := &indigo.Rule{ID: "b", Expr: `10 > 1`}
-//		one.Rules = map[string]*indigo.Rule{}
-//		one.Rules["b"] = b
-//
-//		two := &indigo.Rule{ID: "rule2", Expr: `1+1 == 2`}
-//		if err := v.Mutate(indigo.Add(one, "root"), indigo.Add(two, "root")); err != nil {
-//			t.Fatal(err)
-//		}
-//		baseline := v.ImmutableRule()
-//		debugLogf(t, "Before\n%s\n", baseline)
-//
-//		if err := v.Mutate(indigo.Move("b", "rule2")); err != nil {
-//			t.Fatal(err)
-//		}
-//
-//		debugLogf(t, "Baseline after (should not change)\n%s\n", baseline)
-//		debugLogf(t, "After\n%s\n", v.ImmutableRule())
-//	}
-//
 // This tests adding a rule to a parent 3 levels deep
 func TestVault_NestedAdd(t *testing.T) {
 	e, v := setup2(t)
@@ -848,6 +678,133 @@ func TestVault_Mutations(t *testing.T) {
 		assertPointersEqual(t, baseline, after, "childB", "three")
 
 		// assertPointersEqual(t, baseline, b *indigo.Rule, ruleIDs ...string)
+	})
+
+	t.Run("replace_root", func(t *testing.T) {
+		v := setup()
+		baseline := v.ImmutableRule()
+		debugLogf(t, "baseline:\n%s\n", baseline)
+
+		err := v.Mutate(indigo.Update(indigo.NewRule("root", "true")))
+		if err != nil {
+			t.Fatalf("adding rule failed: %v", err)
+		}
+
+		after := v.ImmutableRule()
+		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+		debugLogf(t, "after mutation:\n%s\n", after)
+		want := `
+┌─────────────────────────────────────────────┐
+│                                             │
+│ INDIGO RULES                                │
+│                                             │
+├──────┬────────┬────────────┬────────┬───────┤
+│      │        │            │ Result │       │
+│ Rule │ Schema │ Expression │ Type   │ Meta  │
+├──────┼────────┼────────────┼────────┼───────┤
+│ root │        │ true       │ <nil>  │ <nil> │
+└──────┴────────┴────────────┴────────┴───────┘
+		`
+
+		assertEqual(want, after.String(), t)
+	})
+
+	t.Run("replace_root_with_more_mutations", func(t *testing.T) {
+		v := setup()
+		baseline := v.ImmutableRule()
+		debugLogf(t, "baseline:\n%s\n", baseline)
+
+		mut := []indigo.Mutation{}
+
+		mut = append(mut, indigo.Update(indigo.NewRule("root", "true")))
+		mut = append(mut, indigo.Add(indigo.NewRule("a", "2+2=4"), "root"))
+		mut = append(mut, indigo.Add(indigo.NewRule("b", "false"), "a"))
+		err := v.Mutate(mut...)
+		if err != nil {
+			t.Fatalf("adding rule failed: %v", err)
+		}
+
+		after := v.ImmutableRule()
+		debugLogf(t, "baseline after mutation (should not change):\n%s\n", baseline)
+		debugLogf(t, "after mutation:\n%s\n", after)
+		want := `
+┌──────────────────────────────────────────────┐
+│                                              │
+│ INDIGO RULES                                 │
+│                                              │
+├───────┬────────┬────────────┬────────┬───────┤
+│       │        │            │ Result │       │
+│ Rule  │ Schema │ Expression │ Type   │ Meta  │
+├───────┼────────┼────────────┼────────┼───────┤
+│ root  │        │ true       │ <nil>  │ <nil> │
+│   a   │        │ 2+2=4      │ <nil>  │ <nil> │
+│     b │        │ false      │ <nil>  │ <nil> │
+└───────┴────────┴────────────┴────────┴───────┘
+		`
+
+		assertEqual(want, after.String(), t)
+	})
+	t.Run("replace_root_incorrect_sequence", func(t *testing.T) {
+		v := setup()
+		baseline := v.ImmutableRule()
+		debugLogf(t, "baseline:\n%s\n", baseline)
+
+		mut := []indigo.Mutation{}
+
+		mut = append(mut, indigo.Add(indigo.NewRule("a", "2+2=4"), "root"))
+		mut = append(mut, indigo.Update(indigo.NewRule("root", "true")))
+		mut = append(mut, indigo.Add(indigo.NewRule("b", "false"), "a"))
+		err := v.Mutate(mut...)
+		if err == nil {
+			t.Fatalf("wanted error")
+		}
+		if !strings.Contains(err.Error(), "root update must be the first mutation") {
+			t.Fatalf("got: %v", err)
+		}
+	})
+
+	t.Run("replace_root_incorrect_sequence", func(t *testing.T) {
+		v := setup()
+		baseline := v.ImmutableRule()
+		debugLogf(t, "baseline:\n%s\n", baseline)
+
+		mut := []indigo.Mutation{}
+
+		mut = append(mut, indigo.Add(indigo.NewRule("a", "2+2=4"), "root"))
+		mut = append(mut, indigo.Update(indigo.NewRule("root", "true")))
+		mut = append(mut, indigo.Add(indigo.NewRule("b", "false"), "a"))
+		err := v.Mutate(mut...)
+		if err == nil {
+			t.Fatalf("wanted error")
+		}
+		if !strings.Contains(err.Error(), "root update must be the first mutation") {
+			t.Fatalf("got: %v", err)
+		}
+	})
+	t.Run("add_rule_with_same_id", func(t *testing.T) {
+		v := setup()
+		baseline := v.ImmutableRule()
+		debugLogf(t, "baseline:\n%s\n", baseline)
+
+		mut := []indigo.Mutation{}
+
+		// childA already exists in the baseline, as a child of root
+		mut = append(mut, indigo.Add(indigo.NewRule("childA", "2+2=4"), "childD"))
+		err := v.Mutate(mut...)
+		if err == nil {
+			t.Fatalf("wanted error")
+		}
+		if !strings.Contains(err.Error(), "rule with same ID") {
+			t.Fatalf("got: %v", err)
+		}
+
+		// verify that an upsert works
+		mut = []indigo.Mutation{}
+		mut = append(mut, indigo.Upsert(indigo.NewRule("childA", "2+2=4")))
+		err = v.Mutate(mut...)
+		if err != nil {
+			t.Fatal(err)
+		}
 	})
 }
 

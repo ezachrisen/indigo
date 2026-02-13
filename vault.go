@@ -315,8 +315,16 @@ func (v *Vault) preProcessUpserts(root *Rule, mut []Mutation) ([]Mutation, error
 // to a different shard. If so, the update will be replaced with delete and add operations.
 func (v *Vault) preProcessShardChanges(root *Rule, mut []Mutation) ([]Mutation, error) {
 	u := make([]Mutation, 0, len(mut))
-	for _, m := range mut {
+	for i, m := range mut {
 		if m.op != update {
+			u = append(u, m)
+			continue
+		}
+		// special case, replacing the root rule
+		if root.ID == m.id {
+			if i != 0 {
+				return nil, fmt.Errorf("root update must be the first mutation")
+			}
 			u = append(u, m)
 			continue
 		}
@@ -326,9 +334,7 @@ func (v *Vault) preProcessShardChanges(root *Rule, mut []Mutation) ([]Mutation, 
 		}
 
 		targetParent := destinationShard(root, m.rule)
-		// if targetParent != nil {
-		// 	fmt.Println("Target parent for ", m.id, " is ", targetParent.ID)
-		// }
+
 		switch {
 		case targetParent != nil && currentParent.ID != targetParent.ID:
 			u = append(u, Delete(m.id))                 // delete from current parent
@@ -483,6 +489,10 @@ func (v *Vault) update(r, newRule *Rule, alreadyCopied map[*Rule]*Rule) (*Rule, 
 func (v *Vault) add(r, newRule *Rule, alreadyCopied map[*Rule]*Rule, parentID string, doNotShard bool) (*Rule, map[*Rule]*Rule, error) {
 	if newRule == nil || r == nil {
 		return nil, nil, fmt.Errorf("rule inconsistency: nil")
+	}
+	existing, _ := r.FindRule(newRule.ID)
+	if existing != nil {
+		return nil, nil, fmt.Errorf("rule with same ID already exists; use an Update or Upsert mutation instead")
 	}
 	if !doNotShard {
 		if target := destinationShard(r, newRule); target != nil {
