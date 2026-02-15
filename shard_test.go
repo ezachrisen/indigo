@@ -821,6 +821,14 @@ root
  `
 	assertEqual(wantAfterMove, afterMoveTree, t)
 
+	rules, shards := v.ImmutableRule().Count()
+	if rules != 8 {
+		t.Errorf("got %d", rules)
+	}
+	if shards != 4 {
+		t.Errorf("got %d", shards)
+	}
+
 	//	// Move genericRule to woodlawn
 	//	err = v.Mutate(indigo.Move("genericRule", "woodlawn"))
 	//	if err != nil {

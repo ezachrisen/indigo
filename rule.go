@@ -308,6 +308,27 @@ func ApplyToRule(r *Rule, f func(r *Rule) error) error {
 	return nil
 }
 
+// Count returns the number of rules in r, including r and its children recursively,
+// and the number of shards, if any.
+// rules + shards = the total number of rules in r.
+func (r *Rule) Count() (rules, shards int) {
+	if r == nil {
+		return 0, 0
+	}
+	switch r.shard {
+	case true:
+		shards++
+	default:
+		rules++
+	}
+	for _, c := range r.Rules {
+		rs, sh := c.Count()
+		rules = rules + rs
+		shards = shards + sh
+	}
+	return rules, shards
+}
+
 // String returns a list of all the rules in hierarchy, with
 // child rules sorted in evaluation order.
 func (r *Rule) String() string {
