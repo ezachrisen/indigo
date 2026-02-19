@@ -1,6 +1,6 @@
 # Indigo Guide
 
-Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules. Rules are expressions (such as ``"a > b"``) that are evaluated, and the outcomes used to direct appliation logic. Indigo does not itself provide a language for expressions, relying instead on a backend compiler (```interface ExpressionCompiler```) and evaluator (```interface ExpressionEvaluator```) to provide that. You can create your own backend evaluator, or use the default one, Google's Common Expression Language, CEL.
+Indigo is a rules engine created to enable application developers to build systems whose logic can be controlled by end-users via rules. Rules are expressions (such as ``"a > b"``) that are evaluated, and the outcomes used to direct application logic. Indigo does not itself provide a language for expressions, relying instead on a backend compiler (```interface ExpressionCompiler```) and evaluator (```interface ExpressionEvaluator```) to provide that. You can create your own backend evaluator, or use the default one, Google's Common Expression Language, CEL.
 
 The purpose of the guide is to describe how Indigo's rules and the evaluation engine works. We encourage you to read the Indigo source code and examples as primary material, and consider this document as a companion to guide you through the concepts.
 
@@ -449,7 +449,7 @@ During compilation, an Engine may update a rule by setting the Program field to 
 
 ## Using a Non-CEL Evaluator
 
-There are several Go implementations of scripting languages, such as Javscript implemented by [Otto](https://github.com/robertkrimen/otto), and Lua. These languages are good choices for rule evaluation as well.
+There are several Go implementations of scripting languages, such as JavaScript implemented by [Otto](https://github.com/robertkrimen/otto), and Lua. These languages are good choices for rule evaluation as well.
 
 To illustrate how Indigo's interface types work together, here's how you could implement and use a different evaluator such as Otto:
 
@@ -542,7 +542,7 @@ rule := indigo.Rule{
 
 For maps we have to specify the key type as well as the value type.
 
-In macros that operate on maps, the value (k) is the map **key**, and we can use that to access values in the map. This will return false, since UA 1500 is delayed:
+In macros that operate on maps, the value (k) is the map **key**, and we can use that to access values in the map. This will return true, since UA1500 is on time:
 
 ```go
 flights["UA1500"] == "On Time" 
@@ -1002,9 +1002,9 @@ goTime := pbtime.AsTime()
 
 Convert from a string to a timestamp:
 
-``proto
+```proto
 timestamp("1972-01-01T10:00:20.021-05:00")
-``
+```
 
 ## Summary of duration operations in Go
 
@@ -1028,9 +1028,9 @@ goDur := protodur.AsDuration()
 
 ## Duration conversion in a CEL rule
 
-``proto
+```proto
 duration("2400h")
-``
+```
 
 ## Parts of time
 
@@ -1055,7 +1055,7 @@ s.enrollment_date.getDayOfWeek() == 5 // Friday
 // Output: true 
 ```
 
-``getDayOfWeek`` is zero-based (Sunday == 0).
+```getDayOfWeek``` is zero-based (Sunday == 0).
 
 CEL also lets us check the day of the week in whatever timezone we want:
 
@@ -1071,7 +1071,7 @@ data := map[string]interface{}{
 }
 ```
 
-... it is now Saturday is India:
+... it is now Saturday in India:
 
 ```proto
 s.enrollment_date.getDayOfWeek("Asia/Kolkata") == 6 // Saturday
@@ -1591,7 +1591,7 @@ From the ``indigo.EvalOptions`` struct documentation:
 // TrueIfAny makes a parent rule Pass = true if any of its child rules are true.
 // The default behavior is that a rule is only true if all of its child rules are true, and
 // the parent rule itself is true.
-// Setting TrueIfAny changes this behvior so that the parent rule is true if at least one of its child rules
+// Setting TrueIfAny changes this behavior so that the parent rule is true if at least one of its child rules
 // are true, and the parent rule itself is true.
 TrueIfAny bool `json:"true_if_any"`
 ```
@@ -1791,7 +1791,7 @@ Example uses of the ``StopFirstNegativeChild`` option:
 - An API server needs to quickly decide to allow or disallow an action (child rules with all required conditions)
 - A self-driving car should apply emergency braking immediately if one of the emergency braking conditions is met
 
-Any negative rule can be turned into a positive rule, so the ``StopFirstPositiveChild`` optiob has similar use case examples.
+Any negative rule can be turned into a positive rule, so the ``StopFirstPositiveChild`` option has similar use case examples.
 
 ## SortFunc
 

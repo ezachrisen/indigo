@@ -15,7 +15,7 @@ Google has a nice tutorial here: [https://codelabs.developers.google.com/codelab
 While it is possible to use CEL with "native" simple types, it is built on protocol buffers. CEL does not
 support Go structs, so if you need to use native types to access fields in a struct, you must first
 "flatten" the fields into plain values to pass to CEL. See the makeStudentData() function in the tests
-in this package for an example of "flatting" a struct to individual data elements.
+in this package for an example of "flattening" a struct to individual data elements.
 
 Organizing your input data using protocol buffers gives you the benefit of being able to move
 data between Go code and CEL expressions without needing to translate or reorganize the data.
@@ -25,7 +25,7 @@ that shows how to generate the Go types.
 
 ## Protocol Buffer Fields in Expressions
 
-When refererring to fields of a protocol buffer in an expression, the field names are the proto names, NOT the
+When referring to fields of a protocol buffer in an expression, the field names are the proto names, NOT the
 generated Go names.
 For example, in the student.proto file, a field called "enrollment_date" is defined.
 When the Go struct is generated, this field name is now called "EnrollmentDate".

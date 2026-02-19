@@ -139,7 +139,7 @@ r, err := indigo.Evaluate(winners_high_avg_rule, data)
 
 
 ### Results
-The players from teams with winning records are in ``r.Results`. 
+The players from teams with winning records are in ``r.Results``. 
 
 
 ## Case 5: Why was the request denied? 
@@ -163,7 +163,7 @@ Note that we will evaluate the child rules if the parent is negative, so that we
         StopFirstPositiveChild: false
         StopFirstNegativeChild: false 
         ReturnPass:             false
-        ReturnFail:             true        <<< Indicates we want to see the rules that were NOT satsified
+        ReturnFail:             true        <<< Indicates we want to see the rules that were NOT satisfied
       Child rules:
         [*] Rule "major"
             - Expression: "student.major == 'Business'"
