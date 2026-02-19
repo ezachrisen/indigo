@@ -270,7 +270,7 @@ then
    set output = true 
 ```
 
-CEL derives the value of the output from the value of the expression, in this case a boolean, so the "if/then" construct is not needed. (CEL does support the if/then functionality with the :? operators which we will cover later in the book.)
+CEL derives the value of the output from the value of the expression, in this case a boolean, so the "if/then" construct is not needed. (CEL does support the if/then functionality with the `?:` operators which we will cover later in the guide.)
 
 ## Operators
 
@@ -427,7 +427,7 @@ This section is a deeper dive into how Indigo is organized. Knowing this will ma
 
 Indigo's rules engine is specified by an interface called Engine, which is composed of two interfaces, a Compiler and an Evaluator. The Compiler interface specifies the Compile method, and Evaluator specifies the Eval method.
 
-The DefaultEngine struct type implements the Engine interface, and most users will use this type. Since it implements Engine, DefaultEngine implements both Compile and Evaluate. Alternate implementations are possible, including rule evaluators that do not support compilation, for example.
+The DefaultEngine struct type implements the Engine interface, and most users will use this type. Since it implements Engine, DefaultEngine implements both Compile and Eval. Alternate implementations are possible, including rule evaluators that do not support compilation, for example.
 
 The engine types are concerned with processing groups of rules organized in a hierarchies. The engine types **do not** concern themselves with the exact nature of the expressions being compiled or evaluated. Instead, they rely on the expression types for that.
 
@@ -590,7 +590,7 @@ We have already seen one macro (`exists`), but here are some of the macros CEL p
 
 - ``has`` checks if a field exists
 - ``all`` will be true if all elements meet the predicate
-- ``exists_one`` will be true if only 1 element matches the
+- ``exists_one`` will be true if only 1 element matches the predicate
 - ``filter`` can be applied to a list and returns a new list with the matching elements
 
 Macros can be chained, as in this example from the [CEL Codelabs tutorial](https://codelabs.developers.google.com/codelabs/cel-go#10):
@@ -1110,7 +1110,7 @@ rule := indigo.Rule{
 }
 ```
 
-Here, the result of the expression is **not** a boolean, but rather a Go protocol buffer struct of with the type ``StudentSummary``.
+Here, the result of the expression is **not** a boolean, but rather a Go protocol buffer struct with the type ``StudentSummary``.
 
 Two important things to point out:
 
@@ -1346,8 +1346,8 @@ delete(parent.Rules, "child-id-to-delete")
 and
 
 ```go
-myNewRule.Compile(myCompiler)
-parent.Rules["my-new-rule"] = myNewRule
+engine.Compile(&myNewRule)
+parent.Rules["my-new-rule"] = &myNewRule
 ```
 
 You must **not** modify a rule:
@@ -1517,7 +1517,7 @@ fmt.Println(results)
 
 As we can see, the structure of results mirrors the structure of the rules that were evaluated: there's a root rule with 3 child values.
 
-The ``indigo.Results`` struct looks like this:
+The ``indigo.Result`` struct looks like this:
 
 ```go
 // Result of evaluating a rule.
@@ -1654,7 +1654,7 @@ This option prevents the evaluation of child rules if the parent's expression is
 
 > The sample code for this section is in [Example_stopIfParentNegative()](cel/example_organization_test.go)
 
-In this example, we're going to evaluate 3 rules, (honors, at_risk and rookie), but we only want to do that for Accounting majors. Imagine that the university as 30,000 students and 10 of them are accounting majors. Obviously, evaluating all 3 rules for every student would be silly.
+In this example, we're going to evaluate 3 rules, (honors, at_risk and rookie), but we only want to do that for Accounting majors. Imagine that the university has 30,000 students and 10 of them are accounting majors. Obviously, evaluating all 3 rules for every student would be silly.
 
 Instead we make a parent rule, called ``accounting``, where we put the major requirement. We then put the 3 rules as child rules of the accounting rule.
 
@@ -1835,7 +1835,7 @@ In this section we'll use our understanding of rule organization and evaluation 
 
 In this example, we are going to monitor system metrics such as CPU and memory and issue alerts when metrics exceed certain thresholds.
 
-The best way to do this is to have a rule for each alarm, and to set the evaluation option ```FailAction = DiscardFailures``, so that only``true`` rules are returned.
+The best way to do this is to have a rule for each alarm, and to set the evaluation option ``FailAction = DiscardFailures``, so that only ``true`` rules are returned.
 
 > The sample code for this section is in [Example_alarms()](cel/example_test.go)
 
@@ -1939,7 +1939,7 @@ graph TD;
 
 alarm_check[alarm_check<br>DiscardFailures] --> cpu_alarm;
 alarm_check --> disk_alarm;
-alarm_check --> memory_alarm[memory_alarm<br>DiscardFailures<br>TrueIfAny];
+alarm_check --> memory_alarm[memory_alarm<br>KeepFailures<br>TrueIfAny];
 memory_alarm --> memory_utilization_alarm;
 memory_alarm --> memory_remaining_alarm;
 ```
@@ -2162,7 +2162,7 @@ Rather than directly update the rule in the vault, writers submit lists of mutat
 
 Vaults support add, update, delete and move mutations.
 
-The Vault guarantees that the active rule in the vault is only updated if all mutation succeed, and that readers never see an inconsistent rule state during updates.
+The Vault guarantees that the active rule in the vault is only updated if all mutations succeed, and that readers never see an inconsistent rule state during updates.
 
 ## Caveats
 
@@ -2172,7 +2172,7 @@ To use a vault your rules have to have globally unique IDs.
 
 Mutations do cause copies of rules to be made, but only the minimum number possible. This includes the parent of the rule being updated and any ancestors up to and including the root node. Child nodes are not copied.
 
-Go's garbage collector will "clean up" versions of the Vault rule that are not needed anymore. If you hold on to the rule after using it for evaluation, you will extend the time the memory is held. This might be a consideration of you are running many long-running batch processes that evaluate rules while at the same time receiving many and frequent rule updates.
+Go's garbage collector will "clean up" versions of the Vault rule that are not needed anymore. If you hold on to the rule after using it for evaluation, you will extend the time the memory is held. This might be a consideration if you are running many long-running batch processes that evaluate rules while at the same time receiving many and frequent rule updates.
 
 ## Using a Vault
 
