@@ -72,7 +72,7 @@ func BenchmarkVault_Mutate_LargeTree_10k(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// This is the hot path we're measuring
-		err := vault.Mutate(indigo.Update(&updateRule))
+		_, err := vault.Mutate(indigo.Update(&updateRule))
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -91,7 +91,7 @@ func BenchmarkVault_Mutate_LargeTree_10k_Move(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		// Move a leaf node from one parent to another
-		err := vault.Mutate(indigo.Move("Z99", "A11")) // assume these exist
+		_, err := vault.Mutate(indigo.Move("Z99", "A11")) // assume these exist
 		if err != nil {
 			continue
 			// b.Fatal(err)

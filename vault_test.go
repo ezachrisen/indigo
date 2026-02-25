@@ -39,11 +39,11 @@ func TestVault_NestedAdd(t *testing.T) {
 	e.Compile(r)
 	debugLogf(t, "Before add\n%s\n", v.ImmutableRule().Tree())
 	t1 := time.Date(2020, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
-	if err := v.Mutate(indigo.LastUpdate(t1)); err != nil {
+	if _, err := v.Mutate(indigo.LastUpdate(t1)); err != nil {
 		t.Fatal(err)
 	}
 	t2 := time.Date(2022, 10, 10, 12, 0o0, 0o0, 0o0, time.UTC)
-	if err := v.Mutate(indigo.Add(r, "c33"), indigo.LastUpdate(t2)); err != nil {
+	if _, err := v.Mutate(indigo.Add(r, "c33"), indigo.LastUpdate(t2)); err != nil {
 		t.Fatal(err)
 	}
 	debugLogf(t, "After add\n%s\n", v.ImmutableRule().Tree())
@@ -139,18 +139,18 @@ func TestVault_Concurrency(t *testing.T) {
 				}
 
 			}
-			if err := v.Mutate(indigo.Update(r)); err != nil {
+			if _, err := v.Mutate(indigo.Update(r)); err != nil {
 				t.Fatal(err)
 			}
 
 			// Move c1 back and forth between a and c
 			cr := v.ImmutableRule()
 			if _, ok := cr.Rules["c"].Rules["c1"]; ok {
-				if err := v.Mutate(indigo.Move("c1", "a")); err != nil {
+				if _, err := v.Mutate(indigo.Move("c1", "a")); err != nil {
 					t.Fatal(err)
 				}
 			} else {
-				if err := v.Mutate(indigo.Move("c1", "c")); err != nil {
+				if _, err := v.Mutate(indigo.Move("c1", "c")); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -204,14 +204,14 @@ func TestVault_AddInvalidInputs(t *testing.T) {
 
 	// Add with empty ID
 	r := indigo.Rule{ID: "", Expr: "true"}
-	err := v.Mutate(indigo.Add(&r, "root"))
+	_, err := v.Mutate(indigo.Add(&r, "root"))
 	if err == nil {
 		t.Error("expected error for empty ID")
 	}
 
 	// Add to non-existent parent
 	r2 := indigo.Rule{ID: "test", Expr: "true"}
-	err = v.Mutate(indigo.Add(&r2, "nonexistent"))
+	_, err = v.Mutate(indigo.Add(&r2, "nonexistent"))
 	if err == nil {
 		t.Error("expected error for non-existent parent")
 	}
@@ -222,7 +222,7 @@ func TestVault_UpdateInvalid(t *testing.T) {
 
 	// Update non-existent
 	r := indigo.Rule{ID: "nonexistent", Expr: "true"}
-	err := v.Mutate(indigo.Update(&r))
+	_, err := v.Mutate(indigo.Update(&r))
 	if err == nil {
 		t.Error("expected error for updating non-existent rule")
 	}
@@ -235,31 +235,31 @@ func TestVault_MoveInvalid(t *testing.T) {
 	a := indigo.Rule{ID: "a", Expr: "true", Rules: map[string]*indigo.Rule{
 		"child": {ID: "child", Expr: "true"},
 	}}
-	err := v.Mutate(indigo.Add(&a, "root"))
+	_, err := v.Mutate(indigo.Add(&a, "root"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Move to non-existent parent
-	err = v.Mutate(indigo.Move("a", "nonexistent"))
+	_, err = v.Mutate(indigo.Move("a", "nonexistent"))
 	if err == nil {
 		t.Error("expected error for moving to non-existent parent")
 	}
 
 	// Move non-existent rule
-	err = v.Mutate(indigo.Move("nonexistent", "root"))
+	_, err = v.Mutate(indigo.Move("nonexistent", "root"))
 	if err == nil {
 		t.Error("expected error for moving non-existent rule")
 	}
 
 	// Move to self
-	err = v.Mutate(indigo.Move("a", "a"))
+	_, err = v.Mutate(indigo.Move("a", "a"))
 	if err == nil {
 		t.Error("expected error for moving to self")
 	}
 
 	// Move to descendant
-	err = v.Mutate(indigo.Move("a", "child"))
+	_, err = v.Mutate(indigo.Move("a", "child"))
 	if err == nil {
 		t.Error("expected error for moving to descendant")
 	}
@@ -269,7 +269,7 @@ func TestVault_DeleteInvalid(t *testing.T) {
 	v := setup(t)
 
 	// Delete root
-	err := v.Mutate(indigo.Delete("root"))
+	_, err := v.Mutate(indigo.Delete("root"))
 	if err == nil {
 		t.Error("expected error for deleting root")
 	}
@@ -282,7 +282,7 @@ func TestVault_MultipleMutationsWithError(t *testing.T) {
 	r2 := indigo.Rule{ID: "r2", Expr: "true"}
 	invalid := indigo.Rule{ID: "", Expr: "true"} // empty ID
 
-	err := v.Mutate(indigo.Add(&r1, "root"), indigo.Add(&invalid, "root"), indigo.Add(&r2, "root"))
+	_, err := v.Mutate(indigo.Add(&r1, "root"), indigo.Add(&invalid, "root"), indigo.Add(&r2, "root"))
 	if err == nil {
 		t.Error("expected error in multiple mutations")
 	}
@@ -345,7 +345,7 @@ func TestVault_ConcurrentMutations_RaceCondition(t *testing.T) {
 			ruleID := fmt.Sprintf("rule_%d", id)
 			newRule := indigo.NewRule(ruleID, "true")
 
-			if err := v.Mutate(indigo.Add(newRule, "root")); err != nil {
+			if _, err := v.Mutate(indigo.Add(newRule, "root")); err != nil {
 				t.Errorf("Mutate failed for %s: %v", ruleID, err)
 			}
 		}(i)
@@ -418,12 +418,12 @@ func TestVault_Mutations(t *testing.T) {
 		baseline := v.ImmutableRule()
 		debugLogf(t, "baseline:\n%s\n", baseline)
 
-		err := v.Mutate(indigo.Delete("z"))
+		_, err := v.Mutate(indigo.Delete("z"))
 		if err != nil {
 			t.Fatalf("Updating rule failed: %v", err)
 		}
 		// delete rule that doesn't exist
-		err = v.Mutate(indigo.Delete("bogus"))
+		_, err = v.Mutate(indigo.Delete("bogus"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -463,7 +463,7 @@ func TestVault_Mutations(t *testing.T) {
 		baseline := v.ImmutableRule()
 		debugLogf(t, "baseline:\n%s\n", baseline)
 
-		err := v.Mutate(indigo.Update(indigo.NewRule("one", "true")))
+		_, err := v.Mutate(indigo.Update(indigo.NewRule("one", "true")))
 		if err != nil {
 			t.Fatalf("Updating rule failed: %v", err)
 		}
@@ -515,7 +515,7 @@ func TestVault_Mutations(t *testing.T) {
 		savedPtrs["y"] = baseline.Rules["childD"].Rules["y"]
 		savedPtrs["z"] = baseline.Rules["childD"].Rules["z"]
 
-		err := v.Mutate(indigo.Add(indigo.NewRule("zzz", "false"), "z"))
+		_, err := v.Mutate(indigo.Add(indigo.NewRule("zzz", "false"), "z"))
 		if err != nil {
 			t.Fatalf("adding rule failed: %v", err)
 		}
@@ -653,7 +653,7 @@ func TestVault_Mutations(t *testing.T) {
 		baseline := v.ImmutableRule()
 		debugLogf(t, "baseline:\n%s\n", baseline)
 
-		err := v.Mutate(indigo.Move("two", "childC"))
+		_, err := v.Mutate(indigo.Move("two", "childC"))
 		if err != nil {
 			t.Fatalf("moving rule failed: %v", err)
 		}
@@ -696,7 +696,7 @@ func TestVault_Mutations(t *testing.T) {
 		baseline := v.ImmutableRule()
 		debugLogf(t, "baseline:\n%s\n", baseline)
 
-		err := v.Mutate(indigo.Update(indigo.NewRule("root", "true")))
+		_, err := v.Mutate(indigo.Update(indigo.NewRule("root", "true")))
 		if err != nil {
 			t.Fatalf("adding rule failed: %v", err)
 		}
@@ -730,7 +730,7 @@ func TestVault_Mutations(t *testing.T) {
 		mut = append(mut, indigo.Update(indigo.NewRule("root", "true")))
 		mut = append(mut, indigo.Add(indigo.NewRule("a", "2+2=4"), "root"))
 		mut = append(mut, indigo.Add(indigo.NewRule("b", "false"), "a"))
-		err := v.Mutate(mut...)
+		_, err := v.Mutate(mut...)
 		if err != nil {
 			t.Fatalf("adding rule failed: %v", err)
 		}
@@ -765,7 +765,7 @@ func TestVault_Mutations(t *testing.T) {
 		mut = append(mut, indigo.Add(indigo.NewRule("a", "2+2=4"), "root"))
 		mut = append(mut, indigo.Update(indigo.NewRule("root", "true")))
 		mut = append(mut, indigo.Add(indigo.NewRule("b", "false"), "a"))
-		err := v.Mutate(mut...)
+		_, err := v.Mutate(mut...)
 		if err == nil {
 			t.Fatalf("wanted error")
 		}
@@ -784,7 +784,7 @@ func TestVault_Mutations(t *testing.T) {
 		mut = append(mut, indigo.Add(indigo.NewRule("a", "2+2=4"), "root"))
 		mut = append(mut, indigo.Update(indigo.NewRule("root", "true")))
 		mut = append(mut, indigo.Add(indigo.NewRule("b", "false"), "a"))
-		err := v.Mutate(mut...)
+		_, err := v.Mutate(mut...)
 		if err == nil {
 			t.Fatalf("wanted error")
 		}
@@ -801,7 +801,7 @@ func TestVault_Mutations(t *testing.T) {
 
 		// childA already exists in the baseline, as a child of root
 		mut = append(mut, indigo.Add(indigo.NewRule("childA", "2+2=4"), "childD"))
-		err := v.Mutate(mut...)
+		_, err := v.Mutate(mut...)
 		if err == nil {
 			t.Fatalf("wanted error")
 		}
@@ -812,7 +812,7 @@ func TestVault_Mutations(t *testing.T) {
 		// verify that an upsert works
 		mut = []indigo.Mutation{}
 		mut = append(mut, indigo.Upsert(indigo.NewRule("childA", "2+2=4")))
-		err = v.Mutate(mut...)
+		_, err = v.Mutate(mut...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -919,7 +919,7 @@ func TestVaultParallelEvalWithShardedMutations(t *testing.T) {
 
 				// Add rules to root - this will clone root and modify its Rules map
 				newRule := indigo.NewRule(fmt.Sprintf("added_%d_%d", id, counter), "x > 5")
-				err := v.Mutate(indigo.Add(newRule, "root"))
+				_, err := v.Mutate(indigo.Add(newRule, "root"))
 				if err != nil && ctx.Err() == nil {
 					errChan <- fmt.Errorf("add error from worker %d: %w", id, err)
 				}
@@ -945,7 +945,7 @@ func TestVaultParallelEvalWithShardedMutations(t *testing.T) {
 				// Update rules that exist
 				targetID := fmt.Sprintf("initial_%d", counter%20)
 				updated := indigo.NewRule(targetID, fmt.Sprintf("x > %d", counter%100))
-				err := v.Mutate(indigo.Update(updated))
+				_, err := v.Mutate(indigo.Update(updated))
 				if err != nil && ctx.Err() == nil {
 					errChan <- fmt.Errorf("update error from worker %d: %w", id, err)
 				}
@@ -1033,7 +1033,7 @@ func TestRaceConditionRulesMapMutation(t *testing.T) {
 			targetID := fmt.Sprintf("child_%d", counter%50)
 			newRule := indigo.NewRule(targetID, fmt.Sprintf("x > %d", counter%100))
 
-			_ = v.Mutate(indigo.Update(newRule))
+			v.Mutate(indigo.Update(newRule))
 			counter++
 		}
 	}()
@@ -1077,9 +1077,9 @@ func TestRaceConditionRulesMapMutation(t *testing.T) {
 
 			if counter%2 == 0 {
 				parentID := fmt.Sprintf("child_%d", counter%50)
-				_ = v.Mutate(indigo.Add(newRule, parentID))
+				v.Mutate(indigo.Add(newRule, parentID))
 			} else {
-				_ = v.Mutate(indigo.Add(newRule, parent))
+				v.Mutate(indigo.Add(newRule, parent))
 			}
 			counter++
 		}
@@ -1164,7 +1164,7 @@ func TestParallelEvalDuringMutation(t *testing.T) {
 				childID := fmt.Sprintf("parent_%d_child_%d_added_%d", i%5, i%20, i)
 				newRule := indigo.NewRule(childID, fmt.Sprintf("x > %d", i))
 
-				_ = v.Mutate(indigo.Add(newRule, parentID))
+				v.Mutate(indigo.Add(newRule, parentID))
 			}
 		}(mutator)
 	}
@@ -1245,7 +1245,7 @@ func TestSortedRulesRaceCondition(t *testing.T) {
 			}
 
 			newRule := indigo.NewRule(fmt.Sprintf("added_%d", counter), "x > 0")
-			_ = v.Mutate(indigo.Add(newRule, "root"))
+			v.Mutate(indigo.Add(newRule, "root"))
 			counter++
 		}
 	}()
@@ -1264,7 +1264,7 @@ func TestSortedRulesRaceCondition(t *testing.T) {
 
 			targetID := fmt.Sprintf("child_%d", counter%100)
 			updated := indigo.NewRule(targetID, fmt.Sprintf("x > %d", counter%50))
-			_ = v.Mutate(indigo.Update(updated))
+			v.Mutate(indigo.Update(updated))
 			counter++
 		}
 	}()
@@ -1331,7 +1331,7 @@ func TestDestinationShardRaceCondition(t *testing.T) {
 			}
 
 			newRule := indigo.NewRule(fmt.Sprintf("rule_%d", counter), "true")
-			_ = v.Mutate(indigo.Add(newRule, "root"))
+			v.Mutate(indigo.Add(newRule, "root"))
 			counter++
 		}
 	}()
@@ -1350,7 +1350,7 @@ func TestDestinationShardRaceCondition(t *testing.T) {
 
 			targetID := fmt.Sprintf("rule_%d", counter%100)
 			updated := indigo.NewRule(targetID, "true")
-			_ = v.Mutate(indigo.Update(updated))
+			v.Mutate(indigo.Update(updated))
 			counter++
 		}
 	}()
@@ -1433,7 +1433,7 @@ func TestVaultMutateRulesMapDirectModification(t *testing.T) {
 
 			// Add children to parent - triggers Rules map modification in makeSafe
 			newRule := indigo.NewRule(fmt.Sprintf("newchild_%d", counter), "x > 10")
-			_ = v.Mutate(indigo.Add(newRule, "parent"))
+			v.Mutate(indigo.Add(newRule, "parent"))
 			counter++
 		}
 	})
@@ -1519,7 +1519,7 @@ func TestVaultMutationDeadlock(t *testing.T) {
 
 			// Add children to parent
 			newRule := indigo.NewRule(fmt.Sprintf("newchild_%d", counter), "x > 10")
-			_ = v.Mutate(indigo.Add(newRule, "parent"))
+			v.Mutate(indigo.Add(newRule, "parent"))
 			mutateCount.Add(1)
 			counter++
 		}
@@ -1604,7 +1604,7 @@ func TestVaultParallelEvalMutationDeadlock(t *testing.T) {
 			}
 
 			newRule := indigo.NewRule(fmt.Sprintf("newchild_%d", counter), "x > 10")
-			_ = v.Mutate(indigo.Add(newRule, "parent"))
+			v.Mutate(indigo.Add(newRule, "parent"))
 			mutateCount.Add(1)
 			counter++
 		}

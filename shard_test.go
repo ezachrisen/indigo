@@ -351,7 +351,7 @@ root
 		// Based on the sharding specification, it shold be placed into "woodlawnForeign"
 		woodlawnForeignJustOK := indigo.NewRule("woodlawnForeignJustOK", `school =="woodlawn" && class == 2026 && gpa > 2.0 && gpa < 3.7 && nationality != "US"`)
 
-		err = v.Mutate(indigo.Add(woodlawnForeignJustOK, "root")) // <-- we can just add it to the root and let sharding place it
+		stats, err := v.Mutate(indigo.Add(woodlawnForeignJustOK, "root")) // <-- we can just add it to the root and let sharding place it
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -379,6 +379,7 @@ root
 
 		debugLogf(t, "After adding new rule, ensuring it ends up in the right shard:\n%s\n", gotTree)
 		assertEqual(wantTree, gotTree, t)
+		checkStats(1, 0, 0, 0, 0, stats, t)
 	})
 }
 
@@ -444,7 +445,7 @@ root
 	assertEqual(wantBefore, beforeTree, t)
 
 	// Delete centralAtRisk from the central shard
-	err = v.Mutate(indigo.Delete("centralAtRisk"))
+	stats, err := v.Mutate(indigo.Delete("centralAtRisk"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,9 +466,10 @@ root
     └── woodlawnHonors
 	`
 	assertEqual(wantAfter, afterTree, t)
+	checkStats(0, 0, 0, 1, 0, stats, t)
 
 	// Delete entire central shard
-	err = v.Mutate(indigo.Delete("central"))
+	stats, err = v.Mutate(indigo.Delete("central"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -486,6 +488,7 @@ root
     └── woodlawnHonors
 	`
 	assertEqual(wantAfterDeleteShard, afterDeleteShard, t)
+	checkStats(0, 0, 0, 1, 0, stats, t)
 }
 
 // TestVaultUpdate tests the Vault Update mutation with sharded rules
@@ -551,7 +554,7 @@ root
 	honorsChild := indigo.NewRule("centralHonorsChild", `gpa > 3.9`)
 	updatedHonors.Add(honorsChild)
 
-	err = v.Mutate(indigo.Update(updatedHonors))
+	stats, err := v.Mutate(indigo.Update(updatedHonors))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -573,11 +576,12 @@ root
     └── woodlawnHonors
 	`
 	assertEqual(wantAfter, afterTree, t)
+	checkStats(0, 0, 1, 0, 0, stats, t)
 
 	// Update eastHonors to modify its expression
 	updatedEastExpr := `school =="east" && class == 2026 && gpa > 3.5`
 	updatedEastHonors := indigo.NewRule("eastHonors", updatedEastExpr)
-	err = v.Mutate(indigo.Update(updatedEastHonors))
+	stats, err = v.Mutate(indigo.Update(updatedEastHonors))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -600,6 +604,7 @@ root
     └── woodlawnHonors
 	`
 	assertEqual(wantAfterUpdateEast, afterUpdateEastTree, t)
+	checkStats(0, 0, 1, 0, 0, stats, t)
 
 	// Verify the expression was actually updated
 	updatedRule, _ := v.ImmutableRule().FindRule("eastHonors")
@@ -660,7 +665,7 @@ root
 	// The Update operation should automatically move it to the woodlawn shard
 	updatedExpr := `school =="woodlawn" && class == 2026 && gpa < 2.5`
 	updatedRule := indigo.NewRule("centralAtRisk", updatedExpr)
-	err = v.Mutate(indigo.Update(updatedRule))
+	stats, err := v.Mutate(indigo.Update(updatedRule))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -679,6 +684,7 @@ root
     └── woodlawnHonors
 	`
 	assertEqual(wantAfterUpdate, afterUpdateTree, t)
+	checkStats(0, 0, 1, 0, 1, stats, t)
 
 	// Verify the expression was updated
 	updatedRuleInVault, _ := v.ImmutableRule().FindRule("centralAtRisk")
@@ -761,7 +767,7 @@ root
 
 	// Add a generic rule to default shard (no specific school), then move it to central
 	genericRule := indigo.NewRule("genericRule", `class == 2027`)
-	err = v.Mutate(indigo.Add(genericRule, "default"))
+	stats, err := v.Mutate(indigo.Add(genericRule, "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -783,24 +789,29 @@ root
     └── woodlawnHonors
 	`
 	assertEqual(wantAfterAdd, afterAddTree, t)
+	checkStats(1, 0, 0, 0, 0, stats, t)
 
-	// Move genericRule to central (note: since it doesn't match central shard criteria,
-	// it will stay in central because that's where we explicitly requested it to go)
-	err = v.Mutate(indigo.Move("genericRule", "central"))
+	// Try to move genericRule to central (note: since it doesn't match central shard criteria,
+	// it will stay in default)
+	stats, err = v.Mutate(indigo.Move("genericRule", "central"))
 	if err == nil {
 		t.Fatalf("expected error that moving a rule to a shard is not allowed")
 	}
+	checkStats(0, 0, 0, 0, 0, stats, t)
+	debugLogf(t, "After attempting to move bingo:\n%s\n\n", v.ImmutableRule().Tree())
 
 	// Let's add a rule to a non-shard rule, then move it to another non-shard rule
-	err = v.Mutate(indigo.Add(indigo.NewRule("bingo", ""), "woodlawnHonors"))
+	stats, err = v.Mutate(indigo.Add(indigo.NewRule("bingo", ""), "woodlawnHonors"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	checkStats(1, 0, 0, 0, 0, stats, t)
 
-	err = v.Mutate(indigo.Move("bingo", "genericRule"))
+	stats, err = v.Mutate(indigo.Move("bingo", "genericRule"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	checkStats(0, 1, 0, 0, 0, stats, t)
 
 	afterMoveTree := v.ImmutableRule().Tree()
 	debugLogf(t, "After moving bingo:\n%s\n\n", afterMoveTree)
@@ -905,7 +916,7 @@ root
 	// The Update operation should automatically move it to the woodlawn shard
 	updatedExpr := `school =="woodlawn" && class == 2026 && gpa < 2.5`
 	updatedRule := indigo.NewRule("centralAtRisk", updatedExpr) // <--- this is an existing rule ID
-	err = v.Mutate(indigo.Upsert(updatedRule))
+	stats, err := v.Mutate(indigo.Upsert(updatedRule))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -924,6 +935,7 @@ root
     └── woodlawnHonors
 	`
 	assertEqual(wantAfterUpdate, afterUpdateTree, t)
+	checkStats(0, 0, 1, 0, 1, stats, t)
 
 	// Verify the expression was updated
 	updatedRuleInVault, _ := v.ImmutableRule().FindRule("centralAtRisk")
@@ -948,7 +960,7 @@ root
 	// Now let's add a new rule using the upsert mutation
 	newExpr := `school =="Central" && class == 2026`
 	newRule := indigo.NewRule("myNewRule", newExpr) // <--- this is an new rule ID
-	err = v.Mutate(indigo.Upsert(newRule))
+	stats, err = v.Mutate(indigo.Upsert(newRule))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -964,6 +976,7 @@ root
 	afterUpsertNewTree := v.ImmutableRule().Tree()
 	debugLogf(t, "After adding newRule (should be in central shard):\n%s\n", afterUpdateTree)
 	assertEqual(wantAfterUpsertNew, afterUpsertNewTree, t)
+	checkStats(1, 0, 0, 0, 0, stats, t)
 }
 
 // Helper function to compare rule trees from the rule.Tree() method
@@ -974,5 +987,24 @@ func assertEqual(want, got string, t *testing.T) {
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
 		t.Errorf("Wanted\n%s\n\nGot\n%s\n", want, got)
+	}
+}
+
+func checkStats(add, move, update, delete, changedShards int, s indigo.MutationStats, t *testing.T) {
+	t.Helper()
+	if add != s.Added {
+		t.Errorf("wanted %d adds, got %d", add, s.Added)
+	}
+	if move != s.Moved {
+		t.Errorf("wanted %d moves, got %d", move, s.Moved)
+	}
+	if update != s.Updated {
+		t.Errorf("wanted %d updates, got %d", update, s.Updated)
+	}
+	if delete != s.Deleted {
+		t.Errorf("wanted %d deletes, got %d", delete, s.Deleted)
+	}
+	if changedShards != s.ChangedShards {
+		t.Errorf("wanted %d shard changes, got %d", changedShards, s.ChangedShards)
 	}
 }

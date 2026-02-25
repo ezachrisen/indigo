@@ -152,7 +152,7 @@ func TestHellishShardedVaultParallelStress(t *testing.T) {
 				newRule := indigo.NewRule(ruleID, fmt.Sprintf("tier > %d", rng.Intn(10)))
 				parentID := selectRandomParent(v.ImmutableRule(), rng)
 				if parentID != "" {
-					err := v.Mutate(indigo.Add(newRule, parentID))
+					_, err := v.Mutate(indigo.Add(newRule, parentID))
 					if err != nil {
 						t.Logf("Add mutation error for %s: %v", ruleID, err)
 						atomic.AddInt64(&mutationErrors, 1)
@@ -166,7 +166,7 @@ func TestHellishShardedVaultParallelStress(t *testing.T) {
 					targetID := allRules[rng.Intn(len(allRules))]
 					updatedExpr := fmt.Sprintf("priority > %d", rng.Intn(100))
 					updatedRule := indigo.NewRule(targetID, updatedExpr)
-					err := v.Mutate(indigo.Update(updatedRule))
+					_, err := v.Mutate(indigo.Update(updatedRule))
 					if err != nil {
 						t.Logf("Update mutation error for %s: %v", targetID, err)
 						atomic.AddInt64(&mutationErrors, 1)
@@ -178,7 +178,7 @@ func TestHellishShardedVaultParallelStress(t *testing.T) {
 				allRules := collectAllRuleIDs(rule)
 				if len(allRules) > 2 { // Don't delete root
 					targetID := allRules[1+rng.Intn(len(allRules)-1)]
-					err := v.Mutate(indigo.Delete(targetID))
+					_, err := v.Mutate(indigo.Delete(targetID))
 					if err != nil {
 						t.Logf("Delete mutation error for %s: %v", targetID, err)
 						atomic.AddInt64(&mutationErrors, 1)
@@ -192,7 +192,7 @@ func TestHellishShardedVaultParallelStress(t *testing.T) {
 					sourceID := allRules[1+rng.Intn(len(allRules)-1)]
 					targetParentID := selectRandomParent(v.ImmutableRule(), rng)
 					if targetParentID != "" && targetParentID != sourceID {
-						err := v.Mutate(indigo.Move(sourceID, targetParentID))
+						_, err := v.Mutate(indigo.Move(sourceID, targetParentID))
 						if err != nil {
 							t.Logf("Move mutation error from %s: %v", sourceID, err)
 							atomic.AddInt64(&mutationErrors, 1)
@@ -257,7 +257,7 @@ func TestHellishShardedVaultParallelStress(t *testing.T) {
 			updateExpr := fmt.Sprintf(`category == "%s" && region == "%s"`, category, region)
 			updateRule := indigo.NewRule(fmt.Sprintf("category_shard_%s", category), updateExpr)
 
-			err := v.Mutate(indigo.Update(updateRule))
+			_, err := v.Mutate(indigo.Update(updateRule))
 			if err != nil {
 				t.Logf("Shard update error: %v", err)
 				atomic.AddInt64(&mutationErrors, 1)
@@ -368,7 +368,7 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 
 		// Add a rule that matches shard_a
 		ruleA := indigo.NewRule("rule_a", `type == "A"`)
-		if err := v.Mutate(indigo.Add(ruleA, "root")); err != nil {
+		if _, err := v.Mutate(indigo.Add(ruleA, "root")); err != nil {
 			t.Fatalf("add rule_a failed: %v", err)
 		}
 
@@ -382,7 +382,7 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 			t.Error("rule_a not in shard_a")
 		}
 		updated := indigo.NewRule("rule_a", `type == "C"`)
-		if err := v.Mutate(indigo.Update(updated)); err != nil {
+		if _, err := v.Mutate(indigo.Update(updated)); err != nil {
 			t.Fatalf("update rule_a failed: %v", err)
 		}
 
@@ -434,7 +434,7 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 		debugLogf(t, "before:\n%s\n", v.ImmutableRule())
 		// Add rules at various levels
 		rule1 := indigo.NewRule("rule1", `type == "primary_sec1"`)
-		if err := v.Mutate(indigo.Add(rule1, "root")); err != nil {
+		if _, err := v.Mutate(indigo.Add(rule1, "root")); err != nil {
 			t.Fatalf("add rule1 failed: %v", err)
 		}
 
@@ -451,7 +451,7 @@ func TestExtremeShardingEdgeCases(t *testing.T) {
 
 		// Update it to match sec2
 		updated := indigo.NewRule("rule1", `type == "primary_sec2"`)
-		if err := v.Mutate(indigo.Update(updated)); err != nil {
+		if _, err := v.Mutate(indigo.Update(updated)); err != nil {
 			t.Fatalf("update rule1 failed: %v", err)
 		}
 
@@ -546,7 +546,7 @@ func TestConcurrentUpdateWithParallelEval(t *testing.T) {
 					newExpr := fmt.Sprintf("x > %d", rng.Intn(100))
 					updateRule := indigo.NewRule(targetID, newExpr)
 
-					err := v.Mutate(indigo.Update(updateRule))
+					_, err := v.Mutate(indigo.Update(updateRule))
 					if err == nil {
 						atomic.AddInt64(&mutCount, 1)
 					}

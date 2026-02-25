@@ -38,7 +38,8 @@ type Vault struct {
 	compileOptions []CompilationOption
 
 	// An optional timestamp maintained by the client to keep track of when the
-	// Vault was last updated. Initialized to time.Time{} on Vault creation.
+	// Vault was last updated. Initialized to time.Time{} on Vault creation to ensure
+	// LastUpdate() never returns nil.
 	lastUpdate atomic.Pointer[time.Time]
 }
 
@@ -103,19 +104,48 @@ type Mutation struct {
 	// we will not try to find the right shard for the rule,
 	// rather it will be placed in the newParent rule
 	doNotShard bool
+
+	// Determines how we're going to count this mutation when we report
+	// at the end of applying mutations. For example, because we process a "move" as
+	// a "delete" from one parent and an "add" to another (replacing the "move"
+	// mutation we were given) we need to be able to control how mutations are
+	// counted as they are applied.
+	countAs mutationOp
+
+	// Indicates that the mutation caused the rule to be moved to a different shard
+	shardChange bool
+}
+
+// MutationStats contains counts of changes made to a [Vault] via [Mutate].
+// The counts reflect the operations performed, not the number of rules affected.
+// For example, a Delete operation that deletes a rule that has 1,000 children will
+// be counted as a single delete.
+//
+// Upserts will be reported as either Added or Updated.
+//
+// Updates that result in moving a rule to a different shard will be counted
+// in the Updated count and the ChangedShards count.
+//
+// Updates to the Vault lastUpdate timestamp are not counted.
+type MutationStats struct {
+	Added         int
+	Moved         int
+	Updated       int
+	Deleted       int
+	ChangedShards int
 }
 
 // mutationOp is an enum for the types of mutations supported by the Vault
 type mutationOp int
 
 const (
-	add mutationOp = iota
+	noOp mutationOp = iota
+	add
 	update
 	upsert
 	deleteOp
 	move
-	timeUpdate
-	noOp // does nothing
+	timeUpdate // updates the vault's last update timestamp
 )
 
 // Add returns a mutation that adds the rule to the parent.
@@ -129,22 +159,38 @@ func Add(r *Rule, parent string) Mutation {
 		return Mutation{op: noOp}
 	}
 	return Mutation{
-		id:     r.ID,
-		rule:   r,
-		parent: parent,
-		op:     add,
+		id:      r.ID,
+		rule:    r,
+		parent:  parent,
+		op:      add,
+		countAs: add,
+	}
+}
+
+func addWOp(r *Rule, parent string, countAs mutationOp, shardChange bool) Mutation {
+	if r == nil {
+		return Mutation{op: noOp}
+	}
+	return Mutation{
+		id:          r.ID,
+		rule:        r,
+		parent:      parent,
+		op:          add,
+		countAs:     countAs,
+		shardChange: shardChange,
 	}
 }
 
 // Add returns a mutation that adds the rule to the parent,
 // bypassing any sharding specifications.
-func addDoNotShard(r *Rule, parent string) Mutation {
+func addDoNotShard(r *Rule, parent string, countAs mutationOp) Mutation {
 	return Mutation{
 		id:         r.ID,
 		rule:       r,
 		parent:     parent,
 		op:         add,
 		doNotShard: true,
+		countAs:    countAs,
 	}
 }
 
@@ -157,9 +203,10 @@ func Update(r *Rule) Mutation {
 		return Mutation{op: noOp}
 	}
 	return Mutation{
-		id:   r.ID,
-		rule: r,
-		op:   update,
+		id:      r.ID,
+		rule:    r,
+		op:      update,
+		countAs: update,
 	}
 }
 
@@ -175,9 +222,10 @@ func Upsert(r *Rule) Mutation {
 		return Mutation{op: noOp}
 	}
 	return Mutation{
-		id:   r.ID,
-		rule: r,
-		op:   upsert,
+		id:      r.ID,
+		rule:    r,
+		op:      upsert,
+		countAs: noOp,
 	}
 }
 
@@ -185,8 +233,19 @@ func Upsert(r *Rule) Mutation {
 // the operation is skipped with no error.
 func Delete(id string) Mutation {
 	return Mutation{
-		id: id,
-		op: deleteOp,
+		id:      id,
+		op:      deleteOp,
+		countAs: deleteOp,
+	}
+}
+
+// Delete deletes the rule with the id. If the rule does not exist,
+// the operation is skipped with no error.
+func deleteWOp(id string, countAs mutationOp) Mutation {
+	return Mutation{
+		id:      id,
+		op:      deleteOp,
+		countAs: countAs,
 	}
 }
 
@@ -197,6 +256,7 @@ func Move(id string, newParent string) Mutation {
 		id:        id,
 		newParent: newParent,
 		op:        move,
+		countAs:   move,
 	}
 }
 
@@ -211,12 +271,11 @@ func LastUpdate(t time.Time) Mutation {
 // Mutate makes the changes to the rule stored in the Vault, applying the
 // mutations in sequence.
 // At the end of all mutations, the resulting root rule becomes the new
-// active rule in the vault, and can be retrieved with the [Rule] function.
+// active rule in the vault, and can be retrieved with the [ImmutableRule] function.
 //
 // Clients do not see the updated rules until all mutations submitted to [Mutate]
-// succeed; if one fails no updates are applied.
-//
-// This ensures that clients see a consistent rule set without partial updates.
+// succeed; if any mutation fails no updates are applied. This ensures that clients
+// see a consistent rule set without partial updates.
 //
 // Mutations incur memory cost equal to the total size of the ancestor rules of
 // the rule being mutated; only children who are affected are copied.
@@ -234,11 +293,14 @@ func LastUpdate(t time.Time) Mutation {
 //
 // Moves incur the cost in both the origin and destination ancestors.
 //
-// To clear a vault, replace the root rule with a new, empty rule.
+// To clear a vault, replace the root rule with a new, empty rule as the first
+// mutation in the mutations variadic, followed by the rules you want in the new root.
 //
 // Vaults support sharding, and will automatically place mutated rules in the correct
 // shard.
-func (v *Vault) Mutate(mutations ...Mutation) error {
+//
+// Returns counts of operations performed on the Vault in the [MutationStats].
+func (v *Vault) Mutate(mutations ...Mutation) (stats MutationStats, err error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -246,17 +308,17 @@ func (v *Vault) Mutate(mutations ...Mutation) error {
 
 	mut, err := v.preProcessMoves(r, mutations)
 	if err != nil {
-		return fmt.Errorf("preprocessing moves: %w", err)
+		return stats, fmt.Errorf("preprocessing moves: %w", err)
 	}
 
 	mut, err = v.preProcessUpserts(r, mut)
 	if err != nil {
-		return fmt.Errorf("preprocessing upserts: %w", err)
+		return stats, fmt.Errorf("preprocessing upserts: %w", err)
 	}
 
 	mut, err = v.preProcessShardChanges(r, mut)
 	if err != nil {
-		return fmt.Errorf("preprocessing shard changes: %w", err)
+		return stats, fmt.Errorf("preprocessing shard changes: %w", err)
 	}
 	return v.applyMutations(r, mut)
 }
@@ -285,8 +347,8 @@ func (v *Vault) preProcessMoves(root *Rule, mut []Mutation) ([]Mutation, error) 
 		if p.shard {
 			return nil, fmt.Errorf("attempt to place rule in shard %s", p.ID)
 		}
-		mut = append(mut, Delete(m.id))                     // delete from current parent
-		mut = append(mut, addDoNotShard(rule, m.newParent)) // add to new parent
+		mut = append(mut, deleteWOp(m.id, noOp))                  // delete from current parent
+		mut = append(mut, addDoNotShard(rule, m.newParent, move)) // add to new parent, count as a move
 	}
 	return mut, nil
 }
@@ -337,8 +399,8 @@ func (v *Vault) preProcessShardChanges(root *Rule, mut []Mutation) ([]Mutation, 
 
 		switch {
 		case targetParent != nil && currentParent.ID != targetParent.ID:
-			u = append(u, Delete(m.id))                 // delete from current parent
-			u = append(u, Add(m.rule, targetParent.ID)) // add to new parent
+			u = append(u, deleteWOp(m.id, noOp))                       // delete from current parent
+			u = append(u, addWOp(m.rule, targetParent.ID, m.op, true)) // add to new parent
 		default:
 			u = append(u, m)
 		}
@@ -377,18 +439,17 @@ func destinationShard(root, rr *Rule) *Rule {
 }
 
 // applyMutations performs the mutations against the root rule.
-func (v *Vault) applyMutations(root *Rule, mutations []Mutation) error {
+func (v *Vault) applyMutations(root *Rule, mutations []Mutation) (stats MutationStats, err error) {
 	// we keep track of which rules have already been cloned, i.e., made safe
 	// for modifications.
 	// Map is Original Pointer -> New Copy Pointer
 	alreadyCopied := make(map[*Rule]*Rule)
-	var err error
 	for _, m := range mutations {
 		switch m.op {
 		case deleteOp:
 			root, alreadyCopied, err = v.delete(root, alreadyCopied, m.id)
 			if err != nil {
-				return fmt.Errorf("deleting rule %s: %w", m.id, err)
+				return stats, fmt.Errorf("deleting rule %s: %w", m.id, err)
 			}
 
 		case timeUpdate:
@@ -397,24 +458,44 @@ func (v *Vault) applyMutations(root *Rule, mutations []Mutation) error {
 		case add:
 			root, alreadyCopied, err = v.add(root, m.rule, alreadyCopied, m.parent, m.doNotShard)
 			if err != nil {
-				return fmt.Errorf("adding rule %s: %w", m.rule.ID, err)
+				return stats, fmt.Errorf("adding rule %s: %w", m.rule.ID, err)
 			}
 
 		case update:
 			root, alreadyCopied, err = v.update(root, m.rule, alreadyCopied)
 			if err != nil {
-				return fmt.Errorf("updating rule %s: %w", m.rule.ID, err)
+				return stats, fmt.Errorf("updating rule %s: %w", m.rule.ID, err)
 			}
 
 		case move:
-			// we've already handled the move operation in [preprocessMoves]
+			// we've already handled moves in [preprocessMoves]
+			continue
+		case upsert:
+			// we've already handled upserts in [preProcessUpserts]
 			continue
 		case noOp:
 			continue
 		}
+		updateStats(&stats, m)
 	}
 	v.root.Store(root)
-	return nil
+	return stats, nil
+}
+
+func updateStats(s *MutationStats, m Mutation) {
+	switch m.countAs {
+	case add:
+		s.Added++
+	case move:
+		s.Moved++
+	case update:
+		s.Updated++
+	case deleteOp:
+		s.Deleted++
+	}
+	if m.shardChange {
+		s.ChangedShards++
+	}
 }
 
 // shallowCopy makes a shallow copy of r, so that we can modify its Rules map.
