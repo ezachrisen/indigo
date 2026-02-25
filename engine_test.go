@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -89,7 +91,6 @@ func TestTrueIfAnyBehavior(t *testing.T) {
 func TestEvaluationTraversalDefault(t *testing.T) {
 	e := indigo.NewEngine(newMockEvaluator())
 	r := makeRule()
-
 	expectedResults := map[string]bool{
 		"rule1": true,
 		"D":     true,
@@ -117,6 +118,9 @@ func TestEvaluationTraversalDefault(t *testing.T) {
 	result, err := e.Eval(context.Background(), r, map[string]any{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if g, w := result.EvaluationCount, len(expectedResults); w != g {
+		t.Errorf("wanted %d, got %d", w, g)
 	}
 	//	fmt.Println(m.rulesTested)
 	//	fmt.Println(result)
@@ -208,6 +212,9 @@ func TestEvaluationTraversalAlphaSort(t *testing.T) {
 	if !reflect.DeepEqual(expectedOrder, flattenResultsEvaluated(result)) {
 		t.Error("not all rules were evaluated")
 	}
+	if g, w := result.EvaluationCount, len(expectedResults); w != g {
+		t.Errorf("wanted %d, got %d", w, g)
+	}
 }
 
 // Test that the engine checks for nil data and rule
@@ -271,8 +278,9 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		prep func(*indigo.Rule)     // a function called to prep the rule before compilation and evaluation
-		want func() map[string]bool // a function returning an edited copy of w after options are applied
+		prep          func(*indigo.Rule)     // a function called to prep the rule before compilation and evaluation
+		want          func() map[string]bool // a function returning an edited copy of w after options are applied
+		wantEvalCount int                    // the number of rules that should have been evaluated
 	}{
 		"Default Options": {
 			prep: func(r *indigo.Rule) {
@@ -280,6 +288,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return copyMap(w)
 			},
+			wantEvalCount: len(w),
 		},
 
 		"StopIfParentNegative": {
@@ -289,6 +298,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b1", "b2", "b3", "b4", "b4-1", "b4-2")
 			},
+			wantEvalCount: 10,
 		},
 		"DiscardPass": {
 			prep: func(r *indigo.Rule) {
@@ -297,6 +307,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b4-1")
 			},
+			wantEvalCount: len(w),
 		},
 		"DiscardFailures": {
 			prep: func(r *indigo.Rule) {
@@ -305,6 +316,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b4", "b4-1", "b4-2") // b4-1 is elim. because b4 is
 			},
+			wantEvalCount: len(w),
 		},
 		"DiscardPass & DiscardFailures": {
 			prep: func(r *indigo.Rule) {
@@ -314,6 +326,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b1", "b2", "b3", "b4", "b4-1", "b4-2")
 			},
+			wantEvalCount: len(w),
 		},
 		"DiscardPass & DiscardFailures on Root": {
 			prep: func(r *indigo.Rule) {
@@ -323,8 +336,9 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return map[string]bool{"rule1": true}
 			},
+			wantEvalCount: len(w),
 		},
-		"StopFirstPositiveChildX": {
+		"StopFirstPositiveChild": {
 			prep: func(r *indigo.Rule) {
 				r.Rules["B"].EvalOptions.StopFirstPositiveChild = true
 				r.Rules["B"].EvalOptions.SortFunc = indigo.SortRulesAlpha
@@ -332,6 +346,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
 			},
+			wantEvalCount: 11,
 		},
 		"StopFirstNegativeChild": {
 			prep: func(r *indigo.Rule) {
@@ -341,6 +356,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b3", "b4", "b4-1", "b4-2")
 			},
+			wantEvalCount: 12,
 		},
 		"StopFirstNegativeChild & StopFirstPositiveChild": {
 			prep: func(r *indigo.Rule) {
@@ -351,6 +367,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b2", "b3", "b4", "b4-1", "b4-2")
 			},
+			wantEvalCount: 11,
 		},
 		"Multiple Options": {
 			prep: func(r *indigo.Rule) {
@@ -361,6 +378,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b1", "b3", "b4-1", "e1", "e2", "e3")
 			},
+			wantEvalCount: 13,
 		},
 		"Delete Rule": {
 			prep: func(r *indigo.Rule) {
@@ -369,6 +387,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			want: func() map[string]bool {
 				return deleteKeys(copyMap(w), "b1")
 			},
+			wantEvalCount: len(w) - 1,
 		},
 		"Add Rule": {
 			prep: func(r *indigo.Rule) {
@@ -383,6 +402,7 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 				w["x"] = true
 				return w
 			},
+			wantEvalCount: len(w) + 1,
 		},
 		"Update Rule": { // TODO and forget to compile; stale program?
 			prep: func(r *indigo.Rule) {
@@ -393,15 +413,15 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 				w["b4"] = true
 				return w
 			},
+			wantEvalCount: len(w),
 		},
 	}
 
 	for k, c := range cases {
-		c := c
 		t.Run(k, func(t *testing.T) {
 			r := makeRule()
 			c.prep(r)
-			err := e.Compile(r)
+			err := e.Compile(r, indigo.CollectDiagnostics(true))
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -410,13 +430,35 @@ func TestEvalOptionsExpressionPassFail(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			//			fmt.Println("got: ", flattenResultsExprResult(u))
-			err = match(flattenResultsExprResult(u), c.want())
+			f := flattenResultsExprResult(u)
+			err = match(f, c.want())
 			if err != nil {
 				t.Errorf("%v", err)
 			}
+
+			if g, w := u.EvaluationCount, c.wantEvalCount; w != g {
+				t.Logf("\n%s\n", r)
+				t.Logf("Result count: %d\n", len(f))
+				for _, id := range slices.Sorted(maps.Keys(f)) {
+					t.Logf("%s\n", id)
+				}
+				t.Logf("\n")
+				ev := ruleIDsEvaluated(u)
+				t.Logf("Evaluated:(doesn't count root) %d (%s)", len(ev), strings.Join(ev, ","))
+				t.Errorf("wanted %d, got %d", w, g)
+			}
 		})
 	}
+}
+
+func ruleIDsEvaluated(u *indigo.Result) (ids []string) {
+	for _, uu := range u.RulesEvaluated {
+		ids = append(ids, uu.ID)
+	}
+	for _, c := range u.Results {
+		ids = append(ids, ruleIDsEvaluated(c)...)
+	}
+	return
 }
 
 // Test the pass/fail of the rule  evaluation with various combinations

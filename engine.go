@@ -70,12 +70,14 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID, err)
 	}
+
 	u := &Result{
-		Rule:           r,
-		ExpressionPass: true, // default boolean result
-		Value:          val,
-		Diagnostics:    diagnostics,
-		EvalOptions:    o,
+		Rule:            r,
+		ExpressionPass:  true, // default boolean result
+		Value:           val,
+		Diagnostics:     diagnostics,
+		EvalOptions:     o,
+		EvaluationCount: 1,
 	}
 
 	// If the evaluation returned a boolean, set the Result's value,
@@ -99,7 +101,8 @@ func (e *DefaultEngine) Eval(ctx context.Context, r *Rule,
 		return nil, err
 	}
 	u.Results = eu.results
-	u.RulesEvaluated = eu.evaluated
+	u.RulesEvaluated = append(u.RulesEvaluated, eu.evaluated...)
+	u.EvaluationCount = u.EvaluationCount + eu.evaluatedCount
 
 	// Based on the results of the child rules, determine the result of the parent rule
 	switch r.EvalOptions.TrueIfAny {
@@ -185,6 +188,7 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 			r.evaluated = append(r.evaluated, res.evaluated...)
 			r.failCount = r.failCount + res.failCount
 			r.passCount = r.passCount + res.passCount
+			r.evaluatedCount = r.evaluatedCount + res.evaluatedCount
 			maps.Copy(r.results, res.results)
 		case err := <-errCh:
 			// A worker encountered an error - stop processing and return it
@@ -198,10 +202,11 @@ func (e *DefaultEngine) evalChildren(ctx context.Context, rules []*Rule, d map[s
 
 // evalResult is a convenience type to let us pass multiple values on a channel
 type evalResult struct {
-	passCount int
-	failCount int
-	results   map[string]*Result
-	evaluated []*Rule
+	passCount      int
+	failCount      int
+	results        map[string]*Result
+	evaluated      []*Rule
+	evaluatedCount int
 }
 
 // makeChunks divides a range [start, len) into batches of the specified size.
@@ -381,6 +386,7 @@ func (e *DefaultEngine) evalRuleSlice(ctx context.Context, rules []*Rule, d map[
 			if err != nil {
 				return r, err
 			}
+			r.evaluatedCount = r.evaluatedCount + result.EvaluationCount
 
 			// If the child rule failed, either due to its own expression evaluation
 			// or its children, we have encountered a failure, and we'll count it

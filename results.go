@@ -50,6 +50,9 @@ type Result struct {
 	// If we're discarding failed/passed rules, they will not be in the results,
 	// and will not show up in diagnostics, but they will be in this list.
 	RulesEvaluated []*Rule
+
+	// Count of the number of rules whose expression was evaluated
+	EvaluationCount int
 }
 
 // Unshard reorganizes the results into the "original" structure of the rule
